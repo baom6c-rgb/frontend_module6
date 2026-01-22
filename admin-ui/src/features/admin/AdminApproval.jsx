@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
     Box, Typography, Paper, Table, TableBody, TableCell,
-    TableContainer, TableHead, TableRow, Avatar, Button, Fade
+    TableContainer, TableHead, TableRow, Avatar, Button, Fade, Chip
 } from '@mui/material';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
-import CancelRoundedIcon from '@mui/icons-material/CancelRounded';
-import api from '../api/axiosConfig';
+import DeleteForeverRoundedIcon from '@mui/icons-material/DeleteForeverRounded'; // Icon Xóa
+import api from '../../api/axiosConfig.js';
 
 const TableStyle = {
     header: { fontWeight: 800, fontSize: '0.95rem', color: '#1B2559', py: 2, bgcolor: '#F4F7FE' },
@@ -16,6 +16,7 @@ const AdminApproval = () => {
     const [users, setUsers] = useState([]);
 
     const fetchPending = () => {
+        // Lấy danh sách từ /api/admin
         api.get('/admin').then(res => {
             // Lọc những học viên có trạng thái chờ duyệt
             const pending = res.data.filter(u => u.status === 'WAITING_APPROVAL');
@@ -25,12 +26,25 @@ const AdminApproval = () => {
 
     useEffect(() => { fetchPending(); }, []);
 
+    // Hàm Duyệt: WAITING_APPROVAL -> ACTIVE
     const handleApprove = async (user) => {
         try {
             await api.put(`/admin/${user.id}`, { ...user, status: 'ACTIVE' });
-            fetchPending(); // Load lại danh sách sau khi duyệt
+            fetchPending();
         } catch (error) {
             console.error("Lỗi khi duyệt:", error);
+        }
+    };
+
+    // Hàm Xóa yêu cầu phê duyệt
+    const handleDelete = async (userId) => {
+        if (window.confirm("Bạn có chắc chắn muốn xóa yêu cầu phê duyệt này?")) {
+            try {
+                await api.delete(`/admin/${userId}`); // Gọi DELETE /api/admin/{id}
+                fetchPending(); // Load lại danh sách
+            } catch (error) {
+                console.error("Lỗi khi xóa:", error);
+            }
         }
     };
 
@@ -49,20 +63,20 @@ const AdminApproval = () => {
                                 <TableCell sx={TableStyle.header}>Email</TableCell>
                                 <TableCell sx={TableStyle.header}>Lớp học</TableCell>
                                 <TableCell sx={TableStyle.header}>Module</TableCell>
+                                <TableCell sx={TableStyle.header} align="center">Trạng thái</TableCell> {/* Cột mới */}
                                 <TableCell sx={TableStyle.header} align="center">Thao tác</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {users.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} align="center" sx={{ py: 5, color: '#A3AED0' }}>
+                                    <TableCell colSpan={6} align="center" sx={{ py: 5, color: '#A3AED0' }}>
                                         Không có yêu cầu phê duyệt nào.
                                     </TableCell>
                                 </TableRow>
                             ) : (
                                 users.map((user) => (
                                     <TableRow key={user.id} hover>
-                                        {/* Họ tên */}
                                         <TableCell sx={TableStyle.cell}>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                                 <Avatar sx={{ bgcolor: '#FFA500', fontWeight: 700, width: 35, height: 35 }}>
@@ -72,24 +86,30 @@ const AdminApproval = () => {
                                             </Box>
                                         </TableCell>
 
-                                        {/* Email */}
                                         <TableCell sx={TableStyle.cell}>{user.email}</TableCell>
 
-                                        {/* Lớp học */}
                                         <TableCell sx={TableStyle.cell}>
-                                            {user.className?.className || user.className?.name || 'N/A'}
+                                            {user.className?.name || 'N/A'}
                                         </TableCell>
 
-                                        {/* Module */}
                                         <TableCell sx={TableStyle.cell}>
                                             {user.learningModule?.name || 'N/A'}
                                         </TableCell>
 
-                                        {/* Thao tác */}
+                                        {/* Cột Trạng thái */}
+                                        <TableCell align="center">
+                                            <Chip
+                                                label="Chờ duyệt"
+                                                sx={{ bgcolor: '#FFF5E6', color: '#FFA500', fontWeight: 800, borderRadius: '8px' }}
+                                            />
+                                        </TableCell>
+
+                                        {/* Thao tác: Duyệt & Xóa */}
                                         <TableCell align="center">
                                             <Button
                                                 variant="contained"
                                                 color="success"
+                                                size="small"
                                                 startIcon={<CheckCircleRoundedIcon />}
                                                 onClick={() => handleApprove(user)}
                                                 sx={{ borderRadius: '10px', mr: 1, textTransform: 'none', fontWeight: 700 }}
@@ -99,10 +119,12 @@ const AdminApproval = () => {
                                             <Button
                                                 variant="outlined"
                                                 color="error"
-                                                startIcon={<CancelRoundedIcon />}
+                                                size="small"
+                                                startIcon={<DeleteForeverRoundedIcon />}
+                                                onClick={() => handleDelete(user.id)}
                                                 sx={{ borderRadius: '10px', textTransform: 'none', fontWeight: 700 }}
                                             >
-                                                Từ chối
+                                                Xóa
                                             </Button>
                                         </TableCell>
                                     </TableRow>
