@@ -48,8 +48,13 @@ const AdminLayout = () => {
     const handleClose = () => setAnchorEl(null);
     const handleLogout = () => {
         handleClose();
-        window.location.href = '/login';
+        localStorage.removeItem("token");
+        localStorage.removeItem("roles");
+        localStorage.removeItem("email");
+        localStorage.removeItem("status");
+        window.location.href = "/login";
     };
+
 
     return (
         <Box sx={{ display: 'flex', bgcolor: '#F4F7FE', minHeight: '100vh' }}>
@@ -153,6 +158,13 @@ const AdminLayout = () => {
                             text="Phê duyệt học viên"
                             onClick={() => navigate('/admin/approval')}
                         />
+                        <NavItem
+                            active={currentPath.includes("/admin/users")}
+                            icon={<PeopleAltRounded />}
+                            text="Danh sách user"
+                            onClick={() => navigate("/admin/users")}
+                        />
+
                     </Box>
                 </Box>
             </Drawer>

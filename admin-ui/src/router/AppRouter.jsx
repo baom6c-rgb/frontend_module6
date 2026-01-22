@@ -13,6 +13,8 @@ import AdminDashboard from "../features/admin/AdminDashboard.jsx";
 import StudentList from "../features/admin/StudentList";
 import AdminApproval from "../features/admin/AdminApproval";
 import StudentBlocked from "../features/admin/StudentBlocked";
+import AdminUserList from "../features/admin/AdminUserList.jsx";
+
 
 // --- PAGES USER ---
 import UserDashboard from "../features/users/UserDashboard.jsx";
@@ -26,6 +28,9 @@ import Register from "../features/login/Register";
 import WaitingApproval from "../features/login/WaitingApproval";
 import SelectClassModule from "../features/login/SelectClassModule.jsx";
 import ApprovalResult from "../features/login/ApprovalResult.jsx";
+import ForgotPassword from "../features/login/ForgotPassword.jsx";
+import ResetPassword from "../features/login/ResetPassword.jsx";
+
 
 const router = createBrowserRouter([
     // 1. NHÓM PUBLIC ROUTES (Ai cũng vào được)
@@ -33,6 +38,15 @@ const router = createBrowserRouter([
         path: "/",
         element: <Navigate to="/login" replace />,
     },
+    {
+        path: "/forgot-password",
+        element: <ForgotPassword />,
+    },
+    {
+        path: "/reset-password",
+        element: <ResetPassword />,
+    },
+
     {
         path: "/login",
         element: <Login />,
@@ -100,6 +114,7 @@ const router = createBrowserRouter([
                     { path: "students", element: <StudentList /> },
                     { path: "blocked", element: <StudentBlocked /> },
                     { path: "approval", element: <AdminApproval /> },
+                    { path: "users", element: <AdminUserList /> },
                 ]
             }
         ],
@@ -115,6 +130,7 @@ const router = createBrowserRouter([
             </Box>
         ),
     },
+
 ]);
 
 export default router;
