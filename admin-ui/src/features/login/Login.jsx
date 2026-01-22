@@ -75,10 +75,16 @@ export default function Login() {
             }
 
             if (res.status === "ACTIVE") {
-                // ✅ Navigate based on user role
+                // ✅ LƯU TOKEN + INFO (QUAN TRỌNG)
+                localStorage.setItem("token", res.token);
+                localStorage.setItem("roles", JSON.stringify(res.roles || []));
+                localStorage.setItem("email", res.email || "");
+                localStorage.setItem("status", res.status || "");
+
                 navigateByRole(res.roles);
                 return;
             }
+
 
         } catch (err) {
             alert(
@@ -110,7 +116,7 @@ export default function Login() {
             ).unwrap();
 
             if (res.status === "CREATED") {
-                localStorage.removeItem("accessToken");
+                localStorage.removeItem("token"); // ✅ đúng key
                 localStorage.setItem("register_email", res.email);
                 navigate("/complete-profile");
                 return;
@@ -122,10 +128,16 @@ export default function Login() {
             }
 
             if (res.status === "ACTIVE") {
-                // ✅ Navigate based on user role
+                // ✅ LƯU TOKEN + INFO
+                localStorage.setItem("token", res.token);
+                localStorage.setItem("roles", JSON.stringify(res.roles || []));
+                localStorage.setItem("email", res.email || "");
+                localStorage.setItem("status", res.status || "");
+
                 navigateByRole(res.roles);
                 return;
             }
+
 
         } catch (err) {
             alert("Google login thất bại");
@@ -187,6 +199,14 @@ export default function Login() {
                             disabled={loading}
                         >
                             Chưa có tài khoản? Đăng ký
+                        </Button>
+                        <Button
+                            variant="text"
+                            onClick={() => navigate("/forgot-password")}
+                            disabled={loading}
+                            sx={{ mt: -1 }}
+                        >
+                            Quên mật khẩu?
                         </Button>
                     </Stack>
                 </CardContent>
