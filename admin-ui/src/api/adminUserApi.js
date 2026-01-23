@@ -1,5 +1,5 @@
 import axiosPrivate from "./axiosPrivate";
-
+import axiosClient from "./axiosClient.js";
 export const adminUserApi = {
     // approvals
     getPendingApprovals: () => axiosPrivate.get("/admin/approvals/pending"),
@@ -22,16 +22,28 @@ export const adminUserApi = {
     getClassOptions: () => axiosPrivate.get("/admin/options/classes"),
     getModuleOptions: () => axiosPrivate.get("/admin/options/modules"),
 };
-import axiosClient from "./axiosClient.js";
-
 // =====================
 // USERS
 // =====================
 export const getAdminUsersApi = (params) =>
     axiosClient.get("/admin/users", { params });
 
-export const createAdminUserApi = (payload) =>
-    axiosClient.post("/admin/users", payload);
+export const createAdminUserApi = (payload) => {
+    const role = (payload?.roleName || "").toUpperCase();
+
+    // ADMIN -> endpoint riêng, body không gửi classId/moduleId
+    if (role === "ADMIN") {
+        const body = {
+            fullName: payload.fullName,
+            email: payload.email,
+            password: payload.password,
+        };
+        return axiosClient.post("/admin/users/admin", body);
+    }
+
+    // STUDENT (hoặc role khác) -> endpoint cũ
+    return axiosClient.post("/admin/users", payload);
+};
 
 // =====================
 // OPTIONS (ROLE)

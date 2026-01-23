@@ -27,6 +27,8 @@ const UserLayout = () => {
         { text: 'Hồ sơ cá nhân', icon: <PersonRounded />, path: '/users/profile' },
         { text: 'Học tập cùng AI', icon: <MenuBookRounded />, path: '/users/study' },
         { text: 'Đánh giá học tập', icon: <SchoolRounded />, path: '/users/review' },
+        { text: 'Tài liệu học', icon: <MenuBookRounded />, path: '/users/materials/upload' },
+
     ];
 // ⭐ Hàm xử lý đăng xuất
     const handleLogout = () => {

@@ -21,6 +21,8 @@ import UserDashboard from "../features/users/UserDashboard.jsx";
 import UserProfile from "../features/users/UserProfile.jsx";
 import UserStudy from "../features/users/UserStudy.jsx";
 import UserReview from "../features/users/UserReview.jsx";
+import StudentMaterialsPage from "../features/users/materials/StudentMaterialsPage";
+
 
 // --- PAGES AUTH ---
 import Login from "../features/login/Login.jsx";
@@ -97,6 +99,13 @@ const router = createBrowserRouter([
                         path: "review",
                         element: <UserReview />,
                     },
+                    {
+                        path: "materials",
+                        children: [
+                            { index: true, element: <StudentMaterialsPage /> },      // /users/materials
+                            { path: "upload", element: <StudentMaterialsPage /> },   // /users/materials/upload
+                        ],
+                    }
                 ]
             } // Đóng đối tượng bọc UserLayout
         ],
