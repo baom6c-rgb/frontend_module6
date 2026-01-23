@@ -25,7 +25,11 @@ import SearchIcon from "@mui/icons-material/Search";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import PersonAddAlt1Icon from "@mui/icons-material/PersonAddAlt1";
 
-import { getAdminUsersApi, createAdminUserApi, getRoleOptionsApi } from "../../api/adminUserApi.js";
+import {
+    getAdminUsersApi,
+    createAdminUserApi,
+    getRoleOptionsApi,
+} from "../../api/adminUserApi.js";
 import { getAllClassesApi } from "../../api/classApi";
 import { getAllModulesApi } from "../../api/moduleApi";
 
@@ -34,7 +38,8 @@ const statusChip = (status) => {
     const s = (status || "").toUpperCase();
     if (s === "ACTIVE") return <Chip label="ACTIVE" color="success" size="small" />;
     if (s === "BLOCKED") return <Chip label="BLOCKED" color="error" size="small" />;
-    if (s === "PENDING" || s === "WAITING_APPROVAL") return <Chip label={s} color="warning" size="small" />;
+    if (s === "PENDING" || s === "WAITING_APPROVAL")
+        return <Chip label={s} color="warning" size="small" />;
     if (s === "REJECTED") return <Chip label="REJECTED" color="default" size="small" />;
     return <Chip label={s || "UNKNOWN"} size="small" />;
 };
@@ -81,6 +86,24 @@ const mapModuleOptions = (arr) =>
         name: m.name ?? m.moduleName ?? m.module_name ?? "",
     }));
 
+// ✅ Convert any backend error shape (string/object/errors map) -> string (to avoid React crash)
+const toErrorText = (err, fallback = "Request failed.") => {
+    const data = err?.response?.data;
+
+    if (!data) return fallback;
+    if (typeof data === "string") return data;
+    if (typeof data?.message === "string") return data.message;
+
+    const obj = data?.errors && typeof data.errors === "object" ? data.errors : data;
+    if (obj && typeof obj === "object") {
+        return Object.entries(obj)
+            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v)}`)
+            .join(" | ");
+    }
+
+    return fallback;
+};
+
 /** ---------------- component ---------------- */
 export default function AdminUserList() {
     const theme = useTheme();
@@ -119,17 +142,44 @@ export default function AdminUserList() {
         roleName: "STUDENT",
     });
 
-    const onChange = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
+    const onChange = (key) => (e) =>
+        setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
-    // ✅ Responsive columns: ẩn bớt cột khi màn hình nhỏ để khỏi scroll ngang
+    const isAdminRole = useMemo(
+        () => (form.roleName || "").toUpperCase() === "ADMIN",
+        [form.roleName]
+    );
+
+    // ✅ When ADMIN selected: clear class/module to avoid sending stale values
+    useEffect(() => {
+        if (isAdminRole) {
+            setForm((prev) => ({
+                ...prev,
+                classId: "",
+                moduleId: "",
+            }));
+        }
+    }, [isAdminRole]);
+
+    // ✅ Responsive columns: hide some columns on smaller screens
     const columns = useMemo(() => {
         const base = [
             { field: "fullName", headerName: "Full Name", flex: 1.1, minWidth: 170 },
             { field: "email", headerName: "Email", flex: 1.3, minWidth: 210 },
             { field: "className", headerName: "Class", flex: 0.6, minWidth: 110 },
             { field: "moduleName", headerName: "Module", flex: 1.0, minWidth: 170 },
-            { field: "registerMethod", headerName: "Register Method", flex: 0.7, minWidth: 150 },
-            { field: "loginProvider", headerName: "Login Provider", flex: 0.7, minWidth: 140 },
+            {
+                field: "registerMethod",
+                headerName: "Register Method",
+                flex: 0.7,
+                minWidth: 150,
+            },
+            {
+                field: "loginProvider",
+                headerName: "Login Provider",
+                flex: 0.7,
+                minWidth: 140,
+            },
             {
                 field: "status",
                 headerName: "Status",
@@ -141,14 +191,14 @@ export default function AdminUserList() {
             { field: "role", headerName: "Role", flex: 0.55, minWidth: 110 },
         ];
 
-        // <1200: ẩn Register/Login Provider (ít quan trọng)
         const hideOnLg = new Set(["registerMethod", "loginProvider"]);
-        // <900: ẩn thêm Module để luôn fit
         const hideOnMd = new Set(["moduleName"]);
 
         return base.map((c) => ({
             ...c,
-            hide: (downLg && hideOnLg.has(c.field)) || (downMd && hideOnMd.has(c.field)),
+            hide:
+                (downLg && hideOnLg.has(c.field)) ||
+                (downMd && hideOnMd.has(c.field)),
         }));
     }, [downLg, downMd]);
 
@@ -161,7 +211,7 @@ export default function AdminUserList() {
             const list = normalizeList(res);
             setRows(list.map(normalizeUserRow));
         } catch (err) {
-            setErrMsg(err?.response?.data?.message || err?.response?.data || "Load users failed.");
+            setErrMsg(toErrorText(err, "Load users failed."));
         } finally {
             setLoading(false);
         }
@@ -194,7 +244,7 @@ export default function AdminUserList() {
                 setForm((prev) => ({ ...prev, roleName: roles[0].name }));
             }
         } catch (err) {
-            setFormErr(err?.response?.data?.message || err?.response?.data || "Load dropdown options failed.");
+            setFormErr(toErrorText(err, "Load dropdown options failed."));
             setRoleOptions([]);
         } finally {
             setOptionsLoading(false);
@@ -225,10 +275,15 @@ export default function AdminUserList() {
 
         if (!fullName) return setFormErr("Full name is required.");
         if (!email) return setFormErr("Email is required.");
-        if (!password || password.length < 6) return setFormErr("Password must be at least 6 characters.");
-        if (!form.classId) return setFormErr("Class is required.");
-        if (!form.moduleId) return setFormErr("Module is required.");
+        if (!password || password.length < 6)
+            return setFormErr("Password must be at least 6 characters.");
         if (!form.roleName) return setFormErr("Role is required.");
+
+        // ✅ Only require class/module when NOT admin
+        if (!isAdminRole) {
+            if (!form.classId) return setFormErr("Class is required.");
+            if (!form.moduleId) return setFormErr("Module is required.");
+        }
 
         try {
             setSaving(true);
@@ -237,9 +292,13 @@ export default function AdminUserList() {
                 fullName,
                 email,
                 password,
-                classId: Number(form.classId),
-                moduleId: Number(form.moduleId),
                 roleName: form.roleName,
+                ...(isAdminRole
+                    ? {}
+                    : {
+                        classId: Number(form.classId),
+                        moduleId: Number(form.moduleId),
+                    }),
             };
 
             await createAdminUserApi(payload);
@@ -258,7 +317,7 @@ export default function AdminUserList() {
             await fetchUsers();
             setTimeout(() => setOpen(false), 250);
         } catch (err) {
-            setFormErr(err?.response?.data?.message || err?.response?.data || "Create user failed.");
+            setFormErr(toErrorText(err, "Create user failed."));
         } finally {
             setSaving(false);
         }
@@ -266,8 +325,13 @@ export default function AdminUserList() {
 
     const filteredRows = useMemo(() => {
         const keyword = q.trim().toLowerCase();
+
         return rows.filter((r) => {
-            const okStatus = statusFilter === "ALL" ? true : (r.status || "").toUpperCase() === statusFilter;
+            const okStatus =
+                statusFilter === "ALL"
+                    ? true
+                    : (r.status || "").toUpperCase() === statusFilter;
+
             const okQ =
                 !keyword ||
                 (r.fullName || "").toLowerCase().includes(keyword) ||
@@ -282,9 +346,14 @@ export default function AdminUserList() {
 
     const stats = useMemo(() => {
         const total = rows.length;
-        const active = rows.filter((r) => (r.status || "").toUpperCase() === "ACTIVE").length;
-        const blocked = rows.filter((r) => (r.status || "").toUpperCase() === "BLOCKED").length;
-        const pending = rows.filter((r) => ["PENDING", "WAITING_APPROVAL"].includes((r.status || "").toUpperCase())).length;
+        const active = rows.filter((r) => (r.status || "").toUpperCase() === "ACTIVE")
+            .length;
+        const blocked = rows.filter((r) => (r.status || "").toUpperCase() === "BLOCKED")
+            .length;
+        const pending = rows.filter((r) =>
+            ["PENDING", "WAITING_APPROVAL"].includes((r.status || "").toUpperCase())
+        ).length;
+
         return { total, active, pending, blocked };
     }, [rows]);
 
@@ -322,7 +391,14 @@ export default function AdminUserList() {
                         </Typography>
                     </Box>
 
-                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="flex-end" flexWrap="wrap" sx={{ minWidth: 0 }}>
+                    <Stack
+                        direction="row"
+                        spacing={1}
+                        alignItems="center"
+                        justifyContent="flex-end"
+                        flexWrap="wrap"
+                        sx={{ minWidth: 0 }}
+                    >
                         <Chip label={`Total: ${stats.total}`} />
                         <Chip label={`Active: ${stats.active}`} color="success" />
                         <Chip label={`Pending: ${stats.pending}`} color="warning" />
@@ -358,7 +434,12 @@ export default function AdminUserList() {
                     borderColor: "divider",
                 }}
             >
-                <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }} sx={{ minWidth: 0 }}>
+                <Stack
+                    direction={{ xs: "column", md: "row" }}
+                    spacing={1}
+                    alignItems={{ md: "center" }}
+                    sx={{ minWidth: 0 }}
+                >
                     <TextField
                         size="small"
                         placeholder="Search name / email / class / module / role..."
@@ -387,26 +468,27 @@ export default function AdminUserList() {
                         <option value="ACTIVE">ACTIVE</option>
                         <option value="BLOCKED">BLOCKED</option>
                         <option value="WAITING_APPROVAL">WAITING_APPROVAL</option>
+                        <option value="REJECTED">REJECTED</option>
                     </TextField>
 
                     <Box sx={{ flex: 1 }} />
 
                     <Tooltip title="Refresh">
-            <span>
-              <IconButton
-                  onClick={async () => {
-                      try {
-                          setRefreshing(true);
-                          await fetchUsers();
-                      } finally {
-                          setRefreshing(false);
-                      }
-                  }}
-                  disabled={loading || refreshing}
-              >
-                <RefreshIcon />
-              </IconButton>
-            </span>
+                        <span>
+                            <IconButton
+                                onClick={async () => {
+                                    try {
+                                        setRefreshing(true);
+                                        await fetchUsers();
+                                    } finally {
+                                        setRefreshing(false);
+                                    }
+                                }}
+                                disabled={loading || refreshing}
+                            >
+                                <RefreshIcon />
+                            </IconButton>
+                        </span>
                     </Tooltip>
                 </Stack>
             </Paper>
@@ -436,7 +518,11 @@ export default function AdminUserList() {
                     disableColumnMenu
                     sx={{
                         border: 0,
-                        "& .MuiDataGrid-columnHeaders": { bgcolor: "background.paper", borderBottom: "1px solid", borderColor: "divider" },
+                        "& .MuiDataGrid-columnHeaders": {
+                            bgcolor: "background.paper",
+                            borderBottom: "1px solid",
+                            borderColor: "divider",
+                        },
                         "& .MuiDataGrid-row:nth-of-type(odd)": { bgcolor: "action.hover" },
                     }}
                 />
@@ -452,8 +538,21 @@ export default function AdminUserList() {
                         {formErr && <Alert severity="error">{formErr}</Alert>}
                         {formOk && <Alert severity="success">{formOk}</Alert>}
 
-                        <TextField label="Full Name" value={form.fullName} onChange={onChange("fullName")} disabled={saving} fullWidth />
-                        <TextField label="Email" type="email" value={form.email} onChange={onChange("email")} disabled={saving} fullWidth />
+                        <TextField
+                            label="Full Name"
+                            value={form.fullName}
+                            onChange={onChange("fullName")}
+                            disabled={saving}
+                            fullWidth
+                        />
+                        <TextField
+                            label="Email"
+                            type="email"
+                            value={form.email}
+                            onChange={onChange("email")}
+                            disabled={saving}
+                            fullWidth
+                        />
                         <TextField
                             label="Password"
                             type="password"
@@ -500,8 +599,9 @@ export default function AdminUserList() {
                                     SelectProps={{ native: true }}
                                     value={form.classId}
                                     onChange={onChange("classId")}
-                                    disabled={saving}
+                                    disabled={saving || isAdminRole}
                                     fullWidth
+                                    helperText={isAdminRole ? "ADMIN không cần chọn Class" : ""}
                                 >
                                     {classOptions.map((c) => (
                                         <option key={c.id} value={c.id}>
@@ -516,8 +616,9 @@ export default function AdminUserList() {
                                     SelectProps={{ native: true }}
                                     value={form.moduleId}
                                     onChange={onChange("moduleId")}
-                                    disabled={saving}
+                                    disabled={saving || isAdminRole}
                                     fullWidth
+                                    helperText={isAdminRole ? "ADMIN không cần chọn Module" : ""}
                                 >
                                     {moduleOptions.map((m) => (
                                         <option key={m.id} value={m.id}>
@@ -534,7 +635,11 @@ export default function AdminUserList() {
                     <Button onClick={closeDialog} disabled={saving}>
                         Hủy
                     </Button>
-                    <Button variant="contained" onClick={submitCreate} disabled={saving || optionsLoading}>
+                    <Button
+                        variant="contained"
+                        onClick={submitCreate}
+                        disabled={saving || optionsLoading}
+                    >
                         {saving ? "Đang tạo..." : "Tạo User"}
                     </Button>
                 </DialogActions>
