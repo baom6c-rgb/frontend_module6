@@ -75,7 +75,7 @@ const AdminLayout = () => {
         localStorage.removeItem("roles");
         localStorage.removeItem("email");
         localStorage.removeItem("status");
-        window.location.href = "/login";
+        navigate("/login", { replace: true });
     };
 
 
