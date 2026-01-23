@@ -287,7 +287,7 @@ const AdminDashboard = () => {
                             icon={<PeopleAlt />}
                             color="#2B3674"
                             bgColor="#F4F7FE"
-                            trend="+55% than last week"
+                            trend="ALL STUDENTS"
                         />
                     </Grid>
 
@@ -298,7 +298,7 @@ const AdminDashboard = () => {
                             icon={<CheckCircle />}
                             color="#4318FF"
                             bgColor="#F4F7FE"
-                            trend="+3% than last month"
+                            trend="WAITING_APPROVAL"
                         />
                     </Grid>
 
@@ -309,7 +309,7 @@ const AdminDashboard = () => {
                             icon={<HowToReg />}
                             color="#05CD99"
                             bgColor="#F4F7FE"
-                            trend="+1% than yesterday"
+                            trend="ACTIVE STUDENTS"
                         />
                     </Grid>
 
@@ -320,7 +320,7 @@ const AdminDashboard = () => {
                             icon={<Block />}
                             color="#EE5D50"
                             bgColor="#F4F7FE"
-                            trend="Just updated"
+                            trend="STUDENT BLOCKED"
                         />
                     </Grid>
                 </Grid>

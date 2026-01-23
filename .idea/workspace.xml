@@ -4,9 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b22cd24f-5aa0-4bfe-82f8-eeaa67120160" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/admin-ui/src/api/axiosConfig.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
+    <list default="true" id="a6d231b7-8c74-4eb5-949d-1fa4a5c227da" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/admin-ui/src/api/dashboardApi.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/admin-ui/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/admin-ui/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/admin-ui/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/admin-ui/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/admin-ui/src/features/users/UserDashboard.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/admin-ui/src/features/users/UserDashboard.jsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -16,39 +19,35 @@
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
       <list>
-        <option value="TypeScript File" />
-        <option value="CSS File" />
-        <option value="JavaScript File" />
         <option value="JSX File" />
+        <option value="JavaScript File" />
       </list>
     </option>
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
+  </component>
   <component name="ProjectColorInfo">{
-  &quot;associatedIndex&quot;: 5
+  &quot;associatedIndex&quot;: 7
 }</component>
-  <component name="ProjectId" id="38VCcQA8pi730ZZAj41qxizOLma" />
+  <component name="ProjectId" id="38ZNtdmYtCLkKPqVAdA1QHqgzPW" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Node.js.EditUser.jsx.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
     "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultAutoModeForALLUsers.v1": "true",
     "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "feature/interface__admin__page",
+    "git-widget-placeholder": "feature/fe__user__dashboard",
     "junie.onboarding.icon.badge.shown": "true",
-    "kotlin-language-version-configured": "true",
-    "list.type.of.created.stylesheet": "CSS",
     "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
@@ -59,9 +58,10 @@
 }]]></component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
-      <recent name="E:\Module6\project_fe\admin-ui\src\style" />
-      <recent name="E:\Module6\project_fe\admin-ui\src" />
-      <recent name="E:\Module6\project_fe\admin-ui\src\layout" />
+      <recent name="E:\Module6\project_fe\admin-ui\src\features\login" />
+      <recent name="E:\Module6\project_fe\admin-ui\src\features\auth\components" />
+      <recent name="E:\Module6\project_fe\admin-ui\src\features" />
+      <recent name="E:\Module6\project_fe\admin-ui\src\pages\admin" />
     </key>
   </component>
   <component name="SharedIndexes">
@@ -73,13 +73,14 @@
   </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
-      <changelist id="b22cd24f-5aa0-4bfe-82f8-eeaa67120160" name="Changes" comment="" />
-      <created>1768875438914</created>
+      <changelist id="a6d231b7-8c74-4eb5-949d-1fa4a5c227da" name="Changes" comment="" />
+      <created>1769003466622</created>
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
-      <updated>1768875438914</updated>
-      <workItem from="1768875438914" duration="4979000" />
-      <workItem from="1768888163524" duration="22366000" />
+      <updated>1769003466622</updated>
+      <workItem from="1769003468382" duration="2741000" />
+      <workItem from="1769043507528" duration="27606000" />
+      <workItem from="1769130137425" duration="15199000" />
     </task>
     <servers />
   </component>
