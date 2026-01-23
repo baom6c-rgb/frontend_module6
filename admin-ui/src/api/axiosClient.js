@@ -10,18 +10,18 @@ const axiosClient = axios.create({
 // 🔥 REQUEST INTERCEPTOR
 axiosClient.interceptors.request.use(
     (config) => {
-        // ✅ SỬA Ở ĐÂY
         const token = localStorage.getItem("token");
 
         const isAuthApi =
             config.url?.startsWith("/auth/login") ||
             config.url?.startsWith("/auth/register") ||
-            config.url?.startsWith("/auth/google");
+            config.url?.startsWith("/auth/google") ||
+            config.url?.startsWith("/auth/forgot-password") ||
+            config.url?.startsWith("/auth/reset-password");
 
         if (token && token !== "null" && !isAuthApi) {
             config.headers.Authorization = `Bearer ${token}`;
         }
-
 
         return config;
     },

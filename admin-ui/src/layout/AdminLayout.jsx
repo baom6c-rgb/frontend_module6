@@ -71,11 +71,13 @@ const AdminLayout = () => {
 
     const handleLogout = () => {
         handleClose();
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("userRoles");
-        localStorage.removeItem("userData");
+        localStorage.removeItem("token");
+        localStorage.removeItem("roles");
+        localStorage.removeItem("email");
+        localStorage.removeItem("status");
         window.location.href = "/login";
     };
+
 
     // ===== admin role check =====
     const { roles = [] } = useSelector((state) => state.auth || {});
@@ -308,6 +310,13 @@ const AdminLayout = () => {
                             text="Phê duyệt học viên"
                             onClick={() => navigate("/admin/approval")}
                         />
+                        <NavItem
+                            active={currentPath.includes("/admin/users")}
+                            icon={<PeopleAltRounded />}
+                            text="Danh sách user"
+                            onClick={() => navigate("/admin/users")}
+                        />
+
                     </Box>
                 </Box>
             </Drawer>
