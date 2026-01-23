@@ -20,6 +20,7 @@
       <list>
         <option value="JavaScript File" />
         <option value="JSX File" />
+        <option value="JavaScript File" />
       </list>
     </option>
   </component>
@@ -48,7 +49,6 @@
     "ignore.virus.scanning.warn.message": "true",
     "last_opened_file_path": "C:/Users/Admin/IdeaProjects/module 4/finalTest/FE_ai_learning_platform/frontend_module6",
     "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
