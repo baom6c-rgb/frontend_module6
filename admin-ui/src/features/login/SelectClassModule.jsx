@@ -18,11 +18,18 @@ import { completeProfileApi } from "../../api/userApi.js";
 import GlobalLoading from "../../components/common/GlobalLoading";
 import { useToast } from "../../components/common/AppToast";
 
+const safeParse = (key, fallback = null) => {
+    try {
+        const s = localStorage.getItem(key);
+        return s ? JSON.parse(s) : fallback;
+    } catch {
+        return fallback;
+    }
+};
+
 export default function SelectClassModule() {
     const navigate = useNavigate();
     const { showToast } = useToast();
-
-    const email = localStorage.getItem("register_email") || "";
 
     const [classes, setClasses] = useState([]);
     const [modules, setModules] = useState([]);
@@ -30,6 +37,20 @@ export default function SelectClassModule() {
     const [form, setForm] = useState({ classId: null, moduleId: null });
     const [touched, setTouched] = useState({ classId: false, moduleId: false });
     const [loading, setLoading] = useState(false);
+
+    // ✅ resolve email robustly (register_email OR userData.email)
+    const resolveEmail = () => {
+        const reg = localStorage.getItem("register_email");
+        if (reg && String(reg).trim()) return String(reg).trim();
+
+        const u = safeParse("userData", {});
+        const fromUserData = u?.email;
+        if (fromUserData && String(fromUserData).trim()) return String(fromUserData).trim();
+
+        return "";
+    };
+
+    const [email, setEmail] = useState(() => resolveEmail());
 
     // ===== load options =====
     useEffect(() => {
@@ -55,13 +76,17 @@ export default function SelectClassModule() {
         };
     }, [showToast]);
 
-    // ===== missing email => back login =====
+    // ✅ ensure email exists, and sync back to register_email
     useEffect(() => {
-        if (!email) {
+        const e = resolveEmail();
+        if (!e) {
             showToast("Không tìm thấy email đăng ký Google. Vui lòng đăng nhập lại.", "warning");
             navigate("/login", { replace: true });
+            return;
         }
-    }, [email, navigate, showToast]);
+        setEmail(e);
+        localStorage.setItem("register_email", e);
+    }, [navigate, showToast]);
 
     const selectedClass = useMemo(
         () => classes.find((c) => c.id === form.classId) || null,
@@ -86,40 +111,60 @@ export default function SelectClassModule() {
             return;
         }
 
+        const currentEmail = resolveEmail();
+        if (!currentEmail) {
+            showToast("Thiếu email. Vui lòng đăng nhập lại.", "error");
+            navigate("/login", { replace: true });
+            return;
+        }
+
         try {
             setLoading(true);
 
-            // ✅ BE cần trả AuthResponse (token/roles/status/email)
             const res = await completeProfileApi({
-                email,
+                email: currentEmail,
                 classId: form.classId,
                 moduleId: form.moduleId,
             });
 
             const payload = res?.data;
 
-            // Nếu BE vẫn trả string => báo rõ để m biết BE chưa sửa
+            // ✅ bắt lỗi BE trả sai format
             if (!payload || typeof payload === "string") {
-                showToast("BE chưa trả token sau complete-profile. Cần sửa API trả AuthResponse.", "error");
+                showToast("BE chưa trả AuthResponse sau complete-profile.", "error");
                 return;
             }
 
-            // ✅ sync auth localStorage theo chuẩn authSlice của m
-            if (payload.token) localStorage.setItem("accessToken", payload.token);
+            const status = String(payload?.status || "").toUpperCase();
+
+            // ✅ nghiệp vụ đúng: complete-profile xong phải là WAITING_APPROVAL
+            if (status !== "WAITING_APPROVAL") {
+                showToast(`Trạng thái sau complete-profile không đúng: ${status || "(empty)"}`, "error");
+                return;
+            }
+
+            // ✅ sync auth localStorage
+            const token = payload?.token || payload?.accessToken || payload?.jwt;
+            if (token) localStorage.setItem("accessToken", token);
+
             localStorage.setItem("userRoles", JSON.stringify(payload.roles || []));
             localStorage.setItem("userData", JSON.stringify(payload));
 
-            // ✅ xóa register_email sau khi đã có token
-            localStorage.removeItem("register_email");
+            // ✅ set flag để ProtectedRoute gate đúng
+            localStorage.setItem("pendingApproval", "1");
+            localStorage.removeItem("onboardingCreated"); // nếu có dùng
+            localStorage.removeItem("register_email"); // xong onboarding thì bỏ
 
             showToast("Gửi yêu cầu thành công. Vui lòng chờ admin phê duyệt.", "success");
 
-            // ✅ waiting nằm trong user layout (có header + logout)
+            // ✅ luôn chuyển sang trang chờ duyệt
             navigate("/users/waiting-approval", { replace: true });
         } catch (err) {
+            console.error("complete-profile error:", err);
             const msg =
                 err?.response?.data?.message ||
                 err?.response?.data ||
+                err?.message ||
                 "Gửi yêu cầu thất bại";
             showToast(String(msg), "error");
         } finally {
