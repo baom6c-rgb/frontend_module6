@@ -24,7 +24,7 @@ const normalizeRoles = (roles) =>
         .filter(Boolean)
         .map((r) => (typeof r === "string" ? r.replace("ROLE_", "") : r));
 
-const ProtectedRoute = ({ allowedRoles }) => {
+export default function ProtectedRoute({ allowedRoles }) {
     const location = useLocation();
 
     const { token: reduxToken, roles: reduxRoles = [], user: reduxUser } =
@@ -33,24 +33,35 @@ const ProtectedRoute = ({ allowedRoles }) => {
     const storedUser = getStoredUser();
     const status = (reduxUser?.status || storedUser?.status || "").toUpperCase();
 
+    // ===== paths =====
     const isWaitingPath = location.pathname.startsWith("/users/waiting-approval");
-    const isWaiting = status === "WAITING_APPROVAL" || localStorage.getItem("pendingApproval") === "1";
+    const isCompleteProfilePath = location.pathname.startsWith("/complete-profile");
 
-    // ✅ FIX QUAN TRỌNG:
-    // Cho phép vào trang waiting-approval dù chưa có token
-    if (!reduxToken && !localStorage.getItem("accessToken")) {
-        if (isWaitingPath && isWaiting) {
-            return <Outlet />;
-        }
+    // ===== flags/status =====
+    // ✅ WAITING ưu tiên theo flag (vì status có thể chưa kịp update)
+    const isWaiting =
+        localStorage.getItem("pendingApproval") === "1" || status === "WAITING_APPROVAL";
+
+    // ✅ CREATED chỉ đúng khi chưa bước sang WAITING
+    const isCreated =
+        !isWaiting && (status === "CREATED" || localStorage.getItem("onboardingCreated") === "1");
+
+    // ===== token =====
+    const token = reduxToken || localStorage.getItem("accessToken");
+
+    // ✅ ALLOW WITHOUT TOKEN:
+    // - CREATED users can access /complete-profile
+    // - WAITING users can access /users/waiting-approval
+    if (!token) {
+        if (isCreated && isCompleteProfilePath) return <Outlet />;
+        if (isWaiting && isWaitingPath) return <Outlet />;
         return <Navigate to="/login" replace state={{ from: location.pathname }} />;
     }
 
-    const token = reduxToken || localStorage.getItem("accessToken");
-
+    // ===== role check =====
     const roles = reduxRoles?.length > 0 ? reduxRoles : getStoredRoles();
     const normalizedRoles = normalizeRoles(roles);
 
-    // role check
     if (allowedRoles && allowedRoles.length > 0) {
         const hasPermission = allowedRoles.some((r) =>
             normalizedRoles.includes(String(r).replace("ROLE_", ""))
@@ -63,12 +74,14 @@ const ProtectedRoute = ({ allowedRoles }) => {
         }
     }
 
-    // gate theo status
+    // ✅ GATE ORDER: WAITING trước CREATED
     if (isWaiting && !isWaitingPath) {
         return <Navigate to="/users/waiting-approval" replace />;
     }
 
-    return <Outlet />;
-};
+    if (isCreated && !isCompleteProfilePath) {
+        return <Navigate to="/complete-profile" replace />;
+    }
 
-export default ProtectedRoute;
+    return <Outlet />;
+}
