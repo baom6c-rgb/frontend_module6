@@ -1,24 +1,18 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import { ThemeProvider, createTheme } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import { Provider } from "react-redux";
 import store from "./app/store";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { ToastProvider } from "./components/common/AppToast";
 
-// Tùy chỉnh màu sắc chủ đạo nếu muốn
-const theme = createTheme({
-    palette: {
-        primary: {
-            main: "#1976d2",
-        },
-        secondary: {
-            main: "#dc004e",
-        },
-    },
-});
+import { ThemeProvider } from "@mui/material/styles";
+import { theme } from "./theme/theme";
+import "@fontsource/roboto/300.css";
+import "@fontsource/roboto/400.css";
+import "@fontsource/roboto/500.css";
+import "@fontsource/roboto/700.css";
 
 const GOOGLE_CLIENT_ID =
     import.meta.env.VITE_GOOGLE_CLIENT_ID ||

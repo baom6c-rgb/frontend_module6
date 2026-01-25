@@ -1,24 +1,11 @@
 import React, { useMemo, useState } from "react";
-import {
-    Box,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    TextField,
-    Button,
-    CircularProgress,
-    Stack,
-} from "@mui/material";
+import { Box, CircularProgress, Stack, TextField } from "@mui/material";
 import Autocomplete from "@mui/material/Autocomplete";
-import { Save, Close } from "@mui/icons-material";
 import { adminUserApi } from "../../api/adminUserApi";
+import AppModal from "../../components/common/AppModal";
 
-const getClassLabel = (opt) =>
-    opt?.label ?? opt?.className ?? opt?.name ?? "";
-
-const getModuleLabel = (opt) =>
-    opt?.label ?? opt?.moduleName ?? opt?.name ?? "";
+const getClassLabel = (opt) => opt?.label ?? opt?.className ?? opt?.name ?? "";
+const getModuleLabel = (opt) => opt?.label ?? opt?.moduleName ?? opt?.name ?? "";
 
 export default function EditStudentModal({ open, userId, onClose, onSaved }) {
     const [editLoading, setEditLoading] = useState(false);
@@ -79,7 +66,6 @@ export default function EditStudentModal({ open, userId, onClose, onSaved }) {
         }
     };
 
-    // load when open changes to true
     React.useEffect(() => {
         if (open) loadData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -87,6 +73,7 @@ export default function EditStudentModal({ open, userId, onClose, onSaved }) {
 
     const handleSave = async () => {
         if (!userId || !canSave) return;
+
         setSaving(true);
         try {
             const payload = {
@@ -98,10 +85,8 @@ export default function EditStudentModal({ open, userId, onClose, onSaved }) {
 
             await adminUserApi.updateUser(userId, payload);
 
+            // AppModal sẽ tự toast success + tự close sau khi onSubmit resolve (theo code modal m vừa làm)
             await onSaved?.();
-            onClose?.();
-        } catch (e) {
-            console.error("Update user failed:", e);
         } finally {
             setSaving(false);
         }
@@ -113,86 +98,64 @@ export default function EditStudentModal({ open, userId, onClose, onSaved }) {
     };
 
     return (
-        <Dialog open={open} onClose={safeClose} fullWidth maxWidth="sm">
-            <DialogTitle sx={{ fontWeight: 900, color: "#1B2559" }}>
-                Chỉnh sửa học viên
-            </DialogTitle>
+        <AppModal
+            open={open}
+            title="Chỉnh sửa học viên"
+            onClose={safeClose}
+            primaryText="Lưu"
+            secondaryText="Hủy"
+            onSubmit={handleSave}
+            loading={saving}
+            maxWidth="sm"
+            hideActions={false}
+        >
+            {editLoading ? (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+                    <CircularProgress />
+                </Box>
+            ) : (
+                <Stack spacing={2.2} sx={{ mt: 0.5 }}>
+                    <TextField
+                        label="Họ tên"
+                        value={form.fullName}
+                        onChange={(e) => setForm((p) => ({ ...p, fullName: e.target.value }))}
+                        fullWidth
+                    />
 
-            <DialogContent dividers>
-                {editLoading ? (
-                    <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-                        <CircularProgress />
-                    </Box>
-                ) : (
-                    <Stack spacing={2.2} sx={{ mt: 1 }}>
-                        <TextField
-                            label="Họ tên"
-                            value={form.fullName}
-                            onChange={(e) => setForm((p) => ({ ...p, fullName: e.target.value }))}
-                            fullWidth
-                        />
+                    <TextField
+                        label="Email"
+                        value={form.email}
+                        onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                        fullWidth
+                    />
 
-                        <TextField
-                            label="Email"
-                            value={form.email}
-                            onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-                            fullWidth
-                        />
+                    <Autocomplete
+                        options={classOptions}
+                        value={selectedClass}
+                        isOptionEqualToValue={(opt, val) => opt?.id === val?.id}
+                        getOptionLabel={getClassLabel}
+                        onChange={(_, newValue) =>
+                            setForm((p) => ({ ...p, classId: newValue?.id ?? null }))
+                        }
+                        loading={editLoading}
+                        noOptionsText="Không có lớp học"
+                        renderInput={(params) => <TextField {...params} label="Lớp học" fullWidth />}
+                    />
 
-                        <Autocomplete
-                            options={classOptions}
-                            value={selectedClass}
-                            isOptionEqualToValue={(opt, val) => opt?.id === val?.id}
-                            getOptionLabel={getClassLabel}
-                            onChange={(_, newValue) =>
-                                setForm((p) => ({ ...p, classId: newValue?.id ?? null }))
-                            }
-                            loading={editLoading}
-                            noOptionsText="Không có lớp học"
-                            renderInput={(params) => (
-                                <TextField {...params} label="Lớp học" fullWidth />
-                            )}
-                        />
-
-                        <Autocomplete
-                            options={moduleOptions}
-                            value={selectedModule}
-                            isOptionEqualToValue={(opt, val) => opt?.id === val?.id}
-                            getOptionLabel={getModuleLabel}
-                            onChange={(_, newValue) =>
-                                setForm((p) => ({ ...p, moduleId: newValue?.id ?? null }))
-                            }
-                            loading={editLoading}
-                            noOptionsText="Không có module"
-                            renderInput={(params) => (
-                                <TextField {...params} label="Module" fullWidth />
-                            )}
-                        />
-                    </Stack>
-                )}
-            </DialogContent>
-
-            <DialogActions sx={{ p: 2 }}>
-                <Button
-                    startIcon={<Close />}
-                    variant="outlined"
-                    onClick={safeClose}
-                    disabled={saving}
-                    sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 800 }}
-                >
-                    Hủy
-                </Button>
-
-                <Button
-                    startIcon={<Save />}
-                    variant="contained"
-                    onClick={handleSave}
-                    disabled={!canSave || saving || editLoading}
-                    sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 800 }}
-                >
-                    {saving ? "Đang lưu..." : "Lưu"}
-                </Button>
-            </DialogActions>
-        </Dialog>
+                    <Autocomplete
+                        options={moduleOptions}
+                        value={selectedModule}
+                        isOptionEqualToValue={(opt, val) => opt?.id === val?.id}
+                        getOptionLabel={getModuleLabel}
+                        onChange={(_, newValue) =>
+                            setForm((p) => ({ ...p, moduleId: newValue?.id ?? null }))
+                        }
+                        loading={editLoading}
+                        noOptionsText="Không có module"
+                        renderInput={(params) => <TextField {...params} label="Module" fullWidth />}
+                    />
+                </Stack>
+            )}
+        </AppModal>
     );
 }
