@@ -26,3 +26,5 @@ export const uploadMyAvatarApi = (file) => {
         headers: { "Content-Type": "multipart/form-data" },
     });
 };
+export const getUserStatusByEmailApi = (email) =>
+    axiosAuth.get("/users/status", { params: { email } });
