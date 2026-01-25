@@ -1,6 +1,7 @@
 import React from "react";
-import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { useSelector } from "react-redux";
+import {Outlet, useNavigate, useLocation} from "react-router-dom";
+import {useDispatch, useSelector} from "react-redux";
+import {logout as logoutAction} from "../features/auth/authSlice";
 
 import {
     Box,
@@ -31,13 +32,13 @@ import {
 } from "@mui/icons-material";
 
 import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
-import { usePendingApprovals } from "../features/admin/hooks/usePendingApprovals";
+import {usePendingApprovals} from "../features/admin/hooks/usePendingApprovals";
 
 const drawerWidth = 280;
 
 // Navigation Item Component
-const NavItem = ({ active, icon, text, onClick }) => (
-    <Box sx={{ px: 2, mb: 1 }}>
+const NavItem = ({active, icon, text, onClick}) => (
+    <Box sx={{px: 2, mb: 1}}>
         <Box
             onClick={onClick}
             sx={{
@@ -49,11 +50,11 @@ const NavItem = ({ active, icon, text, onClick }) => (
                 color: active ? "#FFFFFF" : "#A3AED0",
                 transition: "0.3s",
                 cursor: "pointer",
-                "&:hover": { bgcolor: active ? "#1976d2" : "rgba(255, 255, 255, 0.05)" },
+                "&:hover": {bgcolor: active ? "#1976d2" : "rgba(255, 255, 255, 0.05)"},
             }}
         >
-            <Box sx={{ mr: 2, display: "flex" }}>{icon}</Box>
-            <Typography sx={{ fontWeight: 600 }}>{text}</Typography>
+            <Box sx={{mr: 2, display: "flex"}}>{icon}</Box>
+            <Typography sx={{fontWeight: 600}}>{text}</Typography>
         </Box>
     </Box>
 );
@@ -61,6 +62,12 @@ const NavItem = ({ active, icon, text, onClick }) => (
 const AdminLayout = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const dispatch = useDispatch();
+
+    // ===== read auth from redux =====
+    const {token: tokenFromRedux, roles = []} = useSelector((state) => state.auth || {});
+    const normalizedRoles = (roles || []).map((r) => (r || "").replace("ROLE_", ""));
+    const isAdmin = normalizedRoles.includes("ADMIN");
 
     // ===== avatar menu =====
     const [anchorEl, setAnchorEl] = React.useState(null);
@@ -71,18 +78,30 @@ const AdminLayout = () => {
 
     const handleLogout = () => {
         handleClose();
-        localStorage.removeItem("token");
-        localStorage.removeItem("roles");
+
+        // ✅ clear redux + localStorage(auth) (authSlice đã remove accessToken/userRoles/userData)
+        dispatch(logoutAction());
+
+        // (optional) nếu m có lưu các key ngoài auth thì xoá thêm
         localStorage.removeItem("email");
         localStorage.removeItem("status");
-        navigate("/login", { replace: true });
+
+        // ✅ replace để back không quay lại route protected
+        navigate("/login", {replace: true});
     };
 
+    // ✅ anti bfcache: logout rồi bấm Back vẫn không vào lại admin
+    React.useEffect(() => {
+        const onPageShow = () => {
+            const lsToken = localStorage.getItem("accessToken"); // ✅ đúng key của m
+            if (!tokenFromRedux && !lsToken) {
+                navigate("/login", {replace: true});
+            }
+        };
 
-    // ===== admin role check =====
-    const { roles = [] } = useSelector((state) => state.auth || {});
-    const normalizedRoles = roles.map((r) => (r || "").replace("ROLE_", ""));
-    const isAdmin = normalizedRoles.includes("ADMIN");
+        window.addEventListener("pageshow", onPageShow);
+        return () => window.removeEventListener("pageshow", onPageShow);
+    }, [tokenFromRedux, navigate]);
 
     // ===== notifications menu =====
     const [notifAnchorEl, setNotifAnchorEl] = React.useState(null);
@@ -91,7 +110,7 @@ const AdminLayout = () => {
     const openNotif = (e) => setNotifAnchorEl(e.currentTarget);
     const closeNotif = () => setNotifAnchorEl(null);
 
-    const { items: pendingUsers, count: pendingCount } = usePendingApprovals({
+    const {items: pendingUsers, count: pendingCount} = usePendingApprovals({
         enabled: isAdmin,
         intervalMs: 30000,
     });
@@ -100,7 +119,7 @@ const AdminLayout = () => {
     const currentPath = location.pathname;
 
     return (
-        <Box sx={{ display: "flex", bgcolor: "#F4F7FE", minHeight: "100vh" }}>
+        <Box sx={{display: "flex", bgcolor: "#F4F7FE", minHeight: "100vh"}}>
             {/* AppBar */}
             <AppBar
                 position="fixed"
@@ -112,7 +131,7 @@ const AdminLayout = () => {
                     borderBottom: "1px solid #E0E5F2",
                 }}
             >
-                <Toolbar sx={{ justifyContent: "space-between" }}>
+                <Toolbar sx={{justifyContent: "space-between"}}>
                     <Typography
                         variant="h5"
                         sx={{
@@ -145,17 +164,17 @@ const AdminLayout = () => {
                     </Typography>
 
                     {/* Right actions */}
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Box sx={{display: "flex", alignItems: "center", gap: 1}}>
                         {/* 🔔 Notification Bell (ADMIN only) */}
                         {isAdmin && (
                             <>
                                 <IconButton
                                     onClick={openNotif}
-                                    sx={{ p: 0.8, border: "1px solid #E0E5F2" }}
+                                    sx={{p: 0.8, border: "1px solid #E0E5F2"}}
                                     aria-label="notifications"
                                 >
                                     <Badge badgeContent={pendingCount} color="error" max={99}>
-                                        <NotificationsRoundedIcon sx={{ color: "#2B3674" }} />
+                                        <NotificationsRoundedIcon sx={{color: "#2B3674"}}/>
                                     </Badge>
                                 </IconButton>
 
@@ -173,15 +192,15 @@ const AdminLayout = () => {
                                         },
                                     }}
                                 >
-                                    <Box sx={{ px: 2, py: 1.5, borderBottom: "1px solid #E0E5F2" }}>
-                                        <Typography sx={{ fontWeight: 800, color: "#1B2559" }}>
+                                    <Box sx={{px: 2, py: 1.5, borderBottom: "1px solid #E0E5F2"}}>
+                                        <Typography sx={{fontWeight: 800, color: "#1B2559"}}>
                                             Chờ phê duyệt ({pendingCount})
                                         </Typography>
                                     </Box>
 
                                     {pendingCount === 0 ? (
-                                        <Box sx={{ px: 2, py: 2 }}>
-                                            <Typography sx={{ color: "#707EAE", fontWeight: 600 }}>
+                                        <Box sx={{px: 2, py: 2}}>
+                                            <Typography sx={{color: "#707EAE", fontWeight: 600}}>
                                                 Không có yêu cầu phê duyệt mới.
                                             </Typography>
                                         </Box>
@@ -194,16 +213,16 @@ const AdminLayout = () => {
                                                         closeNotif();
                                                         navigate("/admin/approval");
                                                     }}
-                                                    sx={{ px: 2, py: 1.5 }}
+                                                    sx={{px: 2, py: 1.5}}
                                                 >
                                                     <ListItemText
                                                         primary={
-                                                            <Typography sx={{ fontWeight: 800, color: "#1B2559" }}>
+                                                            <Typography sx={{fontWeight: 800, color: "#1B2559"}}>
                                                                 {u.fullName}
                                                             </Typography>
                                                         }
                                                         secondary={
-                                                            <Typography sx={{ color: "#707EAE" }}>{u.email}</Typography>
+                                                            <Typography sx={{color: "#707EAE"}}>{u.email}</Typography>
                                                         }
                                                     />
                                                 </ListItemButton>
@@ -211,7 +230,7 @@ const AdminLayout = () => {
                                         </List>
                                     )}
 
-                                    <Box sx={{ px: 2, py: 1.5, borderTop: "1px solid #E0E5F2" }}>
+                                    <Box sx={{px: 2, py: 1.5, borderTop: "1px solid #E0E5F2"}}>
                                         <Button
                                             fullWidth
                                             variant="contained"
@@ -219,7 +238,7 @@ const AdminLayout = () => {
                                                 closeNotif();
                                                 navigate("/admin/approval");
                                             }}
-                                            sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 800 }}
+                                            sx={{borderRadius: "10px", textTransform: "none", fontWeight: 800}}
                                         >
                                             Xem trang phê duyệt
                                         </Button>
@@ -229,9 +248,12 @@ const AdminLayout = () => {
                         )}
 
                         {/* Avatar menu */}
-                        <IconButton onClick={handleClick} sx={{ p: 0.5, border: "1px solid #E0E5F2" }}>
-                            <Avatar sx={{ bgcolor: "#1976d2", width: 35, height: 35 }}>A</Avatar>
+                        <IconButton onClick={handleClick} sx={{p: 0.5, border: "1px solid #E0E5F2"}}>
+                            <Avatar sx={{bgcolor: "#1976d2", width: 35, height: 35}}>
+                                A
+                            </Avatar>
                         </IconButton>
+
                         <Menu
                             anchorEl={anchorEl}
                             open={open}
@@ -245,18 +267,20 @@ const AdminLayout = () => {
                                 },
                             }}
                         >
-                            <MenuItem onClick={handleClose} sx={{ py: 1.5 }}>
+                            <MenuItem onClick={handleClose} sx={{py: 1.5}}>
                                 <ListItemIcon>
-                                    <Person fontSize="small" />
+                                    <Person fontSize="small"/>
                                 </ListItemIcon>
-                                <Typography sx={{ fontWeight: 600 }}>Hồ sơ Admin</Typography>
+                                <Typography sx={{fontWeight: 600}}>Hồ sơ Admin</Typography>
                             </MenuItem>
-                            <Divider />
-                            <MenuItem onClick={handleLogout} sx={{ py: 1.5, color: "error.main" }}>
+
+                            <Divider/>
+
+                            <MenuItem onClick={handleLogout} sx={{py: 1.5, color: "error.main"}}>
                                 <ListItemIcon>
-                                    <Logout fontSize="small" sx={{ color: "error.main" }} />
+                                    <Logout fontSize="small" sx={{color: "error.main"}}/>
                                 </ListItemIcon>
-                                <Typography sx={{ fontWeight: 600 }}>Đăng xuất</Typography>
+                                <Typography sx={{fontWeight: 600}}>Đăng xuất</Typography>
                             </MenuItem>
                         </Menu>
                     </Box>
@@ -276,55 +300,54 @@ const AdminLayout = () => {
                     },
                 }}
             >
-                <Toolbar />
-                <Box sx={{ mt: 4 }}>
+                <Toolbar/>
+                <Box sx={{mt: 4}}>
                     <Typography
                         variant="overline"
-                        sx={{ px: 4, fontWeight: 800, color: "#4B5584", fontSize: "0.7rem" }}
+                        sx={{px: 4, fontWeight: 800, color: "#4B5584", fontSize: "0.7rem"}}
                     >
                         QUẢN LÝ HỆ THỐNG
                     </Typography>
 
-                    <Box sx={{ mt: 2 }}>
+                    <Box sx={{mt: 2}}>
                         <NavItem
                             active={currentPath === "/admin" || currentPath === "/admin/"}
-                            icon={<Dashboard />}
+                            icon={<Dashboard/>}
                             text="Dashboard"
                             onClick={() => navigate("/admin")}
                         />
                         <NavItem
                             active={currentPath.includes("/admin/students")}
-                            icon={<PeopleAltRounded />}
+                            icon={<PeopleAltRounded/>}
                             text="Danh sách học viên"
                             onClick={() => navigate("/admin/students")}
                         />
                         <NavItem
                             active={currentPath.includes("/admin/blocked")}
-                            icon={<BlockRounded />}
+                            icon={<BlockRounded/>}
                             text="Học viên bị khóa"
                             onClick={() => navigate("/admin/blocked")}
                         />
                         <NavItem
                             active={currentPath.includes("/admin/approval")}
-                            icon={<HowToRegRounded />}
+                            icon={<HowToRegRounded/>}
                             text="Phê duyệt học viên"
                             onClick={() => navigate("/admin/approval")}
                         />
                         <NavItem
                             active={currentPath.includes("/admin/users")}
-                            icon={<PeopleAltRounded />}
+                            icon={<PeopleAltRounded/>}
                             text="Danh sách user"
                             onClick={() => navigate("/admin/users")}
                         />
-
                     </Box>
                 </Box>
             </Drawer>
 
             {/* Main Content */}
-            <Box component="main" sx={{ flexGrow: 1, p: 5 }}>
-                <Toolbar />
-                <Outlet />
+            <Box component="main" sx={{flexGrow: 1, p: 5}}>
+                <Toolbar/>
+                <Outlet/>
             </Box>
         </Box>
     );
