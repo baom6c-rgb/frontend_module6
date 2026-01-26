@@ -415,10 +415,10 @@ const AdminDashboard = () => {
                     </Box>
 
                     {/* ===== KPI row ===== */}
-                    <Grid container spacing={5} sx={{ mb:7 }}>
+                    <Grid container spacing={3} sx={{ mb:5 }}>
                         <Grid item xs={12} sm={6} md={3}>
                             <StatCard
-                                title="Tổng số học viên"
+                                title="Tổng số học viên"    
                                 value={stats.total}
                                 icon={<PeopleAltRounded />}
                                 tone="blue"

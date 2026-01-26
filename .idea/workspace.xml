@@ -5,10 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b126185a-0208-4cc0-af9f-e5b35ad89a76" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/admin-ui/src/features/users/components/AvatarUploadDialog.jsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/admin-ui/src/api/userApi.js" beforeDir="false" afterPath="$PROJECT_DIR$/admin-ui/src/api/userApi.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/admin-ui/src/features/users/UserProfile.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/admin-ui/src/features/users/UserProfile.jsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -18,8 +15,8 @@
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
       <list>
-        <option value="JavaScript File" />
         <option value="JSX File" />
+        <option value="JavaScript File" />
         <option value="JavaScript File" />
       </list>
     </option>
@@ -27,9 +24,9 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 1
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 1
+}</component>
   <component name="ProjectId" id="38cSEomZBnsofGBUFW3roLD8XW2" />
   <component name="ProjectLevelVcsManager">
     <ConfirmationsSetting value="2" id="Add" />
@@ -45,7 +42,7 @@
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "feature/fix__admin",
+    "git-widget-placeholder": "feature/layout__update2",
     "ignore.virus.scanning.warn.message": "true",
     "last_opened_file_path": "C:/Users/Admin/IdeaProjects/module 4/finalTest/FE_ai_learning_platform/frontend_module6",
     "node.js.detected.package.eslint": "true",

@@ -1,6 +1,7 @@
 import React from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
+import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
 
 import {
     Box,
@@ -15,218 +16,78 @@ import {
     Divider,
     ListItemIcon,
     Badge,
-    List,
-    ListItemButton,
-    ListItemText,
-    Button,
-    Tooltip,
-    useMediaQuery,
-    Chip,
-    Stack,
 } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
 
 import {
-    Dashboard,
     PeopleAltRounded,
-    HowToRegRounded,
-    BlockRounded,
     Logout as LogoutIcon,
     Person,
-    MenuRounded,
-    ChevronLeftRounded,
-    SettingsRounded,
+    DashboardRounded,
 } from "@mui/icons-material";
 
-import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
-import { usePendingApprovals } from "../features/admin/hooks/usePendingApprovals";
 import { logout } from "../features/auth/authSlice";
-
-// ✅ thêm API giống UserProfile (sửa path nếu cần)
-import { getMyProfileApi } from "../api/userApi";
+import { usePendingApprovals } from "../features/admin/hooks/usePendingApprovals";
 
 const drawerWidth = 280;
-const drawerCollapsedWidth = 84;
 
-const safeParse = (key, fallback = null) => {
-    try {
-        const s = localStorage.getItem(key);
-        return s ? JSON.parse(s) : fallback;
-    } catch {
-        return fallback;
-    }
-};
-
-const syncUserDataAvatar = (avatarUrl) => {
-    if (!avatarUrl) return;
-    const u = safeParse("userData", {});
-    localStorage.setItem(
-        "userData",
-        JSON.stringify({
-            ...(u || {}),
-            avatarUrl,
-        })
-    );
-};
-
-// Navigation Item Component (support collapsed mode)
-const NavItem = ({ active, icon, text, onClick, collapsed }) => {
-    const content = (
+// Navigation Item Component
+const NavItem = ({ active, icon, text, onClick }) => (
+    <Box sx={{ px: 2, mb: 1 }}>
         <Box
             onClick={onClick}
             sx={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: collapsed ? "center" : "flex-start",
                 p: 1.5,
                 borderRadius: "12px",
-                bgcolor: active ? "#2E2D84" : "transparent",
-                color: active ? "#FFFFFF" : "#1A1A1A",
-                transition: "0.25s",
+                bgcolor: active ? "#1976d2" : "transparent",
+                color: active ? "#FFFFFF" : "#A3AED0",
+                transition: "0.3s",
                 cursor: "pointer",
-                "&:hover": { bgcolor: active ? "#2E2D84" : "rgba(46, 45, 132, 0.08)" },
-                position: "relative",
-                overflow: "hidden",
-                ...(active && {
-                    "&::before": {
-                        content: '""',
-                        position: "absolute",
-                        left: 0,
-                        top: "20%",
-                        height: "60%",
-                        width: 4,
-                        bgcolor: "#FF8C00",
-                        borderRadius: 4,
-                    },
-                }),
+                "&:hover": { bgcolor: active ? "#1976d2" : "rgba(255, 255, 255, 0.05)" },
             }}
         >
-            <Box
-                sx={{
-                    mr: collapsed ? 0 : 2,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    minWidth: 24,
-                }}
-            >
-                {icon}
-            </Box>
-
-            {collapsed ? null : <Typography sx={{ fontWeight: 700, fontSize: 14 }}>{text}</Typography>}
+            <Box sx={{ mr: 2, display: "flex" }}>{icon}</Box>
+            <Typography sx={{ fontWeight: 600 }}>{text}</Typography>
         </Box>
-    );
-
-    return (
-        <Box sx={{ px: collapsed ? 1 : 2, mb: 1 }}>
-            {collapsed ? (
-                <Tooltip title={text} placement="right" arrow>
-                    <Box>{content}</Box>
-                </Tooltip>
-            ) : (
-                content
-            )}
-        </Box>
-    );
-};
+    </Box>
+);
 
 const AdminLayout = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const dispatch = useDispatch();
 
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-
-    // ===== sidebar state =====
-    const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
-    const [mobileOpen, setMobileOpen] = React.useState(false);
-
-    const toggleSidebar = () => {
-        if (isMobile) setMobileOpen((v) => !v);
-        else setSidebarCollapsed((v) => !v);
-    };
-    const closeMobileDrawer = () => setMobileOpen(false);
-
-    // ✅ NEW: profile giống UserProfile
-    const [profile, setProfile] = React.useState(null);
-
-    React.useEffect(() => {
-        let alive = true;
-
-        const load = async () => {
-            try {
-                const res = await getMyProfileApi();
-                if (!alive) return;
-
-                const p = res.data;
-                setProfile(p);
-
-                if (p?.avatarUrl) syncUserDataAvatar(p.avatarUrl);
-            } catch {
-                // ignore: fail thì fallback localStorage
-            }
-        };
-
-        load();
-        return () => {
-            alive = false;
-        };
-    }, []);
-
-    // ===== user info (avatar image) =====
-    const userData = safeParse("userData", null);
-
-    // ✅ name: ưu tiên profile rồi mới đến localStorage
-    const fullName =
-        profile?.fullName || userData?.fullName || profile?.email || userData?.email || "Admin";
-
-    // ✅ avatar: ưu tiên profile.avatarUrl giống UserProfile
-    const avatarUrl =
-        profile?.avatarUrl ||
-        userData?.avatarUrl ||
-        userData?.avatar ||
-        userData?.profileImageUrl ||
-        "";
-
-    const avatarChar = String(fullName).trim().charAt(0).toUpperCase();
-
-    // ===== admin role check =====
-    const { roles = [] } = useSelector((state) => state.auth || {});
-    const normalizedRoles = (roles || []).map((r) => String(r || "").replace("ROLE_", ""));
-    const isAdmin = normalizedRoles.includes("ADMIN");
-
-    // ===== notifications menu =====
-    const [notifAnchorEl, setNotifAnchorEl] = React.useState(null);
-    const notifOpen = Boolean(notifAnchorEl);
-
-    const openNotif = (e) => setNotifAnchorEl(e.currentTarget);
-    const closeNotif = () => setNotifAnchorEl(null);
-
-    const { items: pendingUsers, count: pendingCount } = usePendingApprovals({
-        enabled: isAdmin,
-        intervalMs: 30000,
-    });
     // ===== avatar menu =====
     const [anchorEl, setAnchorEl] = React.useState(null);
-    const open = Boolean(anchorEl);
+    const menuOpen = Boolean(anchorEl);
 
     const handleClick = (event) => setAnchorEl(event.currentTarget);
     const handleClose = () => setAnchorEl(null);
 
+    // ===== bell menu =====
+    const [bellAnchorEl, setBellAnchorEl] = React.useState(null);
+    const bellOpen = Boolean(bellAnchorEl);
+
+    const handleBellClick = (event) => setBellAnchorEl(event.currentTarget);
+    const handleBellClose = () => setBellAnchorEl(null);
+
     const handleLogout = () => {
         handleClose();
 
+        // 1) clear redux + localStorage auth (accessToken/userRoles/userData)
         dispatch(logout());
 
+        // 2) clear flag flow (để waiting-approval không lách)
         localStorage.removeItem("pendingApproval");
         localStorage.removeItem("onboardingCreated");
         localStorage.removeItem("refreshToken");
 
+        // 3) replace để back không quay lại entry cũ
         navigate("/login", { replace: true });
     };
 
-    // ✅ chặn bfcache
+    // ✅ chặn trường hợp browser restore trang từ bfcache (logout rồi bấm Back vẫn thấy UI cũ)
     React.useEffect(() => {
         const onPageShow = (e) => {
             if (e.persisted) {
@@ -238,130 +99,30 @@ const AdminLayout = () => {
         return () => window.removeEventListener("pageshow", onPageShow);
     }, []);
 
-    const currentPath = location.pathname;
+    // ===== admin role check =====
+    const { roles = [] } = useSelector((state) => state.auth || {});
+    const normalizedRoles = (roles || []).map((r) => String(r || "").replace("ROLE_", ""));
+    const isAdmin = normalizedRoles.includes("ADMIN");
 
-    const effectiveDrawerWidth = isMobile
-        ? drawerWidth
-        : sidebarCollapsed
-            ? drawerCollapsedWidth
-            : drawerWidth;
+    // ✅ pending approvals: chỉ enable khi ADMIN + có token
+    const token = localStorage.getItem("accessToken");
+    const pendingEnabled = Boolean(isAdmin && token);
 
-    const handleNav = (path) => {
-        navigate(path);
-        if (isMobile) closeMobileDrawer();
+    const { count: pendingCount } = usePendingApprovals({
+        enabled: pendingEnabled,
+        intervalMs: 3000,
+    });
+
+    const goPendingApprovals = React.useCallback(() => {
+        navigate("/admin/users?status=WAITING_APPROVAL");
+    }, [navigate]);
+
+    const handleGoPending = () => {
+        handleBellClose();
+        goPendingApprovals();
     };
 
-    const drawerContent = (
-        <>
-            <Toolbar />
-
-            <Box sx={{ mt: 3 }}>
-                {!isMobile && (
-                    <Box
-                        sx={{
-                            px: sidebarCollapsed ? 1 : 2,
-                            mb: 1,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: sidebarCollapsed ? "center" : "space-between",
-                        }}
-                    >
-                        {sidebarCollapsed ? null : (
-                            <Typography
-                                variant="overline"
-                                sx={{
-                                    fontWeight: 900,
-                                    color: "#666666",
-                                    fontSize: "0.7rem",
-                                    letterSpacing: "0.8px",
-                                }}
-                            >
-                                QUẢN LÝ HỆ THỐNG
-                            </Typography>
-                        )}
-                    </Box>
-                )}
-
-                <Box sx={{ mt: 2 }}>
-                    <NavItem
-                        collapsed={!isMobile && sidebarCollapsed}
-                        active={currentPath === "/admin" || currentPath === "/admin/"}
-                        icon={<Dashboard />}
-                        text="Dashboard"
-                        onClick={() => handleNav("/admin")}
-                    />
-                    <NavItem
-                        collapsed={!isMobile && sidebarCollapsed}
-                        active={currentPath.includes("/admin/students")}
-                        icon={<PeopleAltRounded />}
-                        text="Danh sách học viên"
-                        onClick={() => handleNav("/admin/students")}
-                    />
-                    <NavItem
-                        collapsed={!isMobile && sidebarCollapsed}
-                        active={currentPath.includes("/admin/blocked")}
-                        icon={<BlockRounded />}
-                        text="Học viên bị khóa"
-                        onClick={() => handleNav("/admin/blocked")}
-                    />
-                    <NavItem
-                        collapsed={!isMobile && sidebarCollapsed}
-                        active={currentPath.includes("/admin/approval")}
-                        icon={<HowToRegRounded />}
-                        text="Phê duyệt học viên"
-                        onClick={() => handleNav("/admin/approval")}
-                    />
-                    <NavItem
-                        collapsed={!isMobile && sidebarCollapsed}
-                        active={currentPath.includes("/admin/users")}
-                        icon={<PeopleAltRounded />}
-                        text="Danh sách user"
-                        onClick={() => handleNav("/admin/users")}
-                    />
-                </Box>
-            </Box>
-
-            <Box sx={{ flexGrow: 1 }} />
-
-            <Box sx={{ px: sidebarCollapsed && !isMobile ? 1 : 2, pb: 2 }}>
-                <Divider sx={{ borderColor: "rgba(0,0,0,0.1)", mb: 1.5 }} />
-
-                {sidebarCollapsed && !isMobile ? (
-                    <Tooltip title="Đăng xuất" placement="right" arrow>
-                        <IconButton
-                            onClick={handleLogout}
-                            sx={{
-                                width: "100%",
-                                borderRadius: "14px",
-                                color: "#EE5D50",
-                                bgcolor: "rgba(238,93,80,0.08)",
-                                "&:hover": { bgcolor: "rgba(238,93,80,0.14)" },
-                            }}
-                        >
-                            <LogoutIcon />
-                        </IconButton>
-                    </Tooltip>
-                ) : (
-                    <Button
-                        fullWidth
-                        onClick={handleLogout}
-                        startIcon={<LogoutIcon />}
-                        sx={{
-                            borderRadius: "12px",
-                            py: 1.2,
-                            fontWeight: 900,
-                            textTransform: "none",
-                            color: "#EE5D50",
-                            bgcolor: "rgba(238,93,80,0.08)",
-                            "&:hover": { bgcolor: "rgba(238,93,80,0.14)" },
-                        }}
-                    >
-                        Đăng xuất
-                    </Button>
-                )}
-            </Box>
-        </>
-    );
+    const currentPath = location.pathname;
 
     return (
         <Box sx={{ display: "flex", bgcolor: "#F4F7FE", minHeight: "100vh", width: "100%" }}>
@@ -369,28 +130,39 @@ const AdminLayout = () => {
             <AppBar
                 position="fixed"
                 sx={{
-                    zIndex: (t) => t.zIndex.drawer + 1,
-                    bgcolor: "#2E2D84",
-                    color: "#FFFFFF",
-                    boxShadow: "0px 2px 8px rgba(0,0,0,0.1)",
-                    borderBottom: "none",
+                    zIndex: (theme) => theme.zIndex.drawer + 1,
+                    bgcolor: "#FFFFFF",
+                    color: "#2B3674",
+                    boxShadow: "none",
+                    borderBottom: "1px solid #E0E5F2",
                 }}
             >
-                <Toolbar sx={{ justifyContent: "space-between", gap: 1 }}>
-                    {/* LEFT */}
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
-                        <IconButton
-                            onClick={toggleSidebar}
+                <Toolbar sx={{ justifyContent: "space-between" }}>
+                    <Typography
+                        variant="h5"
+                        sx={{
+                            fontWeight: 900,
+                            letterSpacing: "1px",
+                            background: "linear-gradient(45deg, #1B2559 30%, #4318FF 90%)",
+                            WebkitBackgroundClip: "text",
+                            WebkitTextFillColor: "transparent",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 1,
+                            textTransform: "uppercase",
+                            fontFamily: "'Plus Jakarta Sans', sans-serif",
+                        }}
+                    >
+                        <Box
+                            component="span"
                             sx={{
-                                p: 0.9,
-                                border: "1px solid rgba(255,255,255,0.2)",
-                                borderRadius: "12px",
-                                color: "#FFFFFF",
-                                "&:hover": {
-                                    bgcolor: "rgba(255,255,255,0.1)",
-                                }
+                                bgcolor: "#4318FF",
+                                color: "#fff",
+                                px: 1,
+                                borderRadius: "8px",
+                                WebkitTextFillColor: "#fff",
+                                mr: 0.5,
                             }}
-                            aria-label="toggle sidebar"
                         >
                             <MenuRounded />
                         </IconButton>
@@ -410,196 +182,106 @@ const AdminLayout = () => {
 
 
                         </Box>
-                    </Box>
-                    {/* RIGHT */}
+                        LEARNING
+                    </Typography>
+
+                    {/* Right actions */}
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        {/* 🔔 Notification Bell */}
-                        {isAdmin && (
+                        {/* ✅ CHUÔNG: mở popup menu */}
+                        {pendingEnabled && (
                             <>
-                                <Tooltip title="Yêu cầu chờ duyệt" arrow>
-                                    <IconButton
-                                        onClick={openNotif}
-                                        sx={{
-                                            p: 0.9,
-                                            border: "1px solid rgba(255,255,255,0.2)",
-                                            borderRadius: "12px",
-                                            color: "#FFFFFF",
-                                            "&:hover": {
-                                                bgcolor: "rgba(255,255,255,0.1)",
-                                            }
-                                        }}
-                                        aria-label="notifications"
+                                <IconButton
+                                    onClick={handleBellClick}
+                                    sx={{
+                                        border: "1px solid #E0E5F2",
+                                        borderRadius: "12px",
+                                        p: 0.8,
+                                        transition: "all 180ms ease",
+                                        "&:hover": { bgcolor: "rgba(67, 24, 255, 0.08)" },
+                                    }}
+                                >
+                                    <Badge
+                                        badgeContent={pendingCount}
+                                        color="error"
+                                        overlap="circular"
+                                        invisible={!pendingCount || pendingCount <= 0}
                                     >
-                                        <Badge badgeContent={pendingCount} color="error" max={99}>
-                                            <NotificationsRoundedIcon />
-                                        </Badge>
-                                    </IconButton>
-                                </Tooltip>
+                                        <NotificationsRoundedIcon />
+                                    </Badge>
+                                </IconButton>
 
                                 <Menu
-                                    anchorEl={notifAnchorEl}
-                                    open={notifOpen}
-                                    onClose={closeNotif}
+                                    anchorEl={bellAnchorEl}
+                                    open={bellOpen}
+                                    onClose={handleBellClose}
                                     PaperProps={{
                                         sx: {
-                                            mt: 1.5,
-                                            borderRadius: "14px",
-                                            width: 380,
-                                            boxShadow: "0px 14px 40px rgba(0,0,0,0.12)",
+                                            mt: 1.2,
+                                            borderRadius: "12px",
+                                            minWidth: 280,
+                                            boxShadow: "0px 10px 30px rgba(0,0,0,0.1)",
                                             overflow: "hidden",
-                                            border: "1px solid #EEF2F8",
                                         },
                                     }}
                                 >
-                                    <Box sx={{ px: 2, py: 1.6, borderBottom: "1px solid #E0E5F2" }}>
+                                    <Box sx={{ px: 2, pt: 1.5, pb: 1 }}>
                                         <Typography sx={{ fontWeight: 900, color: "#1B2559" }}>
-                                            Chờ phê duyệt ({pendingCount})
+                                            Chờ duyệt
                                         </Typography>
-                                        <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#707EAE" }}>
-                                            Nhấp vào 1 user để mở trang phê duyệt
+
+                                        <Typography sx={{ mt: 0.5, fontWeight: 700, color: "#6C757D", fontSize: 13 }}>
+                                            {pendingCount > 0
+                                                ? `Có ${pendingCount} tài khoản đang chờ duyệt`
+                                                : "Không có tài khoản chờ duyệt"}
                                         </Typography>
                                     </Box>
 
-                                    {pendingCount === 0 ? (
-                                        <Box sx={{ px: 2, py: 2 }}>
-                                            <Typography sx={{ color: "#707EAE", fontWeight: 700 }}>
-                                                Không có yêu cầu phê duyệt mới.
-                                            </Typography>
-                                        </Box>
-                                    ) : (
-                                        <List disablePadding>
-                                            {pendingUsers.slice(0, 6).map((u) => (
-                                                <ListItemButton
-                                                    key={u.id}
-                                                    onClick={() => {
-                                                        closeNotif();
-                                                        handleNav("/admin/approval");
-                                                    }}
-                                                    sx={{ px: 2, py: 1.4, "&:hover": { bgcolor: "#F4F7FE" } }}
-                                                >
-                                                    <ListItemText
-                                                        primary={
-                                                            <Typography sx={{ fontWeight: 900, color: "#1B2559" }}>
-                                                                {u.fullName}
-                                                            </Typography>
-                                                        }
-                                                        secondary={
-                                                            <Typography sx={{ color: "#707EAE", fontWeight: 700 }}>
-                                                                {u.email}
-                                                            </Typography>
-                                                        }
-                                                    />
-                                                </ListItemButton>
-                                            ))}
-                                        </List>
-                                    )}
+                                    <Divider />
 
-                                    <Box sx={{ px: 2, py: 1.6, borderTop: "1px solid #E0E5F2" }}>
-                                        <Button
-                                            fullWidth
-                                            variant="contained"
-                                            onClick={() => {
-                                                closeNotif();
-                                                handleNav("/admin/approval");
-                                            }}
-                                            sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 900, py: 1.1 }}
-                                        >
-                                            Xem trang phê duyệt
-                                        </Button>
-                                    </Box>
+                                    <MenuItem onClick={handleGoPending} sx={{ py: 1.5 }}>
+                                        <Typography sx={{ fontWeight: 800 }}>
+                                            Xem danh sách chờ duyệt
+                                        </Typography>
+                                    </MenuItem>
                                 </Menu>
                             </>
                         )}
 
-                        {/* User chip */}
-                        <Box
+                        {/* Avatar + Account Menu */}
+                        <IconButton
                             onClick={handleClick}
-                            sx={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 1,
-                                px: 1.1,
-                                py: 0.6,
-                                borderRadius: "14px",
-                                border: "1px solid rgba(255,255,255,0.2)",
-                                bgcolor: "rgba(255,255,255,0.1)",
-                                cursor: "pointer",
-                                "&:hover": { bgcolor: "rgba(255,255,255,0.15)" },
-                            }}
+                            sx={{ p: 0.5, border: "1px solid #E0E5F2" }}
                         >
-                            <Avatar
-                                src={avatarUrl || undefined}
-                                imgProps={{ referrerPolicy: "no-referrer" }}
-                                sx={{ width: 36, height: 36, bgcolor: "#FF8C00", fontWeight: 900 }}
-                            >
-                                {avatarChar}
-                            </Avatar>
+                            <Avatar sx={{ bgcolor: "#1976d2", width: 35, height: 35 }}>A</Avatar>
+                        </IconButton>
 
-                            {!isMobile && (
-                                <Box sx={{ lineHeight: 1.1 }}>
-                                    <Typography sx={{ fontWeight: 900, color: "#FFFFFF", fontSize: 14 }}>
-                                        {fullName}
-                                    </Typography>
-                                    <Stack direction="row" spacing={0.8} alignItems="center">
-                                        <Chip
-                                            size="small"
-                                            label="ADMIN"
-                                            sx={{
-                                                height: 20,
-                                                fontWeight: 900,
-                                                bgcolor: "rgba(255,255,255,0.2)",
-                                                color: "#FFFFFF",
-                                            }}
-                                        />
-                                    </Stack>
-                                </Box>
-                            )}
-                        </Box>
-
-                        {/* Dropdown */}
                         <Menu
                             anchorEl={anchorEl}
-                            open={open}
+                            open={menuOpen}
                             onClose={handleClose}
                             PaperProps={{
                                 sx: {
                                     mt: 1.5,
-                                    borderRadius: "14px",
-                                    minWidth: 220,
-                                    boxShadow: "0px 14px 40px rgba(0,0,0,0.12)",
-                                    border: "1px solid #EEF2F8",
-                                    overflow: "hidden",
+                                    borderRadius: "12px",
+                                    minWidth: "180px",
+                                    boxShadow: "0px 10px 30px rgba(0,0,0,0.1)",
                                 },
                             }}
                         >
-                            <Box sx={{ px: 2, py: 1.6, borderBottom: "1px solid #E0E5F2" }}>
-                                <Typography sx={{ fontWeight: 950, color: "#1B2559" }}>{fullName}</Typography>
-                                <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#707EAE" }}>
-                                    Quản trị hệ thống
-                                </Typography>
-                            </Box>
-
-                            <MenuItem onClick={handleClose} sx={{ py: 1.4 }}>
+                            <MenuItem onClick={handleClose} sx={{ py: 1.5 }}>
                                 <ListItemIcon>
                                     <Person fontSize="small" />
                                 </ListItemIcon>
-                                <Typography sx={{ fontWeight: 800 }}>Hồ sơ Admin</Typography>
-                            </MenuItem>
-
-                            <MenuItem onClick={handleClose} sx={{ py: 1.4 }}>
-                                <ListItemIcon>
-                                    <SettingsRounded fontSize="small" />
-                                </ListItemIcon>
-                                <Typography sx={{ fontWeight: 800 }}>Cài đặt</Typography>
+                                <Typography sx={{ fontWeight: 600 }}>Hồ sơ Admin</Typography>
                             </MenuItem>
 
                             <Divider />
 
-                            <MenuItem onClick={handleLogout} sx={{ py: 1.4, color: "error.main" }}>
-                                <ListItemIcon sx={{ color: "error.main" }}>
-                                    <LogoutIcon fontSize="small" />
+                            <MenuItem onClick={handleLogout} sx={{ py: 1.5, color: "error.main" }}>
+                                <ListItemIcon>
+                                    <LogoutIcon fontSize="small" sx={{ color: "error.main" }} />
                                 </ListItemIcon>
-                                <Typography sx={{ fontWeight: 900 }}>Đăng xuất</Typography>
+                                <Typography sx={{ fontWeight: 600 }}>Đăng xuất</Typography>
                             </MenuItem>
                         </Menu>
                     </Box>
@@ -608,29 +290,46 @@ const AdminLayout = () => {
 
             {/* Sidebar */}
             <Drawer
-                variant={isMobile ? "temporary" : "permanent"}
-                open={isMobile ? mobileOpen : true}
-                onClose={isMobile ? closeMobileDrawer : undefined}
-                ModalProps={isMobile ? { keepMounted: true } : undefined}
+                variant="permanent"
                 sx={{
-                    width: effectiveDrawerWidth,
+                    width: drawerWidth,
                     flexShrink: 0,
                     [`& .MuiDrawer-paper`]: {
-                        width: effectiveDrawerWidth,
+                        width: drawerWidth,
                         boxSizing: "border-box",
-                        bgcolor: "rgba(255, 255, 255, 0.95)",
-                        backdropFilter: "blur(10px)",
-                        color: "#1A1A1A",
-                        borderRight: "1px solid rgba(0,0,0,0.08)",
-                        overflowX: "hidden",
-                        transition: theme.transitions.create("width", {
-                            easing: theme.transitions.easing.sharp,
-                            duration: theme.transitions.duration.shortest,
-                        }),
+                        bgcolor: "#0B1437",
+                        color: "#FFFFFF",
+                        border: "none",
                     },
                 }}
             >
-                {drawerContent}
+                <Toolbar />
+                <Box sx={{ mt: 4 }}>
+                    <Typography
+                        variant="overline"
+                        sx={{ px: 4, fontWeight: 800, color: "#4B5584", fontSize: "0.7rem" }}
+                    >
+                        QUẢN LÝ HỆ THỐNG
+                    </Typography>
+
+                    <Box sx={{ mt: 2 }}>
+                        {/* Dashboard */}
+                        <NavItem
+                            active={currentPath === "/admin" || currentPath.startsWith("/admin/dashboard")}
+                            icon={<DashboardRounded />}
+                            text="Dashboard"
+                            onClick={() => navigate("/admin")}
+                        />
+
+                        {/* Danh sách người dùng */}
+                        <NavItem
+                            active={currentPath.startsWith("/admin/users")}
+                            icon={<PeopleAltRounded />}
+                            text="Danh sách người dùng"
+                            onClick={() => navigate("/admin/users")}
+                        />
+                    </Box>
+                </Box>
             </Drawer>
 
             {/* Main Content */}

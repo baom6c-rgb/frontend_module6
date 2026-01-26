@@ -390,7 +390,6 @@ export default function UserLayout() {
                                 src={avatarUrl || undefined}
                                 imgProps={{ referrerPolicy: "no-referrer" }}
                                 sx={{
-                                    bgcolor: COLORS.secondaryOrange,
                                     width: 36,
                                     height: 36,
                                     fontWeight: 900,
