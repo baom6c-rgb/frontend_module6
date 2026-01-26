@@ -21,6 +21,7 @@ import UserProfile from "../features/users/UserProfile.jsx";
 import UserStudy from "../features/users/UserStudy.jsx";
 import UserReview from "../features/users/UserReview.jsx";
 import StudentMaterialsPage from "../features/users/materials/StudentMaterialsPage";
+import PracticePage from "../features/practice/PracticePage.jsx";
 
 // --- PAGES AUTH ---
 import Login from "../features/login/Login.jsx";
@@ -67,6 +68,7 @@ const router = createBrowserRouter([
 
                     { path: "profile", element: <UserProfile /> },
                     { path: "study", element: <UserStudy /> },
+                    { path: "practice", element: <PracticePage /> },
                     { path: "review", element: <UserReview /> },
 
                     {

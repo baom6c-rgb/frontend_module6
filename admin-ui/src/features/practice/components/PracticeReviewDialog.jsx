@@ -1,0 +1,153 @@
+import React, { useMemo, useState } from "react";
+import {
+    Box,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    IconButton,
+    Typography,
+    Divider,
+    Chip,
+    Stack,
+    Button,
+} from "@mui/material";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+
+export default function PracticeReviewDialog({ open, onClose, review }) {
+    const [onlyWrong, setOnlyWrong] = useState(false);
+
+    const items = review?.items || [];
+    const filtered = useMemo(() => {
+        if (!onlyWrong) return items;
+        return items.filter((x) => !x.isCorrect);
+    }, [items, onlyWrong]);
+
+    return (
+        <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
+            <DialogTitle sx={{ fontWeight: 900, color: "#1B2559" }}>
+                Xem lại đáp án
+                <IconButton
+                    onClick={onClose}
+                    sx={{ position: "absolute", right: 10, top: 10 }}
+                >
+                    <CloseRoundedIcon />
+                </IconButton>
+            </DialogTitle>
+
+            <DialogContent dividers>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2, flexWrap: "wrap" }}>
+                    <Chip
+                        label={`Score: ${review?.score ?? 0}/100`}
+                        sx={{ fontWeight: 900 }}
+                    />
+                    <Chip
+                        label={`Đúng: ${review?.correctCount ?? 0}/${review?.totalQuestions ?? 0}`}
+                        sx={{ fontWeight: 900 }}
+                    />
+
+                    <Box sx={{ flex: 1 }} />
+
+                    <Button
+                        variant={onlyWrong ? "contained" : "outlined"}
+                        onClick={() => setOnlyWrong((v) => !v)}
+                        sx={{ fontWeight: 900 }}
+                    >
+                        {onlyWrong ? "Đang lọc câu sai" : "Chỉ xem câu sai"}
+                    </Button>
+                </Stack>
+
+                {filtered.length === 0 ? (
+                    <Typography sx={{ color: "#6C757D", fontWeight: 700 }}>
+                        Không có dữ liệu để hiển thị.
+                    </Typography>
+                ) : (
+                    filtered.map((q, idx) => (
+                        <Box
+                            key={q.questionId}
+                            sx={{
+                                p: 2,
+                                borderRadius: 3,
+                                border: "1px solid #E3E8EF",
+                                bgcolor: "#fff",
+                                mb: 2,
+                            }}
+                        >
+                            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1, flexWrap: "wrap" }}>
+                                <Typography sx={{ fontWeight: 900, color: "#1B2559" }}>
+                                    Câu {idx + 1}: {q.content}
+                                </Typography>
+
+                                <Chip
+                                    size="small"
+                                    label={q.isCorrect ? "ĐÚNG" : "SAI"}
+                                    sx={{
+                                        fontWeight: 900,
+                                        bgcolor: q.isCorrect ? "rgba(27,94,32,0.12)" : "rgba(176,0,32,0.12)",
+                                        color: q.isCorrect ? "#1B5E20" : "#B00020",
+                                    }}
+                                />
+                            </Stack>
+
+                            <Divider sx={{ my: 1.5 }} />
+
+                            {["A", "B", "C", "D"].map((k) => {
+                                const text = q.options?.[k] || "";
+                                const isCorrect = q.correctAnswer === k;
+                                const isSelected = q.selectedAnswer === k;
+                                const isWrongSelected = isSelected && !isCorrect;
+
+                                return (
+                                    <Box
+                                        key={k}
+                                        sx={{
+                                            p: 1.2,
+                                            borderRadius: 2,
+                                            border: "2px solid",
+                                            borderColor: isCorrect
+                                                ? "#1B5E20"
+                                                : isWrongSelected
+                                                    ? "#B00020"
+                                                    : "#E3E8EF",
+                                            bgcolor: isCorrect
+                                                ? "rgba(27,94,32,0.08)"
+                                                : isWrongSelected
+                                                    ? "rgba(176,0,32,0.06)"
+                                                    : "#fff",
+                                            mb: 1,
+                                            display: "flex",
+                                            gap: 1,
+                                            alignItems: "flex-start",
+                                        }}
+                                    >
+                                        <Typography sx={{ fontWeight: 900, width: 26 }}>{k}.</Typography>
+                                        <Typography sx={{ fontWeight: 700, color: "#1B2559" }}>
+                                            {text || "(trống)"}
+                                        </Typography>
+
+                                        <Box sx={{ flex: 1 }} />
+
+                                        {isCorrect && <Chip size="small" label="Đáp án đúng" sx={{ fontWeight: 900 }} />}
+                                        {isWrongSelected && (
+                                            <Chip size="small" label="Bạn chọn" sx={{ fontWeight: 900 }} />
+                                        )}
+                                    </Box>
+                                );
+                            })}
+
+                            {q.explanation ? (
+                                <Box sx={{ mt: 1.5 }}>
+                                    <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
+                                        Giải thích
+                                    </Typography>
+                                    <Typography sx={{ mt: 0.5, color: "#6C757D", fontWeight: 600, whiteSpace: "pre-wrap" }}>
+                                        {q.explanation}
+                                    </Typography>
+                                </Box>
+                            ) : null}
+                        </Box>
+                    ))
+                )}
+            </DialogContent>
+        </Dialog>
+    );
+}

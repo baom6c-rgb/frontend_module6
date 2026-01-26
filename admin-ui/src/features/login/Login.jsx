@@ -19,6 +19,13 @@ import PasswordField from "../../components/form/PasswordField";
 import GlobalLoading from "../../components/common/GlobalLoading";
 import { useToast } from "../../components/common/AppToast";
 
+const normalizeStatus = (s) => String(s || "").trim().toUpperCase();
+
+const normalizeRoles = (roles) =>
+    (roles || [])
+        .filter(Boolean)
+        .map((r) => (typeof r === "string" ? r.replace("ROLE_", "") : String(r).replace("ROLE_", "")));
+
 export default function Login() {
     const dispatch = useDispatch();
     const navigate = useNavigate();
@@ -34,8 +41,8 @@ export default function Login() {
     // ======================
     // Validators
     // ======================
-    const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    const validatePassword = (password) => (password || "").length >= 6;
+    const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
+    const validatePassword = (password) => String(password || "").length >= 6;
 
     const errors = useMemo(() => {
         const e = {};
@@ -48,7 +55,7 @@ export default function Login() {
     // Navigate by role
     // ======================
     const navigateByRole = (roles) => {
-        const normalized = (roles || []).map((r) => (typeof r === "string" ? r.replace("ROLE_", "") : r));
+        const normalized = normalizeRoles(roles);
         if (normalized.includes("ADMIN")) return navigate("/admin", { replace: true });
         return navigate("/users/dashboard", { replace: true });
     };
@@ -62,49 +69,61 @@ export default function Login() {
         const token = res?.token || res?.accessToken || res?.jwt;
         if (token) localStorage.setItem("accessToken", token);
 
-        localStorage.setItem("userRoles", JSON.stringify(res.roles || []));
+        localStorage.setItem("userRoles", JSON.stringify(res?.roles || []));
         localStorage.setItem("userData", JSON.stringify(res));
     };
 
     // ======================
-    // Handle login result
+    // Handle login result (core)
     // ======================
-    const handlePostLogin = (res) => {
-        if (!res) return;
+    const handlePostLogin = (rawRes) => {
+        if (!rawRes) return;
 
-        if (res.status === "CREATED") {
-            localStorage.removeItem("pendingApproval"); // ✅ tránh dính flag cũ
-            localStorage.setItem("register_email", res.email || "");
-            // vẫn lưu userData/roles nếu cần
-            localStorage.setItem("userRoles", JSON.stringify(res.roles || []));
-            localStorage.setItem("userData", JSON.stringify(res));
+        // always persist first (avoid redirect loop / ProtectedRoute missing data)
+        persistAuth(rawRes);
+
+        const status = normalizeStatus(rawRes?.status || rawRes?.userStatus);
+        const email = rawRes?.email || "";
+
+        if (status === "CREATED") {
+            // Google new user -> onboarding
+            localStorage.removeItem("pendingApproval");
+            localStorage.setItem("register_email", email);
+            localStorage.setItem("onboardingCreated", "1");
+            localStorage.removeItem("accessToken");
+            localStorage.removeItem("userRoles");
             navigate("/complete-profile", { replace: true });
             return;
         }
 
-        if (res.status === "WAITING_APPROVAL") {
-            // ✅ quan trọng để ProtectedRoute nhận diện WAITING ngay cả khi không có token
+        if (status === "WAITING_APPROVAL") {
+            // important: mark waiting so route gate works even if roles empty
             localStorage.setItem("pendingApproval", "1");
-
-            const token = res?.token || res?.accessToken || res?.jwt;
-            if (token) localStorage.setItem("accessToken", token);
-
-            localStorage.setItem("userRoles", JSON.stringify(res.roles || []));
-            localStorage.setItem("userData", JSON.stringify(res));
+            localStorage.removeItem("onboardingCreated");
+            localStorage.removeItem("register_email"); // optional, because already onboarded
             navigate("/users/waiting-approval", { replace: true });
             return;
         }
 
-        if (res.status === "ACTIVE") {
+        if (status === "ACTIVE") {
             localStorage.removeItem("pendingApproval");
-            persistAuth(res);
-            navigateByRole(res.roles);
+            localStorage.removeItem("onboardingCreated");
+            localStorage.removeItem("register_email");
+            navigateByRole(rawRes?.roles || []);
             return;
         }
 
         // fallback
-        persistAuth(res);
         navigate("/users/dashboard", { replace: true });
+    };
+
+    const extractErrMsg = (err) => {
+        const data = err?.response?.data;
+        if (typeof data === "string" && data.trim()) return data;
+        if (data?.message) return data.message;
+        if (typeof err === "string" && err.trim()) return err;
+        if (err?.message) return err.message;
+        return "Đăng nhập thất bại";
     };
 
     // ======================
@@ -114,20 +133,22 @@ export default function Login() {
         if (loading) return;
 
         setTouched({ email: true, password: true });
-        if (!validateEmail(form.email) || !validatePassword(form.password)) {
+
+        const email = String(form.email || "").trim();
+        const password = String(form.password || "");
+
+        if (!validateEmail(email) || !validatePassword(password)) {
             showToast("Vui lòng kiểm tra lại Email/Mật khẩu", "warning");
             return;
         }
 
         try {
             setLoading(true);
-            const res = await dispatch(loginThunk({ email: form.email, password: form.password })).unwrap();
-
+            const res = await dispatch(loginThunk({ email, password })).unwrap();
             handlePostLogin(res);
             showToast("Đăng nhập thành công", "success");
         } catch (err) {
-            const msg = typeof err === "string" ? err : err?.message || "Đăng nhập thất bại";
-            showToast(msg, "error");
+            showToast(extractErrMsg(err), "error");
         } finally {
             setLoading(false);
         }
@@ -147,7 +168,7 @@ export default function Login() {
 
             const raw = await dispatch(googleLoginThunk(idToken)).unwrap();
 
-            // ✅ không mutate raw (tránh object frozen)
+            // do NOT mutate raw
             const res = {
                 ...raw,
                 fullName:
@@ -158,9 +179,9 @@ export default function Login() {
             handlePostLogin(res);
             showToast("Đăng nhập Google thành công", "success");
         } catch (err) {
-            const msg = typeof err === "string" ? err : err?.message || "Google login thất bại";
-            showToast(msg, "error");
-            console.error(err);
+            showToast(extractErrMsg(err), "error");
+            // eslint-disable-next-line no-console
+            console.error("Google login failed:", err);
         } finally {
             setLoading(false);
         }
@@ -187,7 +208,8 @@ export default function Login() {
                             label="Email"
                             value={form.email}
                             onChange={(e) => {
-                                setForm((p) => ({ ...p, email: e.target.value }));
+                                const v = e.target.value;
+                                setForm((p) => ({ ...p, email: v }));
                                 if (!touched.email) setTouched((p) => ({ ...p, email: true }));
                             }}
                             onBlur={() => setTouched((p) => ({ ...p, email: true }))}
@@ -201,7 +223,8 @@ export default function Login() {
                             label="Mật khẩu"
                             value={form.password}
                             onChange={(e) => {
-                                setForm((p) => ({ ...p, password: e.target.value }));
+                                const v = e.target.value;
+                                setForm((p) => ({ ...p, password: v }));
                                 if (!touched.password) setTouched((p) => ({ ...p, password: true }));
                             }}
                             onBlur={() => setTouched((p) => ({ ...p, password: true }))}

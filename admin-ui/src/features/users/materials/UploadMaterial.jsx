@@ -9,16 +9,14 @@ import { materialApi } from "../../../api/materialApi";
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_EXT_REGEX = /\.(pdf|docx|txt)$/i;
 
-export default function UserMaterialsUpload() {
+export default function UserMaterialsUpload({ onUploaded }) {
     const [file, setFile] = useState(null);
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [msg, setMsg] = useState({ type: "", text: "" });
 
-    // ✅ NEW
+    // local state (không bắt buộc)
     const [materialId, setMaterialId] = useState(null);
-    const [extractedText, setExtractedText] = useState("");
-    const [loadingText, setLoadingText] = useState(false);
 
     const resetFileInput = (e) => {
         if (e?.target) e.target.value = "";
@@ -47,7 +45,6 @@ export default function UserMaterialsUpload() {
         setFile(f);
         setProgress(0);
         setMsg({ type: "", text: "" });
-        setExtractedText("");
         setMaterialId(null);
     };
 
@@ -71,12 +68,9 @@ export default function UserMaterialsUpload() {
             setFile(null);
             setMaterialId(id);
 
-            // ✅ GỌI API ĐỌC TEXT
-            if (id) {
-                setLoadingText(true);
-                const textRes = await materialApi.getExtractedText(id);
-                setExtractedText(textRes.data || "");
-            }
+            // ✅ QUAN TRỌNG: báo cho parent biết materialId để auto-next step
+            if (id) onUploaded?.(id);
+
         } catch (e) {
             const data = e.response?.data;
             setMsg({
@@ -85,7 +79,6 @@ export default function UserMaterialsUpload() {
             });
         } finally {
             setLoading(false);
-            setLoadingText(false);
         }
     };
 
@@ -134,30 +127,11 @@ export default function UserMaterialsUpload() {
                     Chỉ hỗ trợ PDF / DOCX / TXT, dung lượng tối đa 10MB. Upload xong hệ thống tự trích xuất & lưu DB.
                 </Alert>
 
-                {/* ✅ PREVIEW TEXT */}
-                {loadingText && (
-                    <Box sx={{ mt: 3 }}>
-                        <CircularProgress />
-                        <Typography sx={{ mt: 1 }}>Đang đọc văn bản đã trích xuất...</Typography>
-                    </Box>
-                )}
-
-                {extractedText && (
-                    <Paper sx={{ mt: 3, p: 2, maxHeight: 400, overflow: "auto" }}>
-                        <Typography variant="h6" sx={{ mb: 1 }}>
-                            Văn bản đã trích xuất
-                        </Typography>
-                        <Typography
-                            sx={{
-                                whiteSpace: "pre-wrap",
-                                fontFamily: "Arial, Roboto, sans-serif",
-                                lineHeight: 1.6,
-                                fontSize: "0.95rem",
-                            }}
-                        >
-                            {extractedText}
-                        </Typography>
-                    </Paper>
+                {/* (optional) debug */}
+                {materialId && (
+                    <Typography sx={{ mt: 1, fontWeight: 700, color: "#6C757D" }}>
+                        MaterialId: {materialId}
+                    </Typography>
                 )}
             </Paper>
         </Box>
