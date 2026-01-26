@@ -1,39 +1,87 @@
-import React from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import React from "react";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { useSelector } from "react-redux";
 
-const ProtectedRoute = ({ allowedRoles }) => {
-    // Lấy thông tin từ Redux Store với fallback
-    const { token, roles = [] } = useSelector((state) => state.auth || {});
+const getStoredUser = () => {
+    try {
+        const s = localStorage.getItem("userData");
+        return s ? JSON.parse(s) : null;
+    } catch {
+        return null;
+    }
+};
 
-    // 1. Kiểm tra xem đã đăng nhập chưa
+const getStoredRoles = () => {
+    try {
+        return JSON.parse(localStorage.getItem("userRoles") || "[]");
+    } catch {
+        return [];
+    }
+};
+
+const normalizeRoles = (roles) =>
+    (roles || [])
+        .filter(Boolean)
+        .map((r) => (typeof r === "string" ? r.replace("ROLE_", "") : r));
+
+export default function ProtectedRoute({ allowedRoles }) {
+    const location = useLocation();
+
+    const { token: reduxToken, roles: reduxRoles = [], user: reduxUser } =
+        useSelector((state) => state.auth || {});
+
+    const storedUser = getStoredUser();
+    const status = (reduxUser?.status || storedUser?.status || "").toUpperCase();
+
+    // ===== paths =====
+    const isWaitingPath = location.pathname.startsWith("/users/waiting-approval");
+    const isCompleteProfilePath = location.pathname.startsWith("/complete-profile");
+
+    // ===== flags/status =====
+    // ✅ WAITING ưu tiên theo flag (vì status có thể chưa kịp update)
+    const isWaiting =
+        localStorage.getItem("pendingApproval") === "1" || status === "WAITING_APPROVAL";
+
+    // ✅ CREATED chỉ đúng khi chưa bước sang WAITING
+    const isCreated =
+        !isWaiting && (status === "CREATED" || localStorage.getItem("onboardingCreated") === "1");
+
+    // ===== token =====
+    const token = reduxToken || localStorage.getItem("accessToken");
+
+    // ✅ ALLOW WITHOUT TOKEN:
+    // - CREATED users can access /complete-profile
+    // - WAITING users can access /users/waiting-approval
     if (!token) {
-        return <Navigate to="/login" replace />;
+        if (isCreated && isCompleteProfilePath) return <Outlet />;
+        if (isWaiting && isWaitingPath) return <Outlet />;
+        return <Navigate to="/login" replace state={{ from: location.pathname }} />;
     }
 
-    // 2. Kiểm tra quyền truy cập (nếu có yêu cầu roles)
+    // ===== role check =====
+    const roles = reduxRoles?.length > 0 ? reduxRoles : getStoredRoles();
+    const normalizedRoles = normalizeRoles(roles);
+
     if (allowedRoles && allowedRoles.length > 0) {
-        const normalizedRoles = roles.map(r => r.replace("ROLE_", ""));
-
-        const hasPermission = allowedRoles.some(role => normalizedRoles.includes(role));
-
+        const hasPermission = allowedRoles.some((r) =>
+            normalizedRoles.includes(String(r).replace("ROLE_", ""))
+        );
 
         if (!hasPermission) {
-            console.log("Allowed:", allowedRoles, "User Roles:", normalizedRoles);
-            // Nếu là Admin nhưng vào nhầm trang User hoặc ngược lại
-            // Chuyển hướng về trang chủ tương ứng với Role của họ
-            if (normalizedRoles.includes("ADMIN")) {
-                return <Navigate to="/admin" replace />;
-            }
-            if (normalizedRoles.includes("STUDENT")) {
-                return <Navigate to="/users/dashboard" replace />;
-            }
+            if (normalizedRoles.includes("ADMIN")) return <Navigate to="/admin" replace />;
+            if (normalizedRoles.includes("STUDENT")) return <Navigate to="/users/dashboard" replace />;
             return <Navigate to="/login" replace />;
         }
     }
 
-    // Nếu thỏa mãn hết điều kiện -> Cho phép truy cập vào trang con (Outlet)
-    return <Outlet />;
-};
+    // ✅ GATE ORDER: WAITING trước CREATED
+    if (isWaiting && !isWaitingPath) {
+        return <Navigate to="/users/waiting-approval" replace />;
+    }
 
-export default ProtectedRoute;
+    if (isCreated && !isCompleteProfilePath) {
+        return <Navigate to="/complete-profile" replace />;
+    }
+
+    return <Outlet />;
+}

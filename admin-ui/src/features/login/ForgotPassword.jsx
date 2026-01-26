@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     Box,
@@ -8,39 +8,60 @@ import {
     TextField,
     Button,
     Stack,
-    Alert,
 } from "@mui/material";
+
 import { forgotPasswordApi } from "../../api/authApi.js";
+import GlobalLoading from "../../components/common/GlobalLoading";
+import { useToast } from "../../components/common/AppToast";
 
 export default function ForgotPassword() {
     const navigate = useNavigate();
+    const { showToast } = useToast();
+
     const [email, setEmail] = useState("");
+    const [touched, setTouched] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [okMsg, setOkMsg] = useState("");
-    const [errMsg, setErrMsg] = useState("");
+
+    const validateEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+    const error = useMemo(() => {
+        if (!touched) return "";
+        const v = email.trim();
+        if (!v) return "Vui lòng nhập email.";
+        if (!validateEmail(v)) return "Email không đúng định dạng.";
+        return "";
+    }, [email, touched]);
 
     const submit = async () => {
         if (loading) return;
-        setOkMsg("");
-        setErrMsg("");
+        setTouched(true);
 
         const value = email.trim();
         if (!value) {
-            setErrMsg("Vui lòng nhập email.");
+            showToast("Vui lòng nhập email.", "warning");
+            return;
+        }
+        if (!validateEmail(value)) {
+            showToast("Email không đúng định dạng.", "warning");
             return;
         }
 
         try {
             setLoading(true);
             const res = await forgotPasswordApi(value);
-            // BE trả string message
-            setOkMsg(res?.data || "Link đặt lại mật khẩu đã được gửi vào email của bạn.");
+
+            const msg =
+                (typeof res?.data === "string" && res.data) ||
+                "Link đặt lại mật khẩu đã được gửi vào email của bạn.";
+
+            showToast(msg, "success");
         } catch (err) {
-            setErrMsg(
+            const msg =
                 err?.response?.data?.message ||
                 err?.response?.data ||
-                "Không thể gửi yêu cầu. Vui lòng thử lại."
-            );
+                "Không thể gửi yêu cầu. Vui lòng thử lại.";
+
+            showToast(String(msg), "error");
         } finally {
             setLoading(false);
         }
@@ -48,6 +69,8 @@ export default function ForgotPassword() {
 
     return (
         <Box sx={{ minHeight: "100vh", display: "flex", alignItems: "center" }}>
+            <GlobalLoading open={loading} message="Vui lòng chờ... Đang gửi email" />
+
             <Card sx={{ maxWidth: 420, mx: "auto", width: "100%" }}>
                 <CardContent>
                     <Typography variant="h5" textAlign="center" mb={2}>
@@ -55,18 +78,22 @@ export default function ForgotPassword() {
                     </Typography>
 
                     <Stack spacing={2}>
-                        {okMsg && <Alert severity="success">{okMsg}</Alert>}
-                        {errMsg && <Alert severity="error">{errMsg}</Alert>}
-
                         <TextField
                             label="Email"
                             value={email}
-                            onChange={(e) => setEmail(e.target.value)}
+                            onChange={(e) => {
+                                setEmail(e.target.value);
+                                if (!touched) setTouched(true);
+                            }}
+                            onBlur={() => setTouched(true)}
+                            error={!!error}
+                            helperText={error}
                             disabled={loading}
+                            autoComplete="email"
                         />
 
                         <Button variant="contained" size="large" onClick={submit} disabled={loading}>
-                            {loading ? "Đang gửi..." : "Gửi link đặt lại mật khẩu"}
+                            Gửi link đặt lại mật khẩu
                         </Button>
 
                         <Button variant="text" onClick={() => navigate("/login")} disabled={loading}>

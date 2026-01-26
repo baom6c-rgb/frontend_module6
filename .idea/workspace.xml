@@ -4,12 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a6d231b7-8c74-4eb5-949d-1fa4a5c227da" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/admin-ui/src/api/dashboardApi.js" afterDir="false" />
+    <list default="true" id="b126185a-0208-4cc0-af9f-e5b35ad89a76" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/admin-ui/src/features/users/components/AvatarUploadDialog.jsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/admin-ui/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/admin-ui/package-lock.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/admin-ui/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/admin-ui/package.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/admin-ui/src/features/users/UserDashboard.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/admin-ui/src/features/users/UserDashboard.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/admin-ui/src/api/userApi.js" beforeDir="false" afterPath="$PROJECT_DIR$/admin-ui/src/api/userApi.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/admin-ui/src/features/users/UserProfile.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/admin-ui/src/features/users/UserProfile.jsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -19,6 +18,7 @@
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
       <list>
+        <option value="JavaScript File" />
         <option value="JSX File" />
         <option value="JavaScript File" />
       </list>
@@ -27,43 +27,34 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="ProblemsViewState">
-    <option name="selectedTabId" value="CurrentFile" />
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 1
+}]]></component>
+  <component name="ProjectId" id="38cSEomZBnsofGBUFW3roLD8XW2" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
   </component>
-  <component name="ProjectColorInfo">{
-  &quot;associatedIndex&quot;: 7
-}</component>
-  <component name="ProjectId" id="38ZNtdmYtCLkKPqVAdA1QHqgzPW" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Node.js.axiosPrivate.js.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultAutoModeForALLUsers.v1": "true",
-    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "feature/fe__user__dashboard",
-    "junie.onboarding.icon.badge.shown": "true",
+    "git-widget-placeholder": "feature/fix__admin",
+    "ignore.virus.scanning.warn.message": "true",
+    "last_opened_file_path": "C:/Users/Admin/IdeaProjects/module 4/finalTest/FE_ai_learning_platform/frontend_module6",
     "node.js.detected.package.eslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
-    "to.speed.mode.migration.done": "true",
-    "ts.external.directory.path": "E:\\WebStorm 2025.2\\plugins\\javascript-plugin\\jsLanguageServicesImpl\\external",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
-  <component name="RecentsManager">
-    <key name="MoveFile.RECENT_KEYS">
-      <recent name="E:\Module6\project_fe\admin-ui\src\features\login" />
-      <recent name="E:\Module6\project_fe\admin-ui\src\features\auth\components" />
-      <recent name="E:\Module6\project_fe\admin-ui\src\features" />
-      <recent name="E:\Module6\project_fe\admin-ui\src\pages\admin" />
-    </key>
-  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -73,14 +64,12 @@
   </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
-      <changelist id="a6d231b7-8c74-4eb5-949d-1fa4a5c227da" name="Changes" comment="" />
-      <created>1769003466622</created>
+      <changelist id="b126185a-0208-4cc0-af9f-e5b35ad89a76" name="Changes" comment="" />
+      <created>1769097257057</created>
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
-      <updated>1769003466622</updated>
-      <workItem from="1769003468382" duration="2741000" />
-      <workItem from="1769043507528" duration="27606000" />
-      <workItem from="1769130137425" duration="15199000" />
+      <updated>1769097257057</updated>
+      <workItem from="1769097258235" duration="25794000" />
     </task>
     <servers />
   </component>
