@@ -80,11 +80,11 @@ const NavItem = ({ active, icon, text, onClick, collapsed }) => {
                 justifyContent: collapsed ? "center" : "flex-start",
                 p: 1.5,
                 borderRadius: "12px",
-                bgcolor: active ? "#1976d2" : "transparent",
-                color: active ? "#FFFFFF" : "#A3AED0",
+                bgcolor: active ? "#2E2D84" : "transparent",
+                color: active ? "#FFFFFF" : "#1A1A1A",
                 transition: "0.25s",
                 cursor: "pointer",
-                "&:hover": { bgcolor: active ? "#1976d2" : "rgba(255, 255, 255, 0.06)" },
+                "&:hover": { bgcolor: active ? "#2E2D84" : "rgba(46, 45, 132, 0.08)" },
                 position: "relative",
                 overflow: "hidden",
                 ...(active && {
@@ -207,7 +207,6 @@ const AdminLayout = () => {
         enabled: isAdmin,
         intervalMs: 30000,
     });
-
     // ===== avatar menu =====
     const [anchorEl, setAnchorEl] = React.useState(null);
     const open = Boolean(anchorEl);
@@ -272,7 +271,7 @@ const AdminLayout = () => {
                                 variant="overline"
                                 sx={{
                                     fontWeight: 900,
-                                    color: "#4B5584",
+                                    color: "#666666",
                                     fontSize: "0.7rem",
                                     letterSpacing: "0.8px",
                                 }}
@@ -325,7 +324,7 @@ const AdminLayout = () => {
             <Box sx={{ flexGrow: 1 }} />
 
             <Box sx={{ px: sidebarCollapsed && !isMobile ? 1 : 2, pb: 2 }}>
-                <Divider sx={{ borderColor: "rgba(255,255,255,0.08)", mb: 1.5 }} />
+                <Divider sx={{ borderColor: "rgba(0,0,0,0.1)", mb: 1.5 }} />
 
                 {sidebarCollapsed && !isMobile ? (
                     <Tooltip title="Đăng xuất" placement="right" arrow>
@@ -371,10 +370,10 @@ const AdminLayout = () => {
                 position="fixed"
                 sx={{
                     zIndex: (t) => t.zIndex.drawer + 1,
-                    bgcolor: "#FFFFFF",
-                    color: "#2B3674",
-                    boxShadow: "none",
-                    borderBottom: "1px solid #E0E5F2",
+                    bgcolor: "#2E2D84",
+                    color: "#FFFFFF",
+                    boxShadow: "0px 2px 8px rgba(0,0,0,0.1)",
+                    borderBottom: "none",
                 }}
             >
                 <Toolbar sx={{ justifyContent: "space-between", gap: 1 }}>
@@ -384,52 +383,33 @@ const AdminLayout = () => {
                             onClick={toggleSidebar}
                             sx={{
                                 p: 0.9,
-                                border: "1px solid #E0E5F2",
+                                border: "1px solid rgba(255,255,255,0.2)",
                                 borderRadius: "12px",
+                                color: "#FFFFFF",
+                                "&:hover": {
+                                    bgcolor: "rgba(255,255,255,0.1)",
+                                }
                             }}
                             aria-label="toggle sidebar"
                         >
-                            <MenuRounded sx={{ color: "#2B3674" }} />
+                            <MenuRounded />
                         </IconButton>
 
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
                             <Box
+                                component="img"
+                                src="/images/logo_codegym_ai.png"
+                                alt="CodeGym Logo"
                                 sx={{
-                                    width: 36,
-                                    height: 36,
-                                    borderRadius: "12px",
-                                    bgcolor: "#4318FF",
-                                    color: "#fff",
-                                    display: "grid",
-                                    placeItems: "center",
-                                    fontWeight: 900,
+                                    height: 32,
+                                    width: "auto",
+                                    filter: "brightness(0) invert(1)",
                                     flex: "0 0 auto",
                                 }}
-                            >
-                                AI
-                            </Box>
+                            />
 
-                            <Box sx={{ minWidth: 0 }}>
-                                <Typography
-                                    sx={{
-                                        fontWeight: 950,
-                                        letterSpacing: "0.8px",
-                                        color: "#1B2559",
-                                        lineHeight: 1.1,
-                                        whiteSpace: "nowrap",
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                    }}
-                                >
-                                    AI LEARNING
-                                </Typography>
-                                <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#707EAE", lineHeight: 1.1 }}>
-                                    Admin Console
-                                </Typography>
-                            </Box>
                         </Box>
                     </Box>
-
                     {/* RIGHT */}
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                         {/* 🔔 Notification Bell */}
@@ -440,14 +420,17 @@ const AdminLayout = () => {
                                         onClick={openNotif}
                                         sx={{
                                             p: 0.9,
-                                            border: "1px solid #E0E5F2",
+                                            border: "1px solid rgba(255,255,255,0.2)",
                                             borderRadius: "12px",
-                                            bgcolor: "#fff",
+                                            color: "#FFFFFF",
+                                            "&:hover": {
+                                                bgcolor: "rgba(255,255,255,0.1)",
+                                            }
                                         }}
                                         aria-label="notifications"
                                     >
                                         <Badge badgeContent={pendingCount} color="error" max={99}>
-                                            <NotificationsRoundedIcon sx={{ color: "#2B3674" }} />
+                                            <NotificationsRoundedIcon />
                                         </Badge>
                                     </IconButton>
                                 </Tooltip>
@@ -537,23 +520,23 @@ const AdminLayout = () => {
                                 px: 1.1,
                                 py: 0.6,
                                 borderRadius: "14px",
-                                border: "1px solid #E0E5F2",
-                                bgcolor: "#fff",
+                                border: "1px solid rgba(255,255,255,0.2)",
+                                bgcolor: "rgba(255,255,255,0.1)",
                                 cursor: "pointer",
-                                "&:hover": { bgcolor: "#F7F9FC" },
+                                "&:hover": { bgcolor: "rgba(255,255,255,0.15)" },
                             }}
                         >
                             <Avatar
                                 src={avatarUrl || undefined}
                                 imgProps={{ referrerPolicy: "no-referrer" }}
-                                sx={{ width: 36, height: 36, bgcolor: "#1976d2", fontWeight: 900 }}
+                                sx={{ width: 36, height: 36, bgcolor: "#FF8C00", fontWeight: 900 }}
                             >
                                 {avatarChar}
                             </Avatar>
 
                             {!isMobile && (
                                 <Box sx={{ lineHeight: 1.1 }}>
-                                    <Typography sx={{ fontWeight: 900, color: "#1B2559", fontSize: 14 }}>
+                                    <Typography sx={{ fontWeight: 900, color: "#FFFFFF", fontSize: 14 }}>
                                         {fullName}
                                     </Typography>
                                     <Stack direction="row" spacing={0.8} alignItems="center">
@@ -563,8 +546,8 @@ const AdminLayout = () => {
                                             sx={{
                                                 height: 20,
                                                 fontWeight: 900,
-                                                bgcolor: "rgba(67,24,255,0.08)",
-                                                color: "#4318FF",
+                                                bgcolor: "rgba(255,255,255,0.2)",
+                                                color: "#FFFFFF",
                                             }}
                                         />
                                     </Stack>
@@ -634,9 +617,10 @@ const AdminLayout = () => {
                     [`& .MuiDrawer-paper`]: {
                         width: effectiveDrawerWidth,
                         boxSizing: "border-box",
-                        bgcolor: "#0B1437",
-                        color: "#FFFFFF",
-                        border: "none",
+                        bgcolor: "rgba(255, 255, 255, 0.95)",
+                        backdropFilter: "blur(10px)",
+                        color: "#1A1A1A",
+                        borderRight: "1px solid rgba(0,0,0,0.08)",
                         overflowX: "hidden",
                         transition: theme.transitions.create("width", {
                             easing: theme.transitions.easing.sharp,
