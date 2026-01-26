@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
     Box,
     Grid,
@@ -21,7 +21,9 @@ import {
 import { useSelector } from "react-redux";
 import { getDashboardStatsApi } from "../../api/dashboardApi";
 
-// ===== Color tokens: Orange + Deep Blue + White =====
+// ✅ lấy profile giống UserProfile
+import { getMyProfileApi } from "../../api/userApi";
+
 const COLORS = {
     primaryBlue: "#0B5ED7",
     secondaryOrange: "#FF8C00",
@@ -32,29 +34,93 @@ const COLORS = {
     borderLight: "#E3E8EF",
 };
 
+const safeParse = (key, fallback = null) => {
+    try {
+        const s = localStorage.getItem(key);
+        return s ? JSON.parse(s) : fallback;
+    } catch {
+        return fallback;
+    }
+};
+
 const UserDashboard = () => {
     const { user } = useSelector((state) => state.auth);
+
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // ✅ NEW: profile để lấy avatar giống UserProfile/UserLayout
+    const [profile, setProfile] = useState(null);
+
     useEffect(() => {
-        const fetchStats = async () => {
+        let alive = true;
+
+        const fetchAll = async () => {
             try {
                 setLoading(true);
-                const response = await getDashboardStatsApi();
-                setStats(response.data);
-                setError(null);
-            } catch (err) {
-                console.error("Dashboard Error:", err);
-                setError("Không thể tải dữ liệu thống kê. Vui lòng kiểm tra lại kết nối Server.");
+
+                // chạy song song cho nhanh
+                const [statsRes, profileRes] = await Promise.allSettled([
+                    getDashboardStatsApi(),
+                    getMyProfileApi(),
+                ]);
+
+                if (!alive) return;
+
+                if (statsRes.status === "fulfilled") {
+                    setStats(statsRes.value.data);
+                    setError(null);
+                } else {
+                    console.error("Dashboard Error:", statsRes.reason);
+                    setError("Không thể tải dữ liệu thống kê. Vui lòng kiểm tra lại kết nối Server.");
+                }
+
+                if (profileRes.status === "fulfilled") {
+                    const p = profileRes.value.data;
+                    setProfile(p);
+
+                    // sync về localStorage để đồng bộ UI toàn app
+                    if (p?.avatarUrl) {
+                        const u = safeParse("userData", {});
+                        localStorage.setItem("userData", JSON.stringify({ ...(u || {}), avatarUrl: p.avatarUrl }));
+                    }
+                }
             } finally {
-                setLoading(false);
+                if (alive) setLoading(false);
             }
         };
 
-        fetchStats();
+        fetchAll();
+        return () => {
+            alive = false;
+        };
     }, []);
+
+    // ===== Avatar data (ưu tiên profile) =====
+    const userData = safeParse("userData", null);
+
+    const displayName =
+        profile?.fullName ||
+        user?.fullName ||
+        userData?.fullName ||
+        profile?.email ||
+        user?.email ||
+        userData?.email ||
+        "User";
+
+    const avatarUrl =
+        profile?.avatarUrl ||
+        user?.avatarUrl ||
+        userData?.avatarUrl ||
+        userData?.avatar ||
+        userData?.profileImageUrl ||
+        "";
+
+    const initials = useMemo(() => {
+        const name = String(displayName || "U").trim();
+        return name ? name.charAt(0).toUpperCase() : "U";
+    }, [displayName]);
 
     const StatCard = ({ icon, title, value, subtitle, color }) => (
         <Paper
@@ -146,8 +212,10 @@ const UserDashboard = () => {
                     }}
                 >
                     <Box display="flex" alignItems="center">
+                        {/* ✅ Avatar hiển thị trong "Chào buổi sáng" */}
                         <Avatar
-                            src={user?.avatarUrl}
+                            src={avatarUrl || undefined}
+                            imgProps={{ referrerPolicy: "no-referrer" }}
                             sx={{
                                 width: 70,
                                 height: 70,
@@ -159,12 +227,12 @@ const UserDashboard = () => {
                                 fontWeight: 900,
                             }}
                         >
-                            {user?.fullName?.charAt(0).toUpperCase()}
+                            {initials}
                         </Avatar>
 
                         <Box>
                             <Typography variant="h3" sx={{ fontWeight: 900, color: COLORS.textPrimary, mb: 0.5 }}>
-                                {stats?.greeting || "Chào mừng bạn!"}
+                                {stats?.greeting || `Chào mừng ${displayName}!`}
                             </Typography>
                             <Typography variant="h6" sx={{ color: COLORS.textSecondary, fontWeight: 600 }}>
                                 Hôm nay bạn muốn học gì nào? 📚
