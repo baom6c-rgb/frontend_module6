@@ -45,15 +45,18 @@ const NavItem = ({ active, icon, text, onClick }) => (
                 alignItems: "center",
                 p: 1.5,
                 borderRadius: "12px",
-                bgcolor: active ? "#1976d2" : "transparent",
-                color: active ? "#FFFFFF" : "#A3AED0",
+                bgcolor: active ? "#3949AB" : "transparent",
+                color: active ? "#FFFFFF" : "#1F2937",
                 transition: "0.3s",
                 cursor: "pointer",
-                "&:hover": { bgcolor: active ? "#1976d2" : "rgba(255, 255, 255, 0.05)" },
+                "&:hover": {
+                    bgcolor: active ? "#3949AB" : "rgba(57, 73, 171, 0.1)",
+                    color: active ? "#FFFFFF" : "#1F2937"
+                },
             }}
         >
-            <Box sx={{ mr: 2, display: "flex" }}>{icon}</Box>
-            <Typography sx={{ fontWeight: 600 }}>{text}</Typography>
+            <Box sx={{ mr: 2, display: "flex", color: "inherit" }}>{icon}</Box>
+            <Typography sx={{ fontWeight: 700, fontSize: "0.95rem", color: "inherit" }}>{text}</Typography>
         </Box>
     </Box>
 );
@@ -106,43 +109,26 @@ const AdminLayout = () => {
                 position="fixed"
                 sx={{
                     zIndex: (theme) => theme.zIndex.drawer + 1,
-                    bgcolor: "#FFFFFF",
-                    color: "#2B3674",
-                    boxShadow: "none",
-                    borderBottom: "1px solid #E0E5F2",
+                    bgcolor: "#3949AB",
+                    color: "#FFFFFF",
+                    boxShadow: "0px 4px 12px rgba(57, 73, 171, 0.2)",
                 }}
             >
                 <Toolbar sx={{ justifyContent: "space-between" }}>
-                    <Typography
-                        variant="h5"
+                    <Box
                         sx={{
-                            fontWeight: 900,
-                            letterSpacing: "1px",
-                            background: "linear-gradient(45deg, #1B2559 30%, #4318FF 90%)",
-                            WebkitBackgroundClip: "text",
-                            WebkitTextFillColor: "transparent",
                             display: "flex",
                             alignItems: "center",
-                            gap: 1,
-                            textTransform: "uppercase",
-                            fontFamily: "'Plus Jakarta Sans', sans-serif",
+                            cursor: "pointer"
                         }}
+                        onClick={() => navigate("/admin")}
                     >
-                        <Box
-                            component="span"
-                            sx={{
-                                bgcolor: "#4318FF",
-                                color: "#fff",
-                                px: 1,
-                                borderRadius: "8px",
-                                WebkitTextFillColor: "#fff",
-                                mr: 0.5,
-                            }}
-                        >
-                            AI
-                        </Box>
-                        LEARNING
-                    </Typography>
+                        <img
+                            src="/images/logo_codegym_ai.png"
+                            alt="CodeGym Logo"
+                            style={{ height: "40px" }}
+                        />
+                    </Box>
 
                     {/* Right actions */}
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -151,11 +137,17 @@ const AdminLayout = () => {
                             <>
                                 <IconButton
                                     onClick={openNotif}
-                                    sx={{ p: 0.8, border: "1px solid #E0E5F2" }}
+                                    sx={{
+                                        p: 0.8,
+                                        border: "1px solid rgba(255, 255, 255, 0.3)",
+                                        "&:hover": {
+                                            bgcolor: "rgba(255, 255, 255, 0.1)"
+                                        }
+                                    }}
                                     aria-label="notifications"
                                 >
                                     <Badge badgeContent={pendingCount} color="error" max={99}>
-                                        <NotificationsRoundedIcon sx={{ color: "#2B3674" }} />
+                                        <NotificationsRoundedIcon sx={{ color: "#FFFFFF" }} />
                                     </Badge>
                                 </IconButton>
 
@@ -229,8 +221,17 @@ const AdminLayout = () => {
                         )}
 
                         {/* Avatar menu */}
-                        <IconButton onClick={handleClick} sx={{ p: 0.5, border: "1px solid #E0E5F2" }}>
-                            <Avatar sx={{ bgcolor: "#1976d2", width: 35, height: 35 }}>A</Avatar>
+                        <IconButton
+                            onClick={handleClick}
+                            sx={{
+                                p: 0.5,
+                                border: "1px solid rgba(255, 255, 255, 0.3)",
+                                "&:hover": {
+                                    bgcolor: "rgba(255, 255, 255, 0.1)"
+                                }
+                            }}
+                        >
+                            <Avatar sx={{ bgcolor: "#FF6B35", width: 35, height: 35 }}>A</Avatar>
                         </IconButton>
                         <Menu
                             anchorEl={anchorEl}
@@ -270,9 +271,11 @@ const AdminLayout = () => {
                     width: drawerWidth,
                     [`& .MuiDrawer-paper`]: {
                         width: drawerWidth,
-                        bgcolor: "#0B1437",
-                        color: "#FFFFFF",
+                        bgcolor: "rgba(255, 255, 255, 0.85)",
+                        backdropFilter: "blur(10px)",
+                        color: "#1B2559",
                         border: "none",
+                        boxShadow: "4px 0px 12px rgba(0, 0, 0, 0.08)"
                     },
                 }}
             >
@@ -280,7 +283,13 @@ const AdminLayout = () => {
                 <Box sx={{ mt: 4 }}>
                     <Typography
                         variant="overline"
-                        sx={{ px: 4, fontWeight: 800, color: "#4B5584", fontSize: "0.7rem" }}
+                        sx={{
+                            px: 4,
+                            fontWeight: 900,
+                            color: "#6B7280",
+                            fontSize: "0.75rem",
+                            letterSpacing: "1.2px"
+                        }}
                     >
                         QUẢN LÝ HỆ THỐNG
                     </Typography>
@@ -316,7 +325,6 @@ const AdminLayout = () => {
                             text="Danh sách user"
                             onClick={() => navigate("/admin/users")}
                         />
-
                     </Box>
                 </Box>
             </Drawer>
