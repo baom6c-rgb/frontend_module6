@@ -164,7 +164,23 @@ const AdminLayout = () => {
                                 mr: 0.5,
                             }}
                         >
-                            AI
+                            <MenuRounded />
+                        </IconButton>
+
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+                            <Box
+                                component="img"
+                                src="/images/logo_codegym_ai.png"
+                                alt="CodeGym Logo"
+                                sx={{
+                                    height: 32,
+                                    width: "auto",
+                                    filter: "brightness(0) invert(1)",
+                                    flex: "0 0 auto",
+                                }}
+                            />
+
+
                         </Box>
                         LEARNING
                     </Typography>
