@@ -1,6 +1,5 @@
 import React, { forwardRef, useMemo, useState } from "react";
 import {
-    Box,
     Button,
     CircularProgress,
     Dialog,
@@ -35,7 +34,7 @@ const Transition = forwardRef(function Transition(props, ref) {
  * - onSubmit?: () => Promise<void> | void
  * - loading?: boolean (disable buttons khi submit) - optional controlled
  * - maxWidth?: "xs"|"sm"|"md"|"lg"|"xl"|false|string|number
- * - hideActions?: boolean (nếu modal chỉ hiển thị nội dung)
+ * - hideActions?: boolean
  */
 export default function AppModal({
                                      open,
@@ -54,11 +53,10 @@ export default function AppModal({
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
-    // toast (đã có sẵn ở dự án)
     const toastApi = useToast?.();
     const showToast = toastApi?.showToast;
 
-    // hỗ trợ controlled/uncontrolled loading
+    // controlled/uncontrolled loading
     const [internalLoading, setInternalLoading] = useState(false);
     const isSubmitting = typeof loading === "boolean" ? loading : internalLoading;
 
@@ -92,15 +90,7 @@ export default function AppModal({
 
         try {
             if (typeof loading !== "boolean") setInternalLoading(true);
-
             await onSubmit();
-
-            showToast?.({
-                type: "success",
-                message: "Thành công",
-            });
-
-            onClose?.();
         } catch (err) {
             const msg =
                 err?.response?.data?.message ||
@@ -108,10 +98,9 @@ export default function AppModal({
                 err?.message ||
                 "Có lỗi xảy ra, vui lòng thử lại";
 
-            showToast?.({
-                type: "error",
-                message: msg,
-            });
+            showToast?.(msg, "error");
+            // rethrow để modal con (nếu muốn) vẫn bắt được
+            throw err;
         } finally {
             if (typeof loading !== "boolean") setInternalLoading(false);
         }
@@ -125,7 +114,6 @@ export default function AppModal({
     return (
         <Dialog
             open={open}
-            // ✅ chặn backdrop click + ESC (chỉ cho đóng qua nút Hủy)
             onClose={(_, reason) => {
                 if (reason === "backdropClick" || reason === "escapeKeyDown") return;
                 handleClose();
@@ -138,7 +126,6 @@ export default function AppModal({
             keepMounted
             PaperProps={{ sx: paperSx }}
         >
-            {/* Header (không có nút X) */}
             <DialogTitle
                 sx={{
                     px: 2.5,
@@ -151,6 +138,7 @@ export default function AppModal({
                 {typeof title === "string" ? (
                     <Typography
                         variant="h6"
+                        component="span"
                         sx={{ fontWeight: 800, color: "#fff", wordBreak: "break-word" }}
                     >
                         {title}
@@ -160,7 +148,6 @@ export default function AppModal({
                 )}
             </DialogTitle>
 
-            {/* Body */}
             <DialogContent
                 dividers
                 sx={{
@@ -172,16 +159,15 @@ export default function AppModal({
                 {children}
             </DialogContent>
 
-            {/* Actions */}
             {!hideActions && (
-                <DialogActions
-                    sx={{
-                        px: 2.5,
-                        py: 2,
-                        bgcolor: "#fff",
-                    }}
-                >
-                    <Stack direction="row" spacing={1.5} sx={{ width: "100%" }} justifyContent="flex-end">
+                <DialogActions sx={{ px: 2.5, py: 2, bgcolor: "#fff" }}>
+                    <Stack
+                        direction="row"
+                        spacing={1.5}
+                        sx={{ width: "100%" }}
+                        justifyContent="flex-end"
+                    >
+                        {/* ✅ Nút Hủy: nền trắng chữ đen; hover nền #2E2D84 chữ trắng */}
                         <Button
                             onClick={handleClose}
                             disabled={isSubmitting}
@@ -189,11 +175,14 @@ export default function AppModal({
                             sx={{
                                 borderRadius: 999,
                                 px: 2.5,
-                                borderColor: "rgba(46,45,132,0.35)",
-                                color: "#2E2D84",
+                                bgcolor: "#fff",
+                                color: "#111",
+                                borderColor: "rgba(17,17,17,0.25)",
+                                transition: "all 180ms ease",
                                 "&:hover": {
-                                    borderColor: "rgba(46,45,132,0.55)",
-                                    bgcolor: "rgba(46,45,132,0.06)",
+                                    bgcolor: "#2E2D84",
+                                    color: "#fff",
+                                    borderColor: "#2E2D84",
                                 },
                             }}
                         >

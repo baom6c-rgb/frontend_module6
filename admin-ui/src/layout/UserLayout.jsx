@@ -34,20 +34,20 @@ import QuizRoundedIcon from "@mui/icons-material/QuizRounded";
 import { useDispatch } from "react-redux";
 import { logout } from "../features/auth/authSlice.js";
 
-// ✅ API (ACTIVE mới gọi)
+// ✅ thêm API giống UserProfile
 import { getMyProfileApi } from "../api/userApi";
 
 const drawerWidth = 280;
 const drawerCollapsedWidth = 84;
 
 const COLORS = {
-    primaryBlue: "#0B5ED7",
+    primaryBlue: "#2E2D84",
     secondaryOrange: "#FF8C00",
     bgWhite: "#FFFFFF",
-    bgLight: "#F7F9FC",
+    bgLight: "#F4F7FE",
     textPrimary: "#1B2559",
-    textSecondary: "#000000",
-    borderLight: "#E3E8EF",
+    textSecondary: "#1A1A1A",
+    borderLight: "#E0E5F2",
     danger: "#EE5D50",
 };
 
@@ -106,7 +106,7 @@ export default function UserLayout() {
             "userData",
             JSON.stringify({
                 ...(u || {}),
-                avatarUrl, // ✅ key thống nhất
+                avatarUrl,
             })
         );
     }, []);
@@ -144,7 +144,7 @@ export default function UserLayout() {
         };
     }, [isWaiting, syncUserDataAvatar]);
 
-    // ✅ avatar: ưu tiên profile.avatarUrl -> fallback localStorage
+    // ✅ avatar giống UserProfile:
     const avatarUrl =
         profile?.avatarUrl ||
         userData?.avatarUrl ||
@@ -205,12 +205,21 @@ export default function UserLayout() {
                         }}
                     >
                         {sidebarCollapsed ? null : (
-                            <Typography sx={{ fontWeight: 950, color: COLORS.textPrimary }}>
+                            <Typography
+                                variant="overline"
+                                sx={{
+                                    fontWeight: 900,
+                                    color: "#666666",
+                                    fontSize: "0.7rem",
+                                    letterSpacing: "0.8px",
+                                }}
+                            >
                                 MENU
                             </Typography>
                         )}
                     </Box>
                 )}
+
 
                 <List>
                     {menuItems.map((item) => {
@@ -226,14 +235,15 @@ export default function UserLayout() {
                                 onClick={() => handleNav(item.path)}
                                 sx={{
                                     position: "relative",
-                                    borderRadius: "14px",
-                                    py: 1.2,
+                                    borderRadius: "12px",
+                                    py: 1.5,
                                     justifyContent: sidebarCollapsed && !isMobile ? "center" : "flex-start",
                                     bgcolor: isActive ? COLORS.primaryBlue : "transparent",
                                     color: isActive ? "#fff" : COLORS.textSecondary,
                                     overflow: "hidden",
+                                    transition: "0.25s",
                                     "&:hover": {
-                                        bgcolor: isActive ? COLORS.primaryBlue : COLORS.bgLight,
+                                        bgcolor: isActive ? COLORS.primaryBlue : "rgba(46, 45, 132, 0.08)",
                                     },
                                     ...(isActive && {
                                         "&::before": {
@@ -242,9 +252,9 @@ export default function UserLayout() {
                                             left: 0,
                                             top: "20%",
                                             height: "60%",
-                                            width: 5,
+                                            width: 4,
                                             bgcolor: COLORS.secondaryOrange,
-                                            borderRadius: 3,
+                                            borderRadius: 4,
                                         },
                                     }),
                                     ...(disabled && {
@@ -267,7 +277,7 @@ export default function UserLayout() {
                                 {sidebarCollapsed && !isMobile ? null : (
                                     <ListItemText
                                         primary={item.text}
-                                        primaryTypographyProps={{ fontWeight: 850 }}
+                                        primaryTypographyProps={{ fontWeight: 700, fontSize: 14 }}
                                     />
                                 )}
                             </ListItemButton>
@@ -287,37 +297,38 @@ export default function UserLayout() {
                     })}
                 </List>
 
-                <Divider sx={{ my: 2 }} />
+                <Divider sx={{ my: 2, borderColor: "rgba(0,0,0,0.1)" }} />
 
                 {sidebarCollapsed && !isMobile ? (
                     <Tooltip title="Đăng xuất" placement="right" arrow>
-                        <ListItemButton
+                        <IconButton
                             onClick={handleLogout}
                             sx={{
+                                width: "100%",
                                 borderRadius: "14px",
                                 color: COLORS.danger,
-                                justifyContent: "center",
-                                "&:hover": { bgcolor: COLORS.bgLight },
+                                bgcolor: "rgba(238,93,80,0.08)",
+                                "&:hover": { bgcolor: "rgba(238,93,80,0.14)" },
                             }}
                         >
-                            <ListItemIcon sx={{ color: "inherit", minWidth: "auto" }}>
-                                <LogoutRounded />
-                            </ListItemIcon>
-                        </ListItemButton>
+                            <LogoutRounded />
+                        </IconButton>
                     </Tooltip>
                 ) : (
                     <ListItemButton
                         onClick={handleLogout}
                         sx={{
-                            borderRadius: "14px",
+                            borderRadius: "12px",
+                            py: 1.2,
                             color: COLORS.danger,
-                            "&:hover": { bgcolor: COLORS.bgLight },
+                            bgcolor: "rgba(238,93,80,0.08)",
+                            "&:hover": { bgcolor: "rgba(238,93,80,0.14)" },
                         }}
                     >
                         <ListItemIcon sx={{ color: "inherit" }}>
                             <LogoutRounded />
                         </ListItemIcon>
-                        <ListItemText primary="Đăng xuất" primaryTypographyProps={{ fontWeight: 850 }} />
+                        <ListItemText primary="Đăng xuất" primaryTypographyProps={{ fontWeight: 900 }} />
                     </ListItemButton>
                 )}
             </Box>
@@ -333,10 +344,10 @@ export default function UserLayout() {
                 position="fixed"
                 sx={{
                     zIndex: (t) => t.zIndex.drawer + 1,
-                    bgcolor: COLORS.bgWhite,
-                    color: COLORS.textPrimary,
-                    boxShadow: "none",
-                    borderBottom: `1px solid ${COLORS.borderLight}`,
+                    bgcolor: COLORS.primaryBlue,
+                    color: "#FFFFFF",
+                    boxShadow: "0px 2px 8px rgba(0,0,0,0.1)",
+                    borderBottom: "none",
                 }}
             >
                 <Toolbar sx={{ justifyContent: "space-between", gap: 1 }}>
@@ -346,56 +357,31 @@ export default function UserLayout() {
                             onClick={toggleSidebar}
                             sx={{
                                 p: 0.9,
-                                border: `1px solid ${COLORS.borderLight}`,
-                                borderRadius: "14px",
-                                bgcolor: COLORS.bgWhite,
+                                border: "1px solid rgba(255,255,255,0.2)",
+                                borderRadius: "12px",
+                                color: "#FFFFFF",
+                                "&:hover": {
+                                    bgcolor: "rgba(255,255,255,0.1)",
+                                }
                             }}
                             aria-label="toggle sidebar"
                         >
                             <MenuRounded />
                         </IconButton>
 
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
                             <Box
+                                component="img"
+                                src="/images/logo_codegym_ai.png"
+                                alt="CodeGym Logo"
                                 sx={{
-                                    width: 36,
-                                    height: 36,
-                                    borderRadius: "14px",
-                                    bgcolor: COLORS.primaryBlue,
-                                    display: "grid",
-                                    placeItems: "center",
-                                    color: "#fff",
-                                    fontWeight: 950,
+                                    height: 32,
+                                    width: "auto",
+                                    filter: "brightness(0) invert(1)",
                                     flex: "0 0 auto",
                                 }}
-                            >
-                                AI
-                            </Box>
+                            />
 
-                            <Box sx={{ minWidth: 0 }}>
-                                <Typography
-                                    sx={{
-                                        fontWeight: 950,
-                                        color: COLORS.textPrimary,
-                                        lineHeight: 1.05,
-                                        whiteSpace: "nowrap",
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                    }}
-                                >
-                                    AI LEARNING
-                                </Typography>
-                                <Typography
-                                    sx={{
-                                        fontSize: 12,
-                                        fontWeight: 750,
-                                        color: "#707EAE",
-                                        lineHeight: 1.1,
-                                    }}
-                                >
-                                    Student Portal
-                                </Typography>
-                            </Box>
                         </Box>
                     </Box>
 
@@ -410,20 +396,19 @@ export default function UserLayout() {
                                 px: 1.1,
                                 py: 0.6,
                                 borderRadius: "14px",
-                                border: `1px solid ${COLORS.borderLight}`,
-                                bgcolor: COLORS.bgWhite,
+                                border: "1px solid rgba(255,255,255,0.2)",
+                                bgcolor: "rgba(255,255,255,0.1)",
                                 cursor: "pointer",
-                                "&:hover": { bgcolor: COLORS.bgLight },
+                                "&:hover": { bgcolor: "rgba(255,255,255,0.15)" },
                             }}
                         >
                             <Avatar
                                 src={avatarUrl || undefined}
                                 imgProps={{ referrerPolicy: "no-referrer" }}
                                 sx={{
-                                    bgcolor: COLORS.primaryBlue,
-                                    width: 38,
-                                    height: 38,
-                                    fontWeight: 950,
+                                    width: 36,
+                                    height: 36,
+                                    fontWeight: 900,
                                 }}
                             >
                                 {avatarChar}
@@ -431,7 +416,7 @@ export default function UserLayout() {
 
                             {!isMobile && (
                                 <Box sx={{ lineHeight: 1.1 }}>
-                                    <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary, fontSize: 14 }}>
+                                    <Typography sx={{ fontWeight: 900, color: "#FFFFFF", fontSize: 14 }}>
                                         {profile?.fullName || displayName}
                                     </Typography>
 
@@ -442,8 +427,8 @@ export default function UserLayout() {
                                             sx={{
                                                 height: 20,
                                                 fontWeight: 900,
-                                                bgcolor: isWaiting ? "rgba(255,140,0,0.12)" : "rgba(11,94,215,0.10)",
-                                                color: isWaiting ? COLORS.secondaryOrange : COLORS.primaryBlue,
+                                                bgcolor: isWaiting ? "rgba(255,140,0,0.25)" : "rgba(255,255,255,0.2)",
+                                                color: "#FFFFFF",
                                             }}
                                         />
                                     </Stack>
@@ -462,7 +447,7 @@ export default function UserLayout() {
                                     border: `1px solid ${COLORS.borderLight}`,
                                     overflow: "hidden",
                                     minWidth: 220,
-                                    boxShadow: "0px 14px 40px rgba(0,0,0,0.10)",
+                                    boxShadow: "0px 14px 40px rgba(0,0,0,0.12)",
                                 },
                             }}
                         >
@@ -470,7 +455,7 @@ export default function UserLayout() {
                                 <Typography sx={{ fontWeight: 950, color: COLORS.textPrimary }}>
                                     {profile?.fullName || displayName}
                                 </Typography>
-                                <Typography sx={{ fontSize: 12, fontWeight: 750, color: "#707EAE" }}>
+                                <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#707EAE" }}>
                                     {isWaiting ? "Chờ phê duyệt" : "Tài khoản đang hoạt động"}
                                 </Typography>
                             </Box>
@@ -486,7 +471,7 @@ export default function UserLayout() {
                                 <ListItemIcon>
                                     <PersonRounded fontSize="small" sx={{ color: COLORS.primaryBlue }} />
                                 </ListItemIcon>
-                                <Typography sx={{ fontWeight: 850 }}>Hồ sơ</Typography>
+                                <Typography sx={{ fontWeight: 800 }}>Hồ sơ</Typography>
                             </MenuItem>
 
                             <Divider />
@@ -495,7 +480,7 @@ export default function UserLayout() {
                                 <ListItemIcon sx={{ color: "error.main" }}>
                                     <LogoutRounded fontSize="small" />
                                 </ListItemIcon>
-                                <Typography sx={{ fontWeight: 950 }}>Đăng xuất</Typography>
+                                <Typography sx={{ fontWeight: 900 }}>Đăng xuất</Typography>
                             </MenuItem>
                         </Menu>
                     </Box>
@@ -514,8 +499,10 @@ export default function UserLayout() {
                     [`& .MuiDrawer-paper`]: {
                         width: effectiveDrawerWidth,
                         boxSizing: "border-box",
-                        borderRight: `1px solid ${COLORS.borderLight}`,
-                        bgcolor: COLORS.bgWhite,
+                        bgcolor: "rgba(255, 255, 255, 0.95)",
+                        backdropFilter: "blur(10px)",
+                        color: COLORS.textSecondary,
+                        borderRight: "1px solid rgba(0,0,0,0.08)",
                         overflowX: "hidden",
                         transition: theme.transitions.create("width", {
                             easing: theme.transitions.easing.sharp,

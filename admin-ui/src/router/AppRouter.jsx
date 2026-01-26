@@ -10,9 +10,6 @@ import ProtectedRoute from "./ProtectedRoute.jsx";
 
 // --- PAGES ADMIN ---
 import AdminDashboard from "../features/admin/AdminDashboard.jsx";
-import StudentList from "../features/admin/StudentList";
-import AdminApproval from "../features/admin/AdminApproval";
-import StudentBlocked from "../features/admin/StudentBlocked";
 import AdminUserList from "../features/admin/AdminUserList.jsx";
 
 // --- PAGES USER ---
@@ -84,8 +81,8 @@ const router = createBrowserRouter([
     },
 
     // =========================
-    // 3) ADMIN ROUTES
-    // =========================
+// 3) ADMIN ROUTES
+// =========================
     {
         path: "/admin",
         element: <ProtectedRoute allowedRoles={["ADMIN"]} />,
@@ -94,14 +91,20 @@ const router = createBrowserRouter([
                 element: <AdminLayout />,
                 children: [
                     { index: true, element: <AdminDashboard /> },
-                    { path: "students", element: <StudentList /> },
-                    { path: "blocked", element: <StudentBlocked /> },
-                    { path: "approval", element: <AdminApproval /> },
+
+                    // redirect các route cũ về /admin/users
+                    { path: "students", element: <Navigate to="/admin/users" replace /> },
+                    { path: "blocked", element: <Navigate to="/admin/users" replace /> },
+                    { path: "approval", element: <Navigate to="/admin/users" replace /> },
+
+                    // trang quản lý user tổng
                     { path: "users", element: <AdminUserList /> },
                 ],
             },
         ],
     },
+
+
 
     // =========================
     // 4) NOT FOUND
