@@ -29,8 +29,8 @@ import {
     SchoolRounded,
     MenuBookRounded,
     MenuRounded,
-    ChevronLeftRounded,
 } from "@mui/icons-material";
+import QuizRoundedIcon from "@mui/icons-material/QuizRounded";
 import { useDispatch } from "react-redux";
 import { logout } from "../features/auth/authSlice.js";
 
@@ -73,8 +73,8 @@ export default function UserLayout() {
     const displayName = userData?.fullName || userData?.email || "User";
     const avatarChar = String(displayName || "U").trim().charAt(0).toUpperCase();
 
-    // ✅ WAITING flag (giữ nguyên)
-    const statusUpper = String(userData?.status || "").toUpperCase();
+    // ✅ WAITING flag
+    const statusUpper = String(userData?.status || userData?.userStatus || "").toUpperCase();
     const isWaiting =
         localStorage.getItem("pendingApproval") === "1" ||
         statusUpper === "WAITING_APPROVAL" ||
@@ -96,10 +96,10 @@ export default function UserLayout() {
     };
     const closeMobileDrawer = () => setMobileOpen(false);
 
-    // ✅ NEW: lấy profile từ API giống UserProfile
+    // ✅ Profile state (ACTIVE mới load)
     const [profile, setProfile] = React.useState(null);
 
-    const syncUserDataAvatar = (avatarUrl) => {
+    const syncUserDataAvatar = React.useCallback((avatarUrl) => {
         if (!avatarUrl) return;
         const u = safeParse("userData", {});
         localStorage.setItem(
@@ -109,22 +109,32 @@ export default function UserLayout() {
                 avatarUrl,
             })
         );
-    };
+    }, []);
 
+    /**
+     * ✅ CÁCH A: WAITING_APPROVAL thì KHÔNG gọi API private /users/me/profile
+     * Chỉ ACTIVE mới gọi getMyProfileApi().
+     */
     React.useEffect(() => {
         let alive = true;
 
         const load = async () => {
             try {
+                // ✅ WAITING => skip hoàn toàn (tránh spam 403)
+                if (isWaiting) {
+                    if (alive) setProfile(null); // optional: clear profile để UI dùng local
+                    return;
+                }
+
                 const res = await getMyProfileApi();
                 if (!alive) return;
 
-                const p = res.data;
+                const p = res?.data || null;
                 setProfile(p);
 
                 if (p?.avatarUrl) syncUserDataAvatar(p.avatarUrl);
             } catch {
-                // ignore: nếu fail thì fallback localStorage
+                // ignore: fallback localStorage
             }
         };
 
@@ -132,7 +142,7 @@ export default function UserLayout() {
         return () => {
             alive = false;
         };
-    }, []);
+    }, [isWaiting, syncUserDataAvatar]);
 
     // ✅ avatar giống UserProfile:
     const avatarUrl =
@@ -145,6 +155,7 @@ export default function UserLayout() {
     const menuItems = [
         { text: "Dashboard", icon: <DashboardRounded />, path: "/users/dashboard" },
         { text: "Hồ sơ cá nhân", icon: <PersonRounded />, path: "/users/profile" },
+        { text: "Luyện tập (AI Quiz)", icon: <QuizRoundedIcon />, path: "/users/practice" },
         { text: "Học tập cùng AI", icon: <MenuBookRounded />, path: "/users/study" },
         { text: "Đánh giá học tập", icon: <SchoolRounded />, path: "/users/review" },
         { text: "Tài liệu học", icon: <MenuBookRounded />, path: "/users/materials/upload" },
@@ -158,6 +169,8 @@ export default function UserLayout() {
         localStorage.removeItem("userRoles");
         localStorage.removeItem("userData");
         localStorage.removeItem("register_email");
+        localStorage.removeItem("pendingApproval");
+        localStorage.removeItem("onboardingCreated");
 
         navigate("/login", { replace: true });
     };
@@ -210,7 +223,10 @@ export default function UserLayout() {
 
                 <List>
                     {menuItems.map((item) => {
-                        const isActive = location.pathname === item.path;
+                        const isActive =
+                            location.pathname === item.path ||
+                            location.pathname.startsWith(item.path + "/");
+
                         const disabled = isWaiting;
 
                         const button = (
@@ -369,7 +385,7 @@ export default function UserLayout() {
                         </Box>
                     </Box>
 
-                    {/* RIGHT: user chip */}
+                    {/* RIGHT */}
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                         <Box
                             onClick={openMenu}
@@ -498,7 +514,7 @@ export default function UserLayout() {
                 {drawerContent}
             </Drawer>
 
-            {/* Main Content */}
+            {/* Main */}
             <Box component="main" sx={{ flexGrow: 1, minWidth: 0, bgcolor: COLORS.bgLight }}>
                 <Toolbar />
                 <Box

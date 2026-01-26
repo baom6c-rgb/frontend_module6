@@ -1,3 +1,4 @@
+// src/features/login/SelectClassModule.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -10,14 +11,19 @@ import {
     Autocomplete,
     TextField,
 } from "@mui/material";
+import { useDispatch } from "react-redux";
 
-import { getAllClassesApi } from "../../api/classApi.js";
-import { getAllModulesApi } from "../../api/moduleApi.js";
-import { completeProfileApi } from "../../api/userApi.js";
+import { getAllClassesApi } from "../../api/classApi";
+import { getAllModulesApi } from "../../api/moduleApi";
+import { completeProfileApi } from "../../api/userApi";
 
 import GlobalLoading from "../../components/common/GlobalLoading";
 import { useToast } from "../../components/common/AppToast";
 
+// ✅ đúng theo project của mày (WaitingApproval cũng đang import kiểu này)
+import { setAuth } from "../auth/authSlice";
+
+// ===== helpers =====
 const safeParse = (key, fallback = null) => {
     try {
         const s = localStorage.getItem(key);
@@ -27,44 +33,61 @@ const safeParse = (key, fallback = null) => {
     }
 };
 
+const normalizeStatus = (v) => String(v || "").trim().toUpperCase();
+
+const resolveEmail = () => {
+    const reg = localStorage.getItem("register_email");
+    if (reg && String(reg).trim()) return String(reg).trim();
+
+    const u = safeParse("userData", {});
+    const fromUserData = u?.email;
+    if (fromUserData && String(fromUserData).trim()) return String(fromUserData).trim();
+
+    return "";
+};
+
+const normalizeRoles = (roles) =>
+    (roles || [])
+        .filter(Boolean)
+        .map((r) => String(r).replace("ROLE_", "").toUpperCase());
+
 export default function SelectClassModule() {
     const navigate = useNavigate();
     const { showToast } = useToast();
+    const dispatch = useDispatch();
 
     const [classes, setClasses] = useState([]);
     const [modules, setModules] = useState([]);
 
     const [form, setForm] = useState({ classId: null, moduleId: null });
     const [touched, setTouched] = useState({ classId: false, moduleId: false });
+
     const [loading, setLoading] = useState(false);
-
-    // ✅ resolve email robustly (register_email OR userData.email)
-    const resolveEmail = () => {
-        const reg = localStorage.getItem("register_email");
-        if (reg && String(reg).trim()) return String(reg).trim();
-
-        const u = safeParse("userData", {});
-        const fromUserData = u?.email;
-        if (fromUserData && String(fromUserData).trim()) return String(fromUserData).trim();
-
-        return "";
-    };
-
     const [email, setEmail] = useState(() => resolveEmail());
 
-    // ===== load options =====
+    // ===== 1) Ensure email exists =====
+    useEffect(() => {
+        const e = resolveEmail();
+        if (!e) {
+            showToast("Không tìm thấy email Google. Vui lòng đăng nhập lại.", "warning");
+            navigate("/login", { replace: true });
+            return;
+        }
+        setEmail(e);
+        localStorage.setItem("register_email", e);
+    }, [navigate, showToast]);
+
+    // ===== 2) Load options =====
     useEffect(() => {
         let mounted = true;
 
         const fetchData = async () => {
             try {
-                const [classRes, moduleRes] = await Promise.all([
-                    getAllClassesApi(),
-                    getAllModulesApi(),
-                ]);
+                const [classRes, moduleRes] = await Promise.all([getAllClassesApi(), getAllModulesApi()]);
                 if (!mounted) return;
-                setClasses(classRes?.data || []);
-                setModules(moduleRes?.data || []);
+
+                setClasses(Array.isArray(classRes?.data) ? classRes.data : []);
+                setModules(Array.isArray(moduleRes?.data) ? moduleRes.data : []);
             } catch {
                 showToast("Không load được danh sách lớp / module", "error");
             }
@@ -76,30 +99,29 @@ export default function SelectClassModule() {
         };
     }, [showToast]);
 
-    // ✅ ensure email exists, and sync back to register_email
-    useEffect(() => {
-        const e = resolveEmail();
-        if (!e) {
-            showToast("Không tìm thấy email đăng ký Google. Vui lòng đăng nhập lại.", "warning");
-            navigate("/login", { replace: true });
-            return;
-        }
-        setEmail(e);
-        localStorage.setItem("register_email", e);
-    }, [navigate, showToast]);
-
     const selectedClass = useMemo(
-        () => classes.find((c) => c.id === form.classId) || null,
+        () => classes.find((c) => c?.id === form.classId) || null,
         [classes, form.classId]
     );
 
     const selectedModule = useMemo(
-        () => modules.find((m) => m.id === form.moduleId) || null,
+        () => modules.find((m) => m?.id === form.moduleId) || null,
         [modules, form.moduleId]
     );
 
     const classError = touched.classId && !form.classId ? "Vui lòng chọn lớp" : "";
     const moduleError = touched.moduleId && !form.moduleId ? "Vui lòng chọn module" : "";
+
+    // ✅ sync redux auth ngay sau complete-profile
+    const syncReduxAuthNow = (token, roles, user) => {
+        dispatch(
+            setAuth({
+                token: token || "",
+                roles: roles || [],
+                user: user || null,
+            })
+        );
+    };
 
     const submit = async () => {
         if (loading) return;
@@ -129,41 +151,58 @@ export default function SelectClassModule() {
 
             const payload = res?.data;
 
-            // ✅ bắt lỗi BE trả sai format
             if (!payload || typeof payload === "string") {
-                showToast("BE chưa trả AuthResponse sau complete-profile.", "error");
+                showToast("Backend chưa trả AuthResponse hợp lệ sau complete-profile.", "error");
                 return;
             }
 
-            const status = String(payload?.status || "").toUpperCase();
+            // token/roles/status
+            const token = payload?.token || payload?.accessToken || payload?.jwt || "";
+            const roles = normalizeRoles(payload?.roles || safeParse("userRoles", []));
+            const status = normalizeStatus(payload?.status || payload?.userStatus) || "WAITING_APPROVAL";
 
-            // ✅ nghiệp vụ đúng: complete-profile xong phải là WAITING_APPROVAL
-            if (status !== "WAITING_APPROVAL") {
-                showToast(`Trạng thái sau complete-profile không đúng: ${status || "(empty)"}`, "error");
-                return;
-            }
-
-            // ✅ sync auth localStorage
-            const token = payload?.token || payload?.accessToken || payload?.jwt;
+            // ===== Sync localStorage (ProtectedRoute fallback) =====
             if (token) localStorage.setItem("accessToken", token);
+            localStorage.setItem("userRoles", JSON.stringify(roles));
 
-            localStorage.setItem("userRoles", JSON.stringify(payload.roles || []));
-            localStorage.setItem("userData", JSON.stringify(payload));
+            const prevUser = safeParse("userData", {});
+            const mergedUserData = {
+                ...prevUser,
+                ...payload,
+                email: payload?.email || prevUser?.email || currentEmail,
+                status, // ✅ quan trọng
+                classId: form.classId,
+                moduleId: form.moduleId,
+            };
+            localStorage.setItem("userData", JSON.stringify(mergedUserData));
 
-            // ✅ set flag để ProtectedRoute gate đúng
             localStorage.setItem("pendingApproval", "1");
-            localStorage.removeItem("onboardingCreated"); // nếu có dùng
-            localStorage.removeItem("register_email"); // xong onboarding thì bỏ
+            // giữ register_email cho ổn định
+            // localStorage.removeItem("register_email");
 
-            showToast("Gửi yêu cầu thành công. Vui lòng chờ admin phê duyệt.", "success");
+            // ===== ✅ Sync Redux ngay lập tức (KEY FIX) =====
+            syncReduxAuthNow(token || localStorage.getItem("accessToken") || "", roles, mergedUserData);
 
-            // ✅ luôn chuyển sang trang chờ duyệt
-            navigate("/users/waiting-approval", { replace: true });
+            // ===== Route by status =====
+            if (status === "WAITING_APPROVAL") {
+                showToast("Gửi yêu cầu thành công. Vui lòng chờ admin phê duyệt.", "success");
+                navigate("/users/waiting-approval", { replace: true });
+                return;
+            }
+
+            if (status === "ACTIVE") {
+                showToast("Tài khoản đã ACTIVE. Chuyển về Dashboard.", "success");
+                navigate("/users/dashboard", { replace: true });
+                return;
+            }
+
+            showToast(`Trạng thái tài khoản: ${status}. Vui lòng đăng nhập lại.`, "warning");
+            navigate("/login", { replace: true });
         } catch (err) {
             console.error("complete-profile error:", err);
             const msg =
+                (typeof err?.response?.data === "string" && err.response.data) ||
                 err?.response?.data?.message ||
-                err?.response?.data ||
                 err?.message ||
                 "Gửi yêu cầu thất bại";
             showToast(String(msg), "error");
@@ -185,6 +224,12 @@ export default function SelectClassModule() {
                     <Typography textAlign="center" sx={{ color: "#707EAE", fontWeight: 600 }} mb={3}>
                         Chọn lớp và module để gửi yêu cầu tham gia hệ thống
                     </Typography>
+
+                    {!!email && (
+                        <Typography textAlign="center" sx={{ color: "#A3AED0", fontWeight: 700 }} mb={2}>
+                            {email}
+                        </Typography>
+                    )}
 
                     <Stack spacing={2.2}>
                         <Autocomplete
