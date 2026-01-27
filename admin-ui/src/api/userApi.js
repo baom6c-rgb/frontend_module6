@@ -26,5 +26,10 @@ export const uploadMyAvatarApi = (file) => {
         headers: { "Content-Type": "multipart/form-data" },
     });
 };
+
 export const getUserStatusByEmailApi = (email) =>
     axiosAuth.get("/users/status", { params: { email } });
+
+// ✅ NEW: change password (USER - authenticated)
+export const changeMyPasswordApi = ({ oldPassword, newPassword }) =>
+    axiosPrivate.put("/users/me/password", { oldPassword, newPassword });
