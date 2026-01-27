@@ -158,7 +158,6 @@ export default function UserLayout() {
         { text: "Luyện tập (AI Quiz)", icon: <QuizRoundedIcon />, path: "/users/practice" },
         { text: "Học tập cùng AI", icon: <MenuBookRounded />, path: "/users/study" },
         { text: "Đánh giá học tập", icon: <SchoolRounded />, path: "/users/review" },
-        { text: "Tài liệu học", icon: <MenuBookRounded />, path: "/users/materials/upload" },
     ];
 
     const handleLogout = () => {
