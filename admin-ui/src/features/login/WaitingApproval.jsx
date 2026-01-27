@@ -84,13 +84,27 @@ export default function WaitingApproval() {
                 showToast("Chưa được duyệt. Vui lòng thử lại sau.", "info");
             }
         } catch (e) {
-            const msg =
-                typeof e?.response?.data === "string"
-                    ? e.response.data
-                    : e?.response?.data?.message || e?.message || "Không kiểm tra được trạng thái";
-            showToast(msg, "error");
-        } finally {
-            setLoading(false);
+            const statusCode = e?.response?.status;
+            const message =
+                e?.response?.data?.message ||
+                (typeof e?.response?.data === "string" ? e.response.data : "");
+
+            // ✅ CASE: user bị reject -> đã bị DELETE khỏi DB
+            if (statusCode === 404 || /not found/i.test(message)) {
+                // clear auth data
+                localStorage.removeItem("accessToken");
+                localStorage.removeItem("userData");
+                localStorage.removeItem("userRoles");
+                localStorage.removeItem("pendingApproval");
+                localStorage.removeItem("register_email");
+
+                showToast("Tài khoản đã bị từ chối", "error");
+
+                navigate("/approval-result?status=rejected", { replace: true });
+                return;
+            }
+
+            showToast("Không kiểm tra được trạng thái. Vui lòng thử lại.", "error");
         }
     };
 

@@ -44,6 +44,14 @@ const statusUI = {
         severity: "error",
         chipColor: "error",
     },
+    rejected: {
+        title: "❌ Tài khoản đã bị từ chối",
+        subtitle: "Yêu cầu đăng ký của bạn không được phê duyệt.",
+        note: "Vui lòng liên hệ quản trị viên để biết thêm chi tiết hoặc đăng ký lại bằng email khác.",
+        icon: <ErrorRoundedIcon color="error" sx={{ fontSize: 56 }} />,
+        severity: "error",
+        chipColor: "error",
+    },
 };
 
 export default function ApprovalResult() {
