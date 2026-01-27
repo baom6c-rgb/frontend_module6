@@ -1,11 +1,17 @@
 // src/features/practice/components/PracticePlayer.jsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Box, Button, Paper, Typography, Divider } from "@mui/material";
 import QuestionCard from "./QuestionCard";
+
+// ✅ NEW: countdown dùng chung
+import CountdownTimer from "../../../components/common/CountdownTimer";
+
+const attemptStorageKey = (attemptId) => `practice_attempt_${attemptId}`;
 
 export default function PracticePlayer({
                                            attemptDetail,
                                            durationMinutes,
+                                           attemptId,        // ✅ NEW
                                            onBackToConfig,
                                            onSubmit,
                                        }) {
@@ -45,7 +51,6 @@ export default function PracticePlayer({
     }, [questions, answers]);
 
     const setAnswerForCurrent = (choice) => {
-        // ✅ nếu qid null -> không thể lưu đáp án
         if (!currentQid) {
             console.warn("❌ Missing questionId in currentQuestion:", currentQuestion);
             return;
@@ -56,17 +61,46 @@ export default function PracticePlayer({
     const canPrev = index > 0;
     const canNext = index < total - 1;
 
-    const handleSubmitClick = () => {
-        const answersArray = questions.map((q) => {
+    // ✅ build answers payload (dùng cho submit tay + auto submit)
+    const buildAnswersArray = () => {
+        return questions.map((q) => {
             const qid = getQid(q);
             return {
                 questionId: qid,
                 selectedAnswer: qid ? answers[qid] || null : null,
             };
         });
-
-        onSubmit?.(answersArray);
     };
+
+    // ✅ chặn submit nhiều lần (auto submit + click)
+    const submittedRef = useRef(false);
+
+    const doSubmit = async () => {
+        if (submittedRef.current) return;
+        submittedRef.current = true;
+
+        const answersArray = buildAnswersArray();
+        await onSubmit?.(answersArray);
+    };
+
+    // ✅ đọc startTs từ localStorage để reload vẫn chạy tiếp
+    const startTimestamp = useMemo(() => {
+        if (!attemptId) return null;
+        try {
+            const raw = localStorage.getItem(attemptStorageKey(attemptId));
+            const parsed = raw ? JSON.parse(raw) : null;
+            const ts = parsed?.startTs;
+            return typeof ts === "number" ? ts : null;
+        } catch {
+            return null;
+        }
+    }, [attemptId]);
+
+    const durationSeconds = useMemo(() => {
+        const m = Number(durationMinutes);
+        if (!Number.isFinite(m) || m <= 0) return 0;
+        return m * 60;
+    }, [durationMinutes]);
 
     if (!questions.length) {
         return (
@@ -98,11 +132,11 @@ export default function PracticePlayer({
                     <Typography sx={{ fontWeight: 900, color: "#1B2559", fontSize: 18 }}>
                         3) Làm bài
                     </Typography>
+
                     <Typography sx={{ mt: 0.5, color: "#6C757D", fontWeight: 700 }}>
-                        Tiến độ: {answeredCount}/{total} • Thời gian: {durationMinutes} phút
+                        Tiến độ: {answeredCount}/{total}
                     </Typography>
 
-                    {/* ✅ debug nhẹ: nếu missing id thì thấy ngay */}
                     {!currentQid && (
                         <Typography sx={{ mt: 0.5, color: "#dc3545", fontWeight: 800 }}>
                             Lỗi dữ liệu: Câu hỏi không có questionId/id → không lưu được đáp án.
@@ -111,14 +145,28 @@ export default function PracticePlayer({
                 </Box>
 
                 <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
-                    <Button variant="outlined" onClick={onBackToConfig}>
+                    {/* ✅ Timer: 10s cuối đỏ + hết giờ auto submit */}
+                    {startTimestamp && durationSeconds > 0 ? (
+                        <CountdownTimer
+                            startTimestamp={startTimestamp}
+                            durationSeconds={durationSeconds}
+                            dangerThreshold={10}
+                            onExpire={doSubmit}
+                        />
+                    ) : (
+                        <Box sx={{ px: 1.5, py: 0.75, borderRadius: 2, border: "1px solid #E3E8EF" }}>
+                            <Typography sx={{ fontWeight: 900, color: "#6C757D" }}>--:--</Typography>
+                        </Box>
+                    )}
+
+                    <Button variant="outlined" onClick={onBackToConfig} disabled={submittedRef.current}>
                         Quay lại cấu hình
                     </Button>
 
                     <Button
                         variant="contained"
-                        onClick={handleSubmitClick}
-                        disabled={!isAllAnswered}
+                        onClick={doSubmit}
+                        disabled={!isAllAnswered || submittedRef.current}
                         sx={{ background: "#EC5E32", fontWeight: 900 }}
                     >
                         Nộp bài
@@ -136,14 +184,21 @@ export default function PracticePlayer({
             />
 
             <Box sx={{ display: "flex", justifyContent: "space-between", mt: 2, gap: 1 }}>
-                <Button disabled={!canPrev} variant="outlined" onClick={() => setIndex((i) => i - 1)}>
+                <Button disabled={!canPrev || submittedRef.current} variant="outlined" onClick={() => setIndex((i) => i - 1)}>
                     Câu trước
                 </Button>
 
-                <Button disabled={!canNext} variant="outlined" onClick={() => setIndex((i) => i + 1)}>
+                <Button disabled={!canNext || submittedRef.current} variant="outlined" onClick={() => setIndex((i) => i + 1)}>
                     Câu tiếp
                 </Button>
             </Box>
+
+            {/* ✅ Hint nhỏ nếu thiếu startTimestamp */}
+            {!startTimestamp && (
+                <Typography sx={{ mt: 2, color: "#dc3545", fontWeight: 700 }}>
+                    Không tìm thấy thời điểm bắt đầu (startTs). Hãy kiểm tra PracticePage đã lưu localStorage sau khi start chưa.
+                </Typography>
+            )}
         </Paper>
     );
 }

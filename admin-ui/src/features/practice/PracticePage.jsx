@@ -25,6 +25,9 @@ const STEP_KEYS = {
     RESULT: 3,
 };
 
+// localStorage keys
+const attemptStorageKey = (attemptId) => `practice_attempt_${attemptId}`;
+
 export default function PracticePage() {
     const { showToast } = useToast();
 
@@ -92,6 +95,11 @@ export default function PracticePage() {
         setPreviewQuestions([]);
         setPreviewToken("");
 
+        // dọn attempt localStorage nếu có
+        if (attemptId) {
+            localStorage.removeItem(attemptStorageKey(attemptId));
+        }
+
         setAttemptId(null);
         setAttemptDetail(null);
 
@@ -104,7 +112,7 @@ export default function PracticePage() {
         // optional: reset config default
         setQuestionCount(10);
         setDurationMinutes(15);
-    }, []);
+    }, [attemptId]);
 
     const resetForRetry = useCallback(() => {
         setActiveStep(STEP_KEYS.CONFIG);
@@ -112,6 +120,11 @@ export default function PracticePage() {
         setPreviewOpen(false);
         setPreviewQuestions([]);
         setPreviewToken("");
+
+        // dọn attempt localStorage nếu có
+        if (attemptId) {
+            localStorage.removeItem(attemptStorageKey(attemptId));
+        }
 
         setAttemptId(null);
         setAttemptDetail(null);
@@ -121,7 +134,7 @@ export default function PracticePage() {
         // ✅ reset review
         setReviewOpen(false);
         setReviewData(null);
-    }, []);
+    }, [attemptId]);
 
     // ===== Actions =====
 
@@ -148,9 +161,7 @@ export default function PracticePage() {
             showToast?.("Đã sinh đề xem trước", "success");
         } catch (e) {
             const msg =
-                typeof e.response?.data === "string"
-                    ? e.response.data
-                    : "Không thể sinh đề xem trước";
+                typeof e.response?.data === "string" ? e.response.data : "Không thể sinh đề xem trước";
             showToast?.(msg, "error");
         } finally {
             setLoading(false);
@@ -181,6 +192,10 @@ export default function PracticePage() {
             const startRes = await practiceApi.start(payload);
             const newAttemptId = startRes.data?.attemptId ?? startRes.data?.id;
             if (!newAttemptId) throw new Error("Missing attemptId from server");
+
+            // ✅ lưu mốc thời gian bắt đầu theo attemptId => reload vẫn chạy
+            const startTs = Date.now();
+            localStorage.setItem(attemptStorageKey(newAttemptId), JSON.stringify({ startTs }));
 
             setAttemptId(newAttemptId);
 
@@ -214,6 +229,9 @@ export default function PracticePage() {
             const payload = { answers: answersArray };
             const res = await practiceApi.submit(attemptId, payload);
 
+            // ✅ dọn timer storage sau khi submit thành công
+            localStorage.removeItem(attemptStorageKey(attemptId));
+
             setResult(res.data);
             setActiveStep(STEP_KEYS.RESULT);
 
@@ -222,8 +240,7 @@ export default function PracticePage() {
 
             showToast?.("Nộp bài thành công", "success");
         } catch (e) {
-            const msg =
-                typeof e.response?.data === "string" ? e.response.data : "Nộp bài thất bại";
+            const msg = typeof e.response?.data === "string" ? e.response.data : "Nộp bài thất bại";
             showToast?.(msg, "error");
         } finally {
             setLoading(false);
@@ -253,9 +270,7 @@ export default function PracticePage() {
             setReviewOpen(true);
         } catch (e) {
             const msg =
-                typeof e.response?.data === "string"
-                    ? e.response.data
-                    : "Không thể tải dữ liệu xem lại";
+                typeof e.response?.data === "string" ? e.response.data : "Không thể tải dữ liệu xem lại";
             showToast?.(msg, "error");
         } finally {
             setLoading(false);
@@ -292,9 +307,7 @@ export default function PracticePage() {
                 <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 2 }}>
                     {STEPS.map((label) => (
                         <Step key={label}>
-                            <StepLabel sx={{ "& .MuiStepLabel-label": { fontWeight: 700 } }}>
-                                {label}
-                            </StepLabel>
+                            <StepLabel sx={{ "& .MuiStepLabel-label": { fontWeight: 700 } }}>{label}</StepLabel>
                         </Step>
                     ))}
                 </Stepper>
@@ -328,7 +341,7 @@ export default function PracticePage() {
                             durationMinutes={durationMinutes}
                             onChangeQuestionCount={setQuestionCount}
                             onChangeDuration={setDurationMinutes}
-                            onConfigChanged={resetPreviewCache} // ✅ QUAN TRỌNG
+                            onConfigChanged={resetPreviewCache} // ✅ QUAN TRỌNG (nếu panel support)
                             onBack={() => {
                                 setActiveStep(STEP_KEYS.MATERIAL);
                                 setMaterialReady(false);
@@ -351,8 +364,9 @@ export default function PracticePage() {
                     <PracticePlayer
                         attemptDetail={attemptDetail}
                         durationMinutes={durationMinutes}
+                        attemptId={attemptId}                 // ✅ NEW: truyền attemptId để timer đọc storage
                         onBackToConfig={() => setActiveStep(STEP_KEYS.CONFIG)}
-                        onSubmit={handleSubmit}
+                        onSubmit={handleSubmit}               // ✅ dùng chung submit
                     />
                 )}
 
