@@ -15,6 +15,11 @@ export const materialApi = {
         });
     },
 
+    // ✅ NEW: paste text -> create material
+    createFromText: ({ title, rawText }) => {
+        return axiosPrivate.post("/student/materials/text", { title, rawText });
+    },
+
     // ✅ US9: đọc lại văn bản đã trích xuất
     getExtractedText: (materialId) => {
         return axiosPrivate.get(`/student/materials/${materialId}/text`);
