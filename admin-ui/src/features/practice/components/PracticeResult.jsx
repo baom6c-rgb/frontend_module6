@@ -60,7 +60,7 @@ export default function PracticeResult({
                 <Divider sx={{ my: 2 }} />
 
                 <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
-                    Nhận xét từ AI
+                    Nhận xét
                 </Typography>
 
                 <Typography sx={{ mt: 1, color: "#6C757D", fontWeight: 600, whiteSpace: "pre-wrap" }}>
