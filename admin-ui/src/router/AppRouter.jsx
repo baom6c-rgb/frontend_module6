@@ -11,6 +11,7 @@ import ProtectedRoute from "./ProtectedRoute.jsx";
 // --- PAGES ADMIN ---
 import AdminDashboard from "../features/admin/AdminDashboard.jsx";
 import AdminUserList from "../features/admin/AdminUserList.jsx";
+import AdminReview from "../features/admin/AdminReview.jsx";
 
 // --- PAGES USER ---
 import UserDashboard from "../features/users/UserDashboard.jsx";
@@ -92,6 +93,9 @@ const router = createBrowserRouter([
                 children: [
                     { index: true, element: <AdminDashboard /> },
 
+                    // trang đánh giá học tập
+                    { path: "/admin/review", element: <AdminReview /> },
+
                     // redirect các route cũ về /admin/users
                     { path: "students", element: <Navigate to="/admin/users" replace /> },
                     { path: "blocked", element: <Navigate to="/admin/users" replace /> },
@@ -99,12 +103,11 @@ const router = createBrowserRouter([
 
                     // trang quản lý user tổng
                     { path: "users", element: <AdminUserList /> },
+
                 ],
             },
         ],
     },
-
-
 
     // =========================
     // 4) NOT FOUND

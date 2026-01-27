@@ -300,10 +300,10 @@ const AdminLayout = () => {
                     />
                     <NavItem
                         collapsed={!isMobile && sidebarCollapsed}
-                        active={currentPath.includes("/admin/approval")}
+                        active={currentPath.includes("/admin/review")}
                         icon={<SchoolRounded />}
                         text="Đánh giá học tập"
-                        onClick={() => handleNav("/admin/approval")}
+                        onClick={() => handleNav("/admin/review")}
                     />
                 </Box>
             </Box>
