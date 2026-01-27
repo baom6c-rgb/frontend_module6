@@ -1,13 +1,6 @@
 // src/features/practice/components/PracticeConfigPanel.jsx
-import React, { useMemo } from "react";
-import {
-    Box,
-    Button,
-    Paper,
-    TextField,
-    Typography,
-    MenuItem,
-} from "@mui/material";
+import React, { useMemo, useCallback } from "react";
+import { Box, Button, Paper, TextField, Typography, MenuItem } from "@mui/material";
 
 const DURATION_OPTIONS = [15, 30, 60];
 
@@ -17,6 +10,7 @@ export default function PracticeConfigPanel({
                                                 durationMinutes,
                                                 onChangeQuestionCount,
                                                 onChangeDuration,
+                                                onConfigChanged,
                                                 onBack,
                                                 onPreview,
                                                 onStart,
@@ -33,6 +27,39 @@ export default function PracticeConfigPanel({
     }, [durationMinutes]);
 
     const canAct = !!materialId && validCount && validDuration && !loading;
+
+    const handleChangeCount = useCallback(
+        (e) => {
+            // allow empty input while typing
+            const raw = e.target.value;
+
+            // user clears input
+            if (raw === "") {
+                onChangeQuestionCount?.("");
+                onConfigChanged?.();
+                return;
+            }
+
+            const n = Number(raw);
+            if (!Number.isFinite(n)) return;
+
+            // clamp 1..30
+            const clamped = Math.max(1, Math.min(30, Math.trunc(n)));
+            onChangeQuestionCount?.(clamped);
+            onConfigChanged?.();
+        },
+        [onChangeQuestionCount, onConfigChanged]
+    );
+
+    const handleChangeDuration = useCallback(
+        (e) => {
+            const d = Number(e.target.value);
+            if (!DURATION_OPTIONS.includes(d)) return;
+            onChangeDuration?.(d);
+            onConfigChanged?.();
+        },
+        [onChangeDuration, onConfigChanged]
+    );
 
     return (
         <Paper
@@ -59,17 +86,16 @@ export default function PracticeConfigPanel({
                     label="Số câu hỏi (1–30)"
                     type="number"
                     value={questionCount}
-                    onChange={(e) => onChangeQuestionCount(parseInt(e.target.value || "0", 10))}
+                    onChange={handleChangeCount}
                     inputProps={{ min: 1, max: 30 }}
                     disabled={loading}
                 />
 
-                {/* ✅ Dropdown thời gian: 15 / 30 / 60 */}
                 <TextField
                     select
                     label="Thời gian"
                     value={validDuration ? Number(durationMinutes) : 15}
-                    onChange={(e) => onChangeDuration(Number(e.target.value))}
+                    onChange={handleChangeDuration}
                     disabled={loading}
                 >
                     {DURATION_OPTIONS.map((m) => (

@@ -10,7 +10,7 @@ import PracticeConfigPanel from "./components/PracticeConfigPanel";
 import PracticePreviewDialog from "./components/PracticePreviewDialog";
 import PracticePlayer from "./components/PracticePlayer";
 import PracticeResult from "./components/PracticeResult";
-import PracticeReviewDialog from "./components/PracticeReviewDialog"; // ✅ ADD
+import PracticeReviewDialog from "./components/PracticeReviewDialog";
 
 // Common
 import GlobalLoading from "../../components/common/GlobalLoading";
@@ -48,6 +48,9 @@ export default function PracticePage() {
     const [previewOpen, setPreviewOpen] = useState(false);
     const [previewQuestions, setPreviewQuestions] = useState([]);
 
+    // ✅ previewToken để start() dùng cache => tránh gọi AI lần 2
+    const [previewToken, setPreviewToken] = useState("");
+
     // ===== Step 3 (Attempt) =====
     const [attemptId, setAttemptId] = useState(null);
     const [attemptDetail, setAttemptDetail] = useState(null);
@@ -72,6 +75,13 @@ export default function PracticePage() {
         };
     }, [materialId, questionCount, durationMinutes]);
 
+    // ✅ reset preview khi đổi config (để tránh dùng token cũ sai cấu hình)
+    const resetPreviewCache = useCallback(() => {
+        setPreviewOpen(false);
+        setPreviewQuestions([]);
+        setPreviewToken("");
+    }, []);
+
     const resetForNewMaterial = useCallback(() => {
         setActiveStep(STEP_KEYS.MATERIAL);
 
@@ -80,6 +90,7 @@ export default function PracticePage() {
 
         setPreviewOpen(false);
         setPreviewQuestions([]);
+        setPreviewToken("");
 
         setAttemptId(null);
         setAttemptDetail(null);
@@ -100,6 +111,7 @@ export default function PracticePage() {
 
         setPreviewOpen(false);
         setPreviewQuestions([]);
+        setPreviewToken("");
 
         setAttemptId(null);
         setAttemptDetail(null);
@@ -124,15 +136,21 @@ export default function PracticePage() {
             setLoading(true);
 
             const res = await practiceApi.generatePreview(buildConfigPayload());
-            const questions = res.data?.questions || res.data || [];
 
+            // ✅ shape BE: { previewToken, questions, ... }
+            const token = res.data?.previewToken ?? "";
+            const questions = res.data?.questions ?? [];
+
+            setPreviewToken(token);
             setPreviewQuestions(Array.isArray(questions) ? questions : []);
             setPreviewOpen(true);
 
             showToast?.("Đã sinh đề xem trước", "success");
         } catch (e) {
             const msg =
-                typeof e.response?.data === "string" ? e.response.data : "Không thể sinh đề xem trước";
+                typeof e.response?.data === "string"
+                    ? e.response.data
+                    : "Không thể sinh đề xem trước";
             showToast?.(msg, "error");
         } finally {
             setLoading(false);
@@ -145,11 +163,22 @@ export default function PracticePage() {
             return;
         }
 
+        // ✅ bắt buộc preview trước để start() không gọi AI lần 2
+        if (!previewToken) {
+            showToast?.("Hãy bấm 'Xem trước đề' trước khi bắt đầu", "warning");
+            return;
+        }
+
         try {
             setLoadingMessage("Đang khởi tạo bài luyện tập...");
             setLoading(true);
 
-            const startRes = await practiceApi.start(buildConfigPayload());
+            const payload = {
+                ...buildConfigPayload(),
+                previewToken, // ✅ quan trọng: cache hit ở BE
+            };
+
+            const startRes = await practiceApi.start(payload);
             const newAttemptId = startRes.data?.attemptId ?? startRes.data?.id;
             if (!newAttemptId) throw new Error("Missing attemptId from server");
 
@@ -163,7 +192,9 @@ export default function PracticePage() {
             showToast?.("Bắt đầu làm bài", "success");
         } catch (e) {
             const msg =
-                typeof e.response?.data === "string" ? e.response.data : e.message || "Không thể bắt đầu làm bài";
+                typeof e.response?.data === "string"
+                    ? e.response.data
+                    : e.message || "Không thể bắt đầu làm bài";
             showToast?.(msg, "error");
         } finally {
             setLoading(false);
@@ -187,19 +218,19 @@ export default function PracticePage() {
             setActiveStep(STEP_KEYS.RESULT);
 
             // ✅ nếu backend trả sẵn review thì cache luôn (optional)
-            // ví dụ: res.data.review hoặc res.data.items ...
             if (res.data?.review) setReviewData(res.data.review);
 
             showToast?.("Nộp bài thành công", "success");
         } catch (e) {
-            const msg = typeof e.response?.data === "string" ? e.response.data : "Nộp bài thất bại";
+            const msg =
+                typeof e.response?.data === "string" ? e.response.data : "Nộp bài thất bại";
             showToast?.(msg, "error");
         } finally {
             setLoading(false);
         }
     };
 
-    // ✅ NEW: mở review (ưu tiên dùng cache, không có thì gọi API)
+    // ✅ mở review (ưu tiên dùng cache, không có thì gọi API)
     const handleOpenReview = async () => {
         if (!attemptId) {
             showToast?.("Thiếu attemptId, không thể xem lại", "error");
@@ -222,7 +253,9 @@ export default function PracticePage() {
             setReviewOpen(true);
         } catch (e) {
             const msg =
-                typeof e.response?.data === "string" ? e.response.data : "Không thể tải dữ liệu xem lại";
+                typeof e.response?.data === "string"
+                    ? e.response.data
+                    : "Không thể tải dữ liệu xem lại";
             showToast?.(msg, "error");
         } finally {
             setLoading(false);
@@ -259,7 +292,9 @@ export default function PracticePage() {
                 <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 2 }}>
                     {STEPS.map((label) => (
                         <Step key={label}>
-                            <StepLabel sx={{ "& .MuiStepLabel-label": { fontWeight: 700 } }}>{label}</StepLabel>
+                            <StepLabel sx={{ "& .MuiStepLabel-label": { fontWeight: 700 } }}>
+                                {label}
+                            </StepLabel>
                         </Step>
                     ))}
                 </Stepper>
@@ -271,6 +306,10 @@ export default function PracticePage() {
                         onMaterialUploaded={(id) => {
                             setMaterialId(id);
                             setMaterialReady(true);
+
+                            // ✅ material đổi => reset preview/token
+                            resetPreviewCache();
+
                             showToast?.("Upload thành công, đang xử lý học liệu…", "success");
                             setActiveStep(STEP_KEYS.CONFIG);
                         }}
@@ -289,6 +328,7 @@ export default function PracticePage() {
                             durationMinutes={durationMinutes}
                             onChangeQuestionCount={setQuestionCount}
                             onChangeDuration={setDurationMinutes}
+                            onConfigChanged={resetPreviewCache} // ✅ QUAN TRỌNG
                             onBack={() => {
                                 setActiveStep(STEP_KEYS.MATERIAL);
                                 setMaterialReady(false);
@@ -324,10 +364,9 @@ export default function PracticePage() {
                             numberOfQuestions={questionCount}
                             onRetry={resetForRetry}
                             onNewMaterial={resetForNewMaterial}
-                            onViewReview={handleOpenReview} // ✅ FIX: truyền handler
+                            onViewReview={handleOpenReview}
                         />
 
-                        {/* ✅ FIX: mount dialog xem lại */}
                         <PracticeReviewDialog
                             open={reviewOpen}
                             onClose={() => setReviewOpen(false)}
