@@ -52,9 +52,10 @@ const statusChip = (status) => {
     if (s === "BLOCKED") return <Chip label="Bị khóa" color="error" size="small" />;
     if (s === "PENDING" || s === "WAITING_APPROVAL")
         return <Chip label="Chờ duyệt" color="warning" size="small" />;
-    if (s === "REJECTED") return <Chip label="Từ chối" color="default" size="small" />;
-    // CREATED vẫn có thể tồn tại trong data, nhưng dropdown đã bỏ
+
+    // CREATED vẫn có thể tồn tại trong data, nhưng dropdown filter không có
     if (s === "CREATED") return <Chip label="Mới tạo" color="default" size="small" />;
+
     return <Chip label={s || "UNKNOWN"} size="small" />;
 };
 
@@ -121,7 +122,7 @@ const statusPriority = (s) => {
     const x = String(s || "").toUpperCase();
     if (x === "ACTIVE") return 0;
     if (x === "WAITING_APPROVAL" || x === "PENDING") return 1;
-    if (x === "REJECTED" || x === "CREATED") return 2;
+    if (x === "CREATED") return 2;
     if (x === "BLOCKED") return 3;
     return 99;
 };
@@ -192,6 +193,13 @@ export default function AdminUserList() {
         message: "",
         onConfirm: null,
     });
+
+    // ✅ nếu lỡ có state cũ set REJECTED (localStorage/query/legacy) → reset về ALL
+    useEffect(() => {
+        if (String(statusFilter || "").toUpperCase() === "REJECTED") {
+            setStatusFilter("ALL");
+        }
+    }, [statusFilter]);
 
     // ✅ wrap confirm to include GlobalLoading
     const openConfirm = ({ title = "Xác nhận", message, loadingMessage, onConfirm }) => {
@@ -342,11 +350,15 @@ export default function AdminUserList() {
     const rejectUser = (id) =>
         openConfirm({
             message: "Bạn có chắc muốn từ chối tài khoản này không?",
-            loadingMessage: "Đang từ chối tài khoản...",
+            loadingMessage: "Đang từ chối & xóa người dùng...",
             onConfirm: async () => {
                 await adminUserApi.rejectPendingUser(id);
-                showToast("Từ chối thành công", "success");
-                await fetchUsers();
+
+                // ✅ optimistic remove row (đỡ giật, đúng yêu cầu)
+                setRows((prev) => prev.filter((r) => String(r.id) !== String(id)));
+
+                showToast("Đã từ chối và xóa người dùng", "success");
+                await fetchUsers(); // sync
             },
         });
 
@@ -451,7 +463,7 @@ export default function AdminUserList() {
                                         </span>
                                     </Tooltip>
 
-                                    <Tooltip title="Từ chối">
+                                    <Tooltip title="Từ chối & xóa">
                                         <span>
                                             <IconButton
                                                 size="small"
@@ -625,8 +637,6 @@ export default function AdminUserList() {
                         >
                             Bị khóa
                         </MenuItem>
-
-                        <MenuItem value="REJECTED">Từ chối</MenuItem>
                     </TextField>
 
                     <Tooltip title="Làm mới">
