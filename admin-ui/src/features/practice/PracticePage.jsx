@@ -297,11 +297,6 @@ export default function PracticePage() {
                 <Typography sx={{ fontSize: 22, fontWeight: 800, color: "#1B2559" }}>
                     Practice – AI Quiz từ học liệu
                 </Typography>
-
-                <Typography sx={{ mt: 0.5, color: "#6C757D", fontWeight: 600 }}>
-                    Upload tài liệu → hệ thống xử lý → sinh đề → làm bài → nhận điểm & nhận xét
-                </Typography>
-
                 <Divider sx={{ my: 2 }} />
 
                 <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 2 }}>
