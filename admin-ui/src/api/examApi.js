@@ -6,12 +6,20 @@ import axiosClient from "./axiosClient";
 
 /**
  * Lấy danh sách tất cả exam attempts của user hiện tại
- * Dùng cho màn hình UserReview - Đánh giá học tập
+ * Backend tự động extract userId từ JWT token
  * @returns {Promise} Promise với data là array của UserExamAttemptDTO
  */
 export const getMyExamAttemptsApi = async () => {
-    const url = "/exam-attempts/my-attempts";
-    return axiosClient.get(url);
+    try {
+        console.log("📡 API Call: getMyExamAttemptsApi");
+        const url = "/exam-attempts/my-attempts";
+        const response = await axiosClient.get(url);
+        console.log("✅ API Response:", response.status, response.data);
+        return response;
+    } catch (error) {
+        console.error("❌ getMyExamAttemptsApi error:", error);
+        throw error;
+    }
 };
 
 /**
@@ -20,8 +28,16 @@ export const getMyExamAttemptsApi = async () => {
  * @returns {Promise} Promise với data là chi tiết exam attempt
  */
 export const getExamAttemptByIdApi = async (attemptId) => {
-    const url = `/exam-attempts/${attemptId}`;
-    return axiosClient.get(url);
+    try {
+        console.log("📡 API Call: getExamAttemptByIdApi, attemptId:", attemptId);
+        const url = `/exam-attempts/${attemptId}`;
+        const response = await axiosClient.get(url);
+        console.log("✅ API Response:", response.status, response.data);
+        return response;
+    } catch (error) {
+        console.error("❌ getExamAttemptByIdApi error:", error);
+        throw error;
+    }
 };
 
 /**
@@ -30,8 +46,16 @@ export const getExamAttemptByIdApi = async (attemptId) => {
  * @returns {Promise} Promise với data là thông tin attempt mới tạo
  */
 export const startExamAttemptApi = async (examId) => {
-    const url = "/exam-attempts/start";
-    return axiosClient.post(url, { examId });
+    try {
+        console.log("📡 API Call: startExamAttemptApi, examId:", examId);
+        const url = "/exam-attempts/start";
+        const response = await axiosClient.post(url, { examId });
+        console.log("✅ API Response:", response.status, response.data);
+        return response;
+    } catch (error) {
+        console.error("❌ startExamAttemptApi error:", error);
+        throw error;
+    }
 };
 
 /**
@@ -41,15 +65,34 @@ export const startExamAttemptApi = async (examId) => {
  * @returns {Promise} Promise với data là kết quả submit
  */
 export const submitExamAttemptApi = async (attemptId, answers) => {
-    const url = `/exam-attempts/${attemptId}/submit`;
-    return axiosClient.post(url, { answers });
+    try {
+        console.log("📡 API Call: submitExamAttemptApi");
+        console.log("   attemptId:", attemptId);
+        console.log("   answers:", answers);
+        const url = `/exam-attempts/${attemptId}/submit`;
+        const response = await axiosClient.post(url, { answers });
+        console.log("✅ API Response:", response.status, response.data);
+        return response;
+    } catch (error) {
+        console.error("❌ submitExamAttemptApi error:", error);
+        throw error;
+    }
 };
 
 /**
  * Lấy thống kê exam attempts của user
+ * Backend tự động extract userId từ JWT token
  * @returns {Promise} Promise với data là các thống kê
  */
 export const getExamAttemptsStatsApi = async () => {
-    const url = "/exam-attempts/stats";
-    return axiosClient.get(url);
+    try {
+        console.log("📡 API Call: getExamAttemptsStatsApi");
+        const url = "/exam-attempts/stats";
+        const response = await axiosClient.get(url);
+        console.log("✅ API Response:", response.status, response.data);
+        return response;
+    } catch (error) {
+        console.error("❌ getExamAttemptsStatsApi error:", error);
+        throw error;
+    }
 };

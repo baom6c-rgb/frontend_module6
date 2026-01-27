@@ -154,10 +154,8 @@ export default function UserLayout() {
 
     const menuItems = [
         { text: "Dashboard", icon: <DashboardRounded />, path: "/users/dashboard" },
-        { text: "Hồ sơ cá nhân", icon: <PersonRounded />, path: "/users/profile" },
-        { text: "Luyện tập (AI Quiz)", icon: <QuizRoundedIcon />, path: "/users/practice" },
-        { text: "Học tập cùng AI", icon: <MenuBookRounded />, path: "/users/study" },
         { text: "Đánh giá học tập", icon: <SchoolRounded />, path: "/users/review" },
+        { text: "Luyện tập (AI Quiz)", icon: <QuizRoundedIcon />, path: "/users/practice" },
     ];
 
     const handleLogout = () => {
