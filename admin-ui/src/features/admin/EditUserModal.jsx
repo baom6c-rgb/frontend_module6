@@ -1,11 +1,35 @@
-// admin-ui/src/features/admin/EditUserModal.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import { Stack, TextField, CircularProgress, Typography } from "@mui/material";
+import { useEffect, useMemo, useState } from "react";
+import {
+    Box,
+    Stack,
+    TextField,
+    Typography,
+    CircularProgress,
+    Autocomplete,
+    Alert,
+    MenuItem,
+} from "@mui/material";
+
 import AppModal from "../../components/common/AppModal";
 import { adminUserApi } from "../../api/adminUserApi";
-import Grid from "@mui/material/Grid";
+import { useToast } from "../../components/common/AppToast";
 
-const toUpper = (s) => (s || "").toUpperCase();
+const toUpper = (s) => String(s || "").toUpperCase();
+
+const toErrorText = (err, fallback = "Cập nhật thất bại.") => {
+    const data = err?.response?.data;
+    if (!data) return fallback;
+    if (typeof data === "string") return data;
+    if (typeof data?.message === "string") return data.message;
+
+    const obj = data?.errors && typeof data.errors === "object" ? data.errors : data;
+    if (obj && typeof obj === "object") {
+        return Object.entries(obj)
+            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v)}`)
+            .join(" | ");
+    }
+    return fallback;
+};
 
 export default function EditUserModal({
                                           open,
@@ -14,10 +38,13 @@ export default function EditUserModal({
                                           roleOptions = [],
                                           classOptions = [],
                                           moduleOptions = [],
-                                          onUpdated, // () => Promise<void> | void
+                                          onUpdated,
                                       }) {
+    const { showToast } = useToast();
+
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [formErr, setFormErr] = useState("");
 
     const [form, setForm] = useState({
         fullName: "",
@@ -29,6 +56,13 @@ export default function EditUserModal({
 
     const isAdminRole = useMemo(() => toUpper(form.roleName) === "ADMIN", [form.roleName]);
 
+    // ✅ reset lỗi khi mở modal / đổi userId
+    useEffect(() => {
+        if (!open) return;
+        setFormErr("");
+    }, [open, userId]);
+
+    // ===== preload user =====
     useEffect(() => {
         if (!open || !userId) return;
 
@@ -37,6 +71,8 @@ export default function EditUserModal({
         (async () => {
             try {
                 setLoading(true);
+                setFormErr(""); // ✅ mở modal là sạch lỗi
+
                 const res = await adminUserApi.getUserDetail(userId);
                 const u = res?.data || {};
 
@@ -49,6 +85,10 @@ export default function EditUserModal({
                     classId: u.classId ?? u.class?.id ?? "",
                     moduleId: u.moduleId ?? u.module?.id ?? "",
                 });
+
+                setFormErr(""); // ✅ load OK thì chắc chắn không còn lỗi cũ
+            } catch (e) {
+                setFormErr(toErrorText(e, "Không thể tải thông tin người dùng."));
             } finally {
                 if (alive) setLoading(false);
             }
@@ -59,24 +99,50 @@ export default function EditUserModal({
         };
     }, [open, userId]);
 
-    // ADMIN selected => clear class/module
+    // ===== role change → clear class/module =====
     useEffect(() => {
         if (isAdminRole) {
-            setForm((prev) => ({ ...prev, classId: "", moduleId: "" }));
+            setForm((p) => ({ ...p, classId: "", moduleId: "" }));
         }
     }, [isAdminRole]);
 
-    const onChange = (key) => (e) => setForm((p) => ({ ...p, [key]: e.target.value }));
+    const setField = (key, value) => {
+        setForm((p) => ({ ...p, [key]: value }));
+    };
+
+    const selectedClass = useMemo(
+        () => classOptions.find((c) => String(c.id) === String(form.classId)) || null,
+        [classOptions, form.classId]
+    );
+
+    const selectedModule = useMemo(
+        () => moduleOptions.find((m) => String(m.id) === String(form.moduleId)) || null,
+        [moduleOptions, form.moduleId]
+    );
+
+    const handleClose = () => {
+        if (saving) return;
+        setFormErr(""); // ✅ đóng modal là sạch lỗi
+        onClose?.();
+    };
 
     const handleSubmit = async () => {
-        if (!userId) return;
+        if (!userId || saving) return;
 
-        const fullName = form.fullName.trim();
-        if (!fullName) throw new Error("Full name is required.");
+        setFormErr("");
+
+        if (!form.fullName.trim()) {
+            setFormErr("Vui lòng nhập Họ tên.");
+            return;
+        }
+
+        if (!isAdminRole && (!form.classId || !form.moduleId)) {
+            setFormErr("Vui lòng chọn Lớp và Module.");
+            return;
+        }
 
         const payload = {
-            fullName,
-            email: form.email.trim(),
+            fullName: form.fullName.trim(),
             roleName: form.roleName,
             ...(isAdminRole
                 ? {}
@@ -89,7 +155,12 @@ export default function EditUserModal({
         try {
             setSaving(true);
             await adminUserApi.updateUser(userId, payload);
+            showToast("Cập nhật người dùng thành công", "success");
             await onUpdated?.();
+        } catch (e) {
+            const msg = toErrorText(e, "Cập nhật thất bại.");
+            setFormErr(msg);            // ✅ chỉ set khi bấm Lưu và fail
+            showToast(msg, "error");    // ✅ hiện lỗi thật để biết vì sao ADMIN fail
         } finally {
             setSaving(false);
         }
@@ -98,42 +169,55 @@ export default function EditUserModal({
     return (
         <AppModal
             open={open}
-            title="Chỉnh sửa user"
-            onClose={onClose}
-            primaryText="Lưu"
+            title="Chỉnh sửa người dùng"
+            primaryText={saving ? "Đang lưu..." : "Lưu"}
             secondaryText="Hủy"
+            onClose={handleClose}
             onSubmit={handleSubmit}
             loading={saving}
-            maxWidth="sm"
+            maxWidth={560}
         >
             {loading ? (
-                <Stack direction="row" spacing={1.2} alignItems="center">
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                     <CircularProgress size={18} />
-                    <Typography variant="body2">Loading user...</Typography>
-                </Stack>
+                    <Typography variant="body2">Đang tải dữ liệu...</Typography>
+                </Box>
             ) : (
                 <Stack spacing={2}>
+                    {formErr ? <Alert severity="error">{formErr}</Alert> : null}
+
                     <TextField
-                        label="Full Name"
+                        label="Họ tên"
                         value={form.fullName}
-                        onChange={onChange("fullName")}
+                        onChange={(e) => setField("fullName", e.target.value)}
+                        disabled={saving}
                         fullWidth
                     />
 
+                    {/* Email readonly (không disabled) */}
                     <TextField
                         label="Email"
                         value={form.email}
-                        onChange={onChange("email")}
                         fullWidth
+                        InputProps={{ readOnly: true }}
+                        onKeyDown={(e) => e.preventDefault()}
+                        helperText="Email không thể chỉnh sửa"
                     />
 
                     <TextField
-                        label="Role"
+                        label="Vai trò"
                         select
-                        SelectProps={{ native: true }}
                         value={form.roleName}
-                        onChange={onChange("roleName")}
+                        onChange={(e) => setField("roleName", e.target.value)}
+                        disabled={saving}
                         fullWidth
+                        InputLabelProps={{ shrink: true }}
+                        SelectProps={{
+                            MenuProps: {
+                                disablePortal: true,
+                                PaperProps: { sx: { borderRadius: 2, mt: 0.5 } },
+                            },
+                        }}
                     >
                         {(roleOptions?.length
                                 ? roleOptions
@@ -142,47 +226,39 @@ export default function EditUserModal({
                                     { id: "ADMIN", name: "ADMIN" },
                                 ]
                         ).map((r) => (
-                            <option key={r.id} value={r.name}>
+                            <MenuItem key={r.id} value={r.name}>
                                 {r.name}
-                            </option>
+                            </MenuItem>
                         ))}
                     </TextField>
 
-                    <TextField
-                        label="Class"
-                        select
-                        SelectProps={{ native: true }}
-                        value={form.classId}
-                        onChange={onChange("classId")}
-                        disabled={isAdminRole}
-                        fullWidth
-                        helperText={isAdminRole ? "ADMIN không cần chọn Class" : ""}
-                    >
-                        <option value="">-- Select --</option>
-                        {classOptions.map((c) => (
-                            <option key={c.id} value={c.id}>
-                                {c.name}
-                            </option>
-                        ))}
-                    </TextField>
+                    {!isAdminRole ? (
+                        <>
+                            <Autocomplete
+                                options={classOptions}
+                                value={selectedClass}
+                                onChange={(_, opt) => setField("classId", opt?.id ? String(opt.id) : "")}
+                                getOptionLabel={(o) => o?.name || ""}
+                                isOptionEqualToValue={(a, b) => String(a.id) === String(b.id)}
+                                disabled={saving}
+                                renderInput={(params) => <TextField {...params} label="Lớp" />}
+                            />
 
-                    <TextField
-                        label="Module"
-                        select
-                        SelectProps={{ native: true }}
-                        value={form.moduleId}
-                        onChange={onChange("moduleId")}
-                        disabled={isAdminRole}
-                        fullWidth
-                        helperText={isAdminRole ? "ADMIN không cần chọn Module" : ""}
-                    >
-                        <option value="">-- Select --</option>
-                        {moduleOptions.map((m) => (
-                            <option key={m.id} value={m.id}>
-                                {m.name}
-                            </option>
-                        ))}
-                    </TextField>
+                            <Autocomplete
+                                options={moduleOptions}
+                                value={selectedModule}
+                                onChange={(_, opt) => setField("moduleId", opt?.id ? String(opt.id) : "")}
+                                getOptionLabel={(o) => o?.name || ""}
+                                isOptionEqualToValue={(a, b) => String(a.id) === String(b.id)}
+                                disabled={saving}
+                                renderInput={(params) => <TextField {...params} label="Module" />}
+                            />
+                        </>
+                    ) : (
+                        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                            ADMIN không cần chọn Lớp / Module.
+                        </Typography>
+                    )}
                 </Stack>
             )}
         </AppModal>
