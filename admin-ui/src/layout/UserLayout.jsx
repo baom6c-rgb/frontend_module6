@@ -520,7 +520,7 @@ export default function UserLayout() {
                 <Box
                     sx={{
                         width: "100%",
-                        maxWidth: "1600px",
+                        maxWidth: "none",
                         mx: "auto",
                         px: { xs: 2, md: 3 },
                         py: { xs: 2, md: 3 },

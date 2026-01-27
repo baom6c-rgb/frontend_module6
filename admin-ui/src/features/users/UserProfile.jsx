@@ -28,9 +28,9 @@ import {
     MenuBookRounded,
     LockRounded,
 } from "@mui/icons-material";
-import { useNavigate } from "react-router-dom";
 
 import AvatarUploadDialog from "./components/AvatarUploadDialog";
+import ChangePasswordModal from "./components/ChangePasswordModal";
 import { getMyProfileApi, updateMyProfileApi, uploadMyAvatarApi } from "../../api/userApi";
 
 import GlobalLoading from "../../components/common/GlobalLoading";
@@ -123,7 +123,13 @@ const InfoField = ({
     const showStar = isEditing && editable && required;
 
     return (
-        <Box sx={{ mb: 2 }}>
+        <Box
+            sx={{
+                display: "flex",
+                flexDirection: "column",
+                height: "100%",
+            }}
+        >
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.9 }}>
                 <Box
                     sx={{
@@ -134,6 +140,7 @@ const InfoField = ({
                         placeItems: "center",
                         background: `${COLORS.primaryBlue}12`,
                         border: `1px solid ${COLORS.border}`,
+                        flex: "0 0 auto",
                     }}
                 >
                     {icon}
@@ -147,6 +154,7 @@ const InfoField = ({
                         textTransform: "uppercase",
                         fontSize: "0.72rem",
                         letterSpacing: "0.6px",
+                        flex: "1 1 auto",
                     }}
                 >
                     {label}
@@ -189,6 +197,9 @@ const InfoField = ({
                         borderRadius: "14px",
                         bgcolor: COLORS.bg,
                         border: `1px dashed ${COLORS.border}`,
+                        flex: "1 1 auto",
+                        display: "flex",
+                        alignItems: "center",
                     }}
                 >
                     <Typography sx={{ fontWeight: 800, color: COLORS.textPrimary, wordBreak: "break-word" }}>
@@ -201,7 +212,6 @@ const InfoField = ({
 };
 
 const UserProfile = () => {
-    const navigate = useNavigate();
     const { showToast } = useToast();
 
     const [loading, setLoading] = useState(true);
@@ -223,6 +233,7 @@ const UserProfile = () => {
     });
 
     const [avatarOpen, setAvatarOpen] = useState(false);
+    const [changePwOpen, setChangePwOpen] = useState(false);
 
     const initials = useMemo(() => {
         const name = (profile?.fullName || profile?.email || "U").trim();
@@ -317,7 +328,7 @@ const UserProfile = () => {
         } finally {
             setTimeout(() => {
                 setSaving(false);
-            }, 1000); // ⏱ 5 giây
+            }, 1000);
         }
     };
 
@@ -354,13 +365,11 @@ const UserProfile = () => {
     const globalLoadingOpen = loading || saving;
     const globalLoadingMessage = saving ? "Đang lưu thay đổi..." : "Đang tải hồ sơ...";
 
-    // ✅ Loading skeleton (nhẹ) + Global overlay vẫn hiện
     if (loading) {
         return (
             <Box sx={{ p: 4, display: "flex", gap: 2, alignItems: "center" }}>
                 <CircularProgress sx={{ color: COLORS.primaryBlue }} />
                 <Typography sx={{ color: COLORS.textSecondary, fontWeight: 800 }}>Đang tải hồ sơ...</Typography>
-
                 <GlobalLoading open={globalLoadingOpen} message={globalLoadingMessage} />
             </Box>
         );
@@ -368,18 +377,19 @@ const UserProfile = () => {
 
     return (
         <>
-            {/* ✅ đặt GlobalLoading ngoài Fade để tránh lỗi Transition ref */}
             <GlobalLoading open={globalLoadingOpen} message={globalLoadingMessage} />
 
-            {/* ✅ Fade chỉ bọc 1 DOM node */}
             <Fade in timeout={700}>
+                {/* ✅ MỞ NGANG: bỏ maxWidth + bỏ mx auto để không “lọt thỏm” */}
                 <Box
                     sx={{
-                        minHeight: "calc(100vh - 120px)",
                         width: "100%",
-                        maxWidth: "1500px",
-                        mx: "auto",
+                        maxWidth: "none",
+                        mx: 0,
                         px: { xs: 2, md: 3 },
+                        py: { xs: 2, md: 3 },
+                        flex: 1,
+                        minWidth: 0,
                     }}
                 >
                     {/* Page Header */}
@@ -390,28 +400,6 @@ const UserProfile = () => {
                         <Typography sx={{ mt: 0.5, color: COLORS.textSecondary, fontWeight: 700 }}>
                             Quản lý thông tin cá nhân của bạn
                         </Typography>
-
-                        {isEditing && (
-                            <Box sx={{ mt: 1 }}>
-                                <Chip
-                                    size="small"
-                                    label={
-                                        <Typography sx={{ fontWeight: 900, fontSize: 12 }}>
-                                            <Box component="span" sx={{ color: COLORS.danger }}>
-                                                *
-                                            </Box>{" "}
-                                            là trường bắt buộc
-                                        </Typography>
-                                    }
-                                    sx={{
-                                        bgcolor: `${COLORS.accentOrange}12`,
-                                        color: COLORS.textPrimary,
-                                        border: `1px solid ${COLORS.border}`,
-                                        borderRadius: "999px",
-                                    }}
-                                />
-                            </Box>
-                        )}
                     </Box>
 
                     <Grid container spacing={2.5}>
@@ -517,7 +505,7 @@ const UserProfile = () => {
                                 <Box sx={{ p: 2.5 }}>
                                     <Button
                                         startIcon={<LockRounded />}
-                                        onClick={() => navigate("/reset-password")}
+                                        onClick={() => setChangePwOpen(true)}
                                         fullWidth
                                         variant="outlined"
                                         sx={{
@@ -539,8 +527,8 @@ const UserProfile = () => {
                         </Grid>
 
                         {/* RIGHT */}
-                        <Grid item xs={12} md={9} lg={9}>
-                            <CardShell>
+                        <Grid item xs={12} md={9} lg={9} sx={{ minWidth: 0 }}>
+                            <CardShell sx={{ width: "100%" }}>
                                 <SectionTitle
                                     title="Thông tin chi tiết"
                                     subtitle={isEditing ? "Chỉnh sửa thông tin của bạn" : "Xem thông tin cá nhân"}
@@ -563,6 +551,7 @@ const UserProfile = () => {
                                                 Chỉnh sửa
                                             </Button>
                                         ) : (
+                                            // ✅ CHỈ ĐỔI STYLE 2 NÚT (Hủy/Lưu) theo yêu cầu
                                             <Stack direction="row" spacing={1}>
                                                 <Button
                                                     startIcon={<CancelRounded />}
@@ -570,15 +559,28 @@ const UserProfile = () => {
                                                     disabled={saving}
                                                     sx={{
                                                         borderRadius: "14px",
-                                                        color: COLORS.textSecondary,
+                                                        bgcolor: "#FFFFFF",
+                                                        color: COLORS.textSecondary, // chữ tối
                                                         textTransform: "none",
                                                         fontWeight: 950,
                                                         px: 2,
-                                                        "&:hover": { bgcolor: COLORS.bg },
+                                                        border: `1px solid ${COLORS.border}`,
+                                                        "&:hover": {
+                                                            bgcolor: "#2E2D84",
+                                                            color: "#FFFFFF",
+                                                            borderColor: "#2E2D84",
+                                                        },
+                                                        "&.Mui-disabled": {
+                                                            bgcolor: "#FFFFFF",
+                                                            color: "#9CA3AF",
+                                                            borderColor: COLORS.border,
+                                                            opacity: 0.7,
+                                                        },
                                                     }}
                                                 >
                                                     Hủy
                                                 </Button>
+
                                                 <Button
                                                     startIcon={<SaveRounded />}
                                                     onClick={handleSave}
@@ -586,12 +588,21 @@ const UserProfile = () => {
                                                     variant="contained"
                                                     sx={{
                                                         borderRadius: "14px",
-                                                        bgcolor: COLORS.accentOrange,
+                                                        bgcolor: "#FF8C00",
+                                                        color: "#FFFFFF",
                                                         textTransform: "none",
                                                         fontWeight: 950,
                                                         px: 2.8,
                                                         boxShadow: "none",
-                                                        "&:hover": { bgcolor: COLORS.accentOrangeHover, boxShadow: "none" },
+                                                        "&:hover": {
+                                                            bgcolor: "#E67600",
+                                                            boxShadow: "none",
+                                                        },
+                                                        "&.Mui-disabled": {
+                                                            bgcolor: "#E5E7EB",
+                                                            color: "#9CA3AF",
+                                                            boxShadow: "none",
+                                                        },
                                                     }}
                                                 >
                                                     {saving ? "Đang lưu..." : "Lưu"}
@@ -601,9 +612,18 @@ const UserProfile = () => {
                                     }
                                 />
 
-                                <Box sx={{ p: { xs: 5, md: 10 } }}>
-                                    <Grid container spacing={10}>
-                                        <Grid item xs={12} md={12}>
+                                {/* ✅ LOCKED 2 rows × 3 columns (View/Edit không đổi layout) */}
+                                <Box sx={{ p: { xs: 2, md: 2.5 } }}>
+                                    <Box
+                                        sx={{
+                                            display: "grid",
+                                            gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" },
+                                            gap: 2.25,
+                                            alignItems: "stretch",
+                                        }}
+                                    >
+                                        {/* Row 1 */}
+                                        <Box sx={{ minWidth: 0 }}>
                                             <InfoField
                                                 icon={<PersonRounded sx={{ color: COLORS.primaryBlue, fontSize: 20 }} />}
                                                 label="Họ và tên"
@@ -617,7 +637,9 @@ const UserProfile = () => {
                                                 helperText={errors.fullName}
                                                 placeholder="Nhập họ và tên"
                                             />
+                                        </Box>
 
+                                        <Box sx={{ minWidth: 0 }}>
                                             <InfoField
                                                 icon={<PhoneRounded sx={{ color: COLORS.primaryBlue, fontSize: 20 }} />}
                                                 label="Số điện thoại"
@@ -630,25 +652,9 @@ const UserProfile = () => {
                                                 helperText={errors.phoneNumber}
                                                 placeholder="VD: 0912345678"
                                             />
+                                        </Box>
 
-                                            <InfoField
-                                                icon={<SchoolRounded sx={{ color: COLORS.primaryBlue, fontSize: 20 }} />}
-                                                label="Lớp học"
-                                                value={profile?.className || "Unassigned"}
-                                                isEditing={isEditing}
-                                                editable={false}
-                                            />
-                                        </Grid>
-
-                                        <Grid item xs={12} md={12}>
-                                            <InfoField
-                                                icon={<EmailRounded sx={{ color: COLORS.primaryBlue, fontSize: 20 }} />}
-                                                label="Email"
-                                                value={profile?.email}
-                                                isEditing={isEditing}
-                                                editable={false}
-                                            />
-
+                                        <Box sx={{ minWidth: 0 }}>
                                             <InfoField
                                                 icon={<LocationOnRounded sx={{ color: COLORS.primaryBlue, fontSize: 20 }} />}
                                                 label="Địa chỉ"
@@ -661,7 +667,30 @@ const UserProfile = () => {
                                                 helperText={errors.address}
                                                 placeholder="Nhập địa chỉ (optional)"
                                             />
+                                        </Box>
 
+                                        {/* Row 2 */}
+                                        <Box sx={{ minWidth: 0 }}>
+                                            <InfoField
+                                                icon={<EmailRounded sx={{ color: COLORS.primaryBlue, fontSize: 20 }} />}
+                                                label="Email"
+                                                value={profile?.email}
+                                                isEditing={isEditing}
+                                                editable={false}
+                                            />
+                                        </Box>
+
+                                        <Box sx={{ minWidth: 0 }}>
+                                            <InfoField
+                                                icon={<SchoolRounded sx={{ color: COLORS.primaryBlue, fontSize: 20 }} />}
+                                                label="Lớp học"
+                                                value={profile?.className || "Unassigned"}
+                                                isEditing={isEditing}
+                                                editable={false}
+                                            />
+                                        </Box>
+
+                                        <Box sx={{ minWidth: 0 }}>
                                             <InfoField
                                                 icon={<MenuBookRounded sx={{ color: COLORS.primaryBlue, fontSize: 20 }} />}
                                                 label="Module"
@@ -669,10 +698,10 @@ const UserProfile = () => {
                                                 isEditing={isEditing}
                                                 editable={false}
                                             />
-                                        </Grid>
-                                    </Grid>
+                                        </Box>
+                                    </Box>
 
-                                    <Divider sx={{ mt: 1.25, borderColor: COLORS.border }} />
+                                    <Divider sx={{ mt: 2.25, borderColor: COLORS.border }} />
 
                                     <Box
                                         sx={{
@@ -685,7 +714,7 @@ const UserProfile = () => {
                                         }}
                                     >
                                         <Typography sx={{ color: COLORS.textSecondary, fontWeight: 700, fontSize: 12 }}>
-                                            Tip: Nhấn “Chỉnh sửa” để cập nhật thông tin. Email/Lớp/Module là read-only theo nghiệp vụ.
+                                            Tip: Nhấn ‘Chỉnh sửa’ để cập nhật thông tin. Email/Lớp/Module không được chỉnh sửa.
                                         </Typography>
 
                                         {isEditing ? (
@@ -724,6 +753,7 @@ const UserProfile = () => {
                         displayName={profile?.fullName || ""}
                         onSave={handleAvatarSave}
                     />
+                    <ChangePasswordModal open={changePwOpen} onClose={() => setChangePwOpen(false)} />
                 </Box>
             </Fade>
         </>

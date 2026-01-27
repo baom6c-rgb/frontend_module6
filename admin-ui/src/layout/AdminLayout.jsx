@@ -295,7 +295,7 @@ const AdminLayout = () => {
                         collapsed={!isMobile && sidebarCollapsed}
                         active={currentPath.includes("/admin/users")}
                         icon={<PeopleAltRounded />}
-                        text="Danh sách user"
+                        text="Danh sách người dùng"
                         onClick={() => handleNav("/admin/users")}
                     />
                     <NavItem
@@ -486,7 +486,7 @@ const AdminLayout = () => {
                                             variant="contained"
                                             onClick={() => {
                                                 closeNotif();
-                                                handleNav("/admin/approval");
+                                                handleNav("/admin/users?status=WAITING_APPROVAL");
                                             }}
                                             sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 900, py: 1.1 }}
                                         >
