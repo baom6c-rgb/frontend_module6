@@ -29,6 +29,7 @@ import { useTheme } from "@mui/material/styles";
 import {
     Dashboard,
     PeopleAltRounded,
+    SchoolRounded,
     HowToRegRounded,
     BlockRounded,
     Logout as LogoutIcon,
@@ -292,31 +293,17 @@ const AdminLayout = () => {
                     />
                     <NavItem
                         collapsed={!isMobile && sidebarCollapsed}
-                        active={currentPath.includes("/admin/students")}
-                        icon={<PeopleAltRounded />}
-                        text="Danh sách học viên"
-                        onClick={() => handleNav("/admin/students")}
-                    />
-                    <NavItem
-                        collapsed={!isMobile && sidebarCollapsed}
-                        active={currentPath.includes("/admin/blocked")}
-                        icon={<BlockRounded />}
-                        text="Học viên bị khóa"
-                        onClick={() => handleNav("/admin/blocked")}
-                    />
-                    <NavItem
-                        collapsed={!isMobile && sidebarCollapsed}
-                        active={currentPath.includes("/admin/approval")}
-                        icon={<HowToRegRounded />}
-                        text="Phê duyệt học viên"
-                        onClick={() => handleNav("/admin/approval")}
-                    />
-                    <NavItem
-                        collapsed={!isMobile && sidebarCollapsed}
                         active={currentPath.includes("/admin/users")}
                         icon={<PeopleAltRounded />}
                         text="Danh sách user"
                         onClick={() => handleNav("/admin/users")}
+                    />
+                    <NavItem
+                        collapsed={!isMobile && sidebarCollapsed}
+                        active={currentPath.includes("/admin/approval")}
+                        icon={<SchoolRounded />}
+                        text="Đánh giá học tập"
+                        onClick={() => handleNav("/admin/approval")}
                     />
                 </Box>
             </Box>
