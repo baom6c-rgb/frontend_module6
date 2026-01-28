@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
     Box,
     Paper,
@@ -46,8 +46,8 @@ import {
     Check as CheckIcon,
 } from "@mui/icons-material";
 
-// Import API - ✅ Đúng path theo cấu trúc project
-import { getMyExamAttemptsApi, getExamAttemptsStatsApi } from "../../api/examApi";
+import { getMyExamAttemptsApi } from "../../api/examApi";
+import { getDashboardStatsApi } from "../../api/dashboardApi";
 
 const COLORS = {
     primaryBlue: "#0B5ED7",
@@ -62,202 +62,322 @@ const COLORS = {
     danger: "#EE5D50",
 };
 
+const ALL = "Tất cả";
+
+const safeNum = (v, fallback = 0) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+};
+
+const formatDateTime = (d) => (d ? new Date(d).toLocaleString("vi-VN") : "—");
+const formatDate = (d) => (d ? new Date(d).toLocaleDateString("vi-VN") : "—");
+
+function normalizeAttempt(raw) {
+    const id = raw?.id ?? raw?.attemptId ?? raw?.examAttemptId ?? null;
+
+    const submitTime = raw?.submitTime ?? raw?.date ?? raw?.submittedAt ?? raw?.endTime ?? null;
+    const startTime = raw?.startTime ?? raw?.startedAt ?? null;
+
+    const name =
+        raw?.name ??
+        raw?.examName ??
+        raw?.examTitle ??
+        raw?.title ??
+        (String(raw?.type || "").toUpperCase().includes("PRACTICE") ? "Bài thi PRACTICE" : "Bài test");
+
+    const module =
+        raw?.module ??
+        raw?.moduleName ??
+        raw?.learningModuleName ??
+        raw?.learningModule ??
+        raw?.moduleTitle ??
+        raw?.module_code ??
+        null;
+
+    const className =
+        raw?.className ??
+        raw?.class ??
+        raw?.classroomName ??
+        raw?.classroom ??
+        raw?.classTitle ??
+        raw?.class_code ??
+        null;
+
+    const totalQuestions = safeNum(
+        raw?.totalQuestions ??
+        raw?.questions ??
+        raw?.questionCount ??
+        raw?.totalQuestion ??
+        raw?.numQuestions,
+        0
+    );
+
+    // attempt.score bên BE đang là % (0..100)
+    const scorePct = safeNum(raw?.score ?? raw?.scorePct ?? raw?.percentage ?? 0, 0);
+
+    const totalScore = safeNum(raw?.totalScore ?? raw?.totalPoints ?? raw?.maxScore ?? 100, 100);
+
+    const directCorrect = raw?.correctAnswers ?? raw?.correctCount ?? raw?.numCorrect ?? raw?.correct ?? null;
+    let correctAnswers = directCorrect == null ? null : safeNum(directCorrect, 0);
+
+    if (correctAnswers == null) {
+        if (totalQuestions > 0) {
+            const estimated = Math.round((scorePct / 100) * totalQuestions);
+            correctAnswers = Math.max(0, Math.min(totalQuestions, estimated));
+        } else {
+            correctAnswers = 0;
+        }
+    }
+
+    let durationMinutes =
+        raw?.durationMinutes ?? raw?.duration ?? raw?.timeMinutes ?? raw?.minutes ?? null;
+
+    if (durationMinutes == null && startTime && submitTime) {
+        const diffMs = new Date(submitTime).getTime() - new Date(startTime).getTime();
+        durationMinutes = diffMs > 0 ? Math.round(diffMs / 60000) : 0;
+    }
+    durationMinutes = safeNum(durationMinutes, 0);
+
+    const accuracy =
+        totalQuestions > 0 ? Number(((correctAnswers / totalQuestions) * 100).toFixed(1)) : 0;
+
+    return {
+        _raw: raw,
+        id,
+        name,
+        module: module || "Chưa gắn module",
+        className: className || "Chưa gắn lớp",
+        submitTime,
+        startTime,
+        scorePct,
+        totalScore,
+        totalQuestions,
+        correctAnswers,
+        accuracy,
+        durationMinutes,
+    };
+}
+
+const StatCard = ({ icon, title, value, subtitle, color }) => (
+    <Paper
+        elevation={0}
+        sx={{
+            p: 3,
+            borderRadius: "16px",
+            border: `1px solid ${COLORS.borderLight}`,
+            height: "100%",
+            background: COLORS.bgWhite,
+            transition: "all 0.25s ease",
+            "&:hover": {
+                transform: "translateY(-4px)",
+                boxShadow: "0px 18px 40px rgba(0,0,0,0.06)",
+                borderColor: color,
+            },
+        }}
+    >
+        <Stack direction="row" alignItems="center" spacing={2}>
+            <Box
+                sx={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: "12px",
+                    bgcolor: color + "20",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                }}
+            >
+                {React.cloneElement(icon, { sx: { color, fontSize: 28 } })}
+            </Box>
+
+            <Box>
+                <Typography sx={{ fontSize: 14, color: COLORS.textSecondary, fontWeight: 800 }}>
+                    {title}
+                </Typography>
+                <Typography sx={{ fontSize: 28, fontWeight: 900, color: COLORS.textPrimary, lineHeight: 1.1 }}>
+                    {value}
+                </Typography>
+                <Typography sx={{ fontSize: 12, color: "#8A94A6", fontWeight: 700 }}>
+                    {subtitle}
+                </Typography>
+            </Box>
+        </Stack>
+    </Paper>
+);
+
 export default function UserReview() {
-    const [tests, setTests] = useState([]);
-    const [filteredTests, setFilteredTests] = useState([]);
+    const [testsRaw, setTestsRaw] = useState([]);
+    const tests = useMemo(() => testsRaw.map(normalizeAttempt), [testsRaw]);
+
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [expandedRow, setExpandedRow] = useState(null);
     const [selectedTest, setSelectedTest] = useState(null);
     const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Stats
+    // ✅ Stats giống Dashboard (dùng chung getDashboardStatsApi)
     const [stats, setStats] = useState({
-        totalTests: 0,
+        completedLessons: 0,
+        onlineTime: 0,
         averageScore: 0,
-        passedTests: 0,
         rank: 0,
-        totalStudents: 150,
+        totalStudents: 0,
     });
 
-    // Filter states
+    // Filters
     const [searchText, setSearchText] = useState("");
-    const [selectedModule, setSelectedModule] = useState("Tất cả");
-    const [selectedClass, setSelectedClass] = useState("Tất cả");
+    const [selectedModule, setSelectedModule] = useState(ALL);
+    const [selectedClass, setSelectedClass] = useState(ALL);
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
     const [showFilters, setShowFilters] = useState(false);
 
-    // Dynamic filter options
-    const [modules, setModules] = useState(["Tất cả"]);
-    const [classes, setClasses] = useState(["Tất cả"]);
+    const [modules, setModules] = useState([ALL]);
+    const [classes, setClasses] = useState([ALL]);
 
-    // 🔥 FETCH DATA với debug logging
     useEffect(() => {
         let alive = true;
 
-        const fetchData = async () => {
+        const fetchAll = async () => {
             try {
                 setLoading(true);
                 setError(null);
 
-                console.log("===========================================");
-                console.log("🚀 UserReview: Starting data fetch");
-                console.log("===========================================");
-
-                // Check token
                 const token = localStorage.getItem("accessToken");
-                console.log("🔐 Token check:");
-                console.log("   Has token:", !!token);
-                console.log("   Token preview:", token ? token.substring(0, 50) + "..." : "NO TOKEN");
+                if (!token || token === "null") throw new Error("No valid token. Please login.");
 
-                if (!token || token === "null") {
-                    throw new Error("No valid token. Please login.");
-                }
-
-                console.log("📡 Fetching exam attempts and stats...");
-
-                // Fetch parallel
-                const [attemptsRes, statsRes] = await Promise.all([
+                // ✅ chạy song song: attempts + dashboard stats
+                const [attemptsRes, dashStatsRes] = await Promise.allSettled([
                     getMyExamAttemptsApi(),
-                    getExamAttemptsStatsApi()
+                    getDashboardStatsApi(),
                 ]);
 
                 if (!alive) return;
 
-                console.log("📥 Responses received");
-                console.log("   Attempts data:", attemptsRes?.data);
-                console.log("   Stats data:", statsRes?.data);
+                // attempts
+                if (attemptsRes.status === "fulfilled") {
+                    const data = Array.isArray(attemptsRes.value?.data) ? attemptsRes.value.data : [];
+                    setTestsRaw(data);
 
-                // Process attempts
-                if (attemptsRes?.data) {
-                    const data = Array.isArray(attemptsRes.data) ? attemptsRes.data : [];
-                    console.log("✅ Loaded", data.length, "exam attempts");
-
-                    if (data.length > 0) {
-                        console.log("📝 First record:", data[0]);
-                    }
-
-                    setTests(data);
-                    setFilteredTests(data);
-
-                    // Extract modules & classes
-                    const mods = new Set(data.map(e => e.module || e.moduleName).filter(Boolean));
-                    const cls = new Set(data.map(e => e.className || e.class).filter(Boolean));
-                    setModules(["Tất cả", ...Array.from(mods)]);
-                    setClasses(["Tất cả", ...Array.from(cls)]);
+                    const normalized = data.map(normalizeAttempt);
+                    const mods = new Set(normalized.map((e) => e.module).filter(Boolean));
+                    const cls = new Set(normalized.map((e) => e.className).filter(Boolean));
+                    setModules([ALL, ...Array.from(mods)]);
+                    setClasses([ALL, ...Array.from(cls)]);
+                } else {
+                    console.error("UserReview attempts error:", attemptsRes.reason);
+                    throw attemptsRes.reason;
                 }
 
-                // Process stats
-                if (statsRes?.data) {
-                    console.log("✅ Stats loaded");
+                // stats (dashboard)
+                if (dashStatsRes.status === "fulfilled") {
+                    const s = dashStatsRes.value?.data || {};
                     setStats({
-                        totalTests: statsRes.data.totalTests || 0,
-                        averageScore: statsRes.data.averageScore || 0,
-                        passedTests: statsRes.data.passedTests || 0,
-                        rank: statsRes.data.rank || 0,
-                        totalStudents: statsRes.data.totalStudents || 150,
+                        completedLessons: safeNum(s.completedLessons, 0),
+                        onlineTime: safeNum(s.onlineTime, 0),
+                        averageScore: safeNum(s.averageScore, 0),
+                        rank: safeNum(s.rank, 0),
+                        totalStudents: safeNum(s.totalStudents, 0),
                     });
+                } else {
+                    console.warn("UserReview dashboard stats error:", dashStatsRes.reason);
+                    // không block UI nếu stats fail
                 }
-
-                console.log("✅ Fetch completed successfully");
-                console.log("===========================================");
-
             } catch (err) {
                 if (!alive) return;
 
-                console.error("❌ ERROR in UserReview:", err);
-                console.error("Error response:", err.response);
-
-                if (err.response?.status === 401) {
+                if (err?.response?.status === 401) {
                     setError("Session expired. Redirecting to login...");
                     setTimeout(() => {
                         localStorage.clear();
                         window.location.href = "/login";
-                    }, 2000);
-                } else if (err.response?.status === 403) {
+                    }, 1200);
+                } else if (err?.response?.status === 403) {
                     setError("Access denied. Please check your token or login again.");
                 } else {
-                    setError(err.message || "Failed to load data");
+                    setError(err?.message || "Failed to load data");
                 }
             } finally {
-                setLoading(false);
+                if (alive) setLoading(false);
             }
         };
 
-        fetchData();
-        return () => { alive = false; };
+        fetchAll();
+        return () => {
+            alive = false;
+        };
     }, []);
 
-    // Apply filters
-    useEffect(() => {
+    const filteredTests = useMemo(() => {
         let filtered = [...tests];
 
-        if (searchText) {
-            filtered = filtered.filter(t =>
-                (t.name || t.examName || "").toLowerCase().includes(searchText.toLowerCase()) ||
-                (t.module || t.moduleName || "").toLowerCase().includes(searchText.toLowerCase())
+        if (searchText.trim()) {
+            const s = searchText.toLowerCase();
+            filtered = filtered.filter(
+                (t) =>
+                    (t.name || "").toLowerCase().includes(s) ||
+                    (t.module || "").toLowerCase().includes(s) ||
+                    (t.className || "").toLowerCase().includes(s)
             );
         }
 
-        if (selectedModule !== "Tất cả") {
-            filtered = filtered.filter(t => (t.module || t.moduleName) === selectedModule);
-        }
-
-        if (selectedClass !== "Tất cả") {
-            filtered = filtered.filter(t => (t.className || t.class) === selectedClass);
-        }
+        if (selectedModule !== ALL) filtered = filtered.filter((t) => t.module === selectedModule);
+        if (selectedClass !== ALL) filtered = filtered.filter((t) => t.className === selectedClass);
 
         if (startDate) {
-            filtered = filtered.filter(t => new Date(t.date || t.submitTime) >= new Date(startDate));
+            filtered = filtered.filter((t) => new Date(t.submitTime || t.startTime) >= new Date(startDate));
         }
-
         if (endDate) {
-            filtered = filtered.filter(t => new Date(t.date || t.submitTime) <= new Date(endDate));
+            filtered = filtered.filter((t) => new Date(t.submitTime || t.startTime) <= new Date(endDate));
         }
 
-        setFilteredTests(filtered);
-        setPage(0);
+        return filtered;
     }, [tests, searchText, selectedModule, selectedClass, startDate, endDate]);
 
-    // Handlers
+    useEffect(() => setPage(0), [searchText, selectedModule, selectedClass, startDate, endDate]);
+
     const handleChangePage = (e, newPage) => setPage(newPage);
-    const handleChangeRowsPerPage = (e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); };
+    const handleChangeRowsPerPage = (e) => {
+        setRowsPerPage(parseInt(e.target.value, 10));
+        setPage(0);
+    };
     const handleExpandRow = (id) => setExpandedRow(expandedRow === id ? null : id);
-    const handleViewDetail = (test) => { setSelectedTest(test); setDetailDialogOpen(true); };
-    const handleCloseDetail = () => { setDetailDialogOpen(false); setSelectedTest(null); };
+    const handleViewDetail = (test) => {
+        setSelectedTest(test);
+        setDetailDialogOpen(true);
+    };
+    const handleCloseDetail = () => {
+        setDetailDialogOpen(false);
+        setSelectedTest(null);
+    };
     const handleResetFilters = () => {
         setSearchText("");
-        setSelectedModule("Tất cả");
-        setSelectedClass("Tất cả");
+        setSelectedModule(ALL);
+        setSelectedClass(ALL);
         setStartDate("");
         setEndDate("");
     };
 
-    // Utilities
-    const getScoreColor = (score) => score >= 80 ? COLORS.success : score >= 50 ? COLORS.warning : COLORS.danger;
-    const getScoreLabel = (score) => score >= 80 ? "Xuất sắc" : score >= 50 ? "Đạt" : "Chưa đạt";
-    const formatDateTime = (d) => d ? new Date(d).toLocaleString("vi-VN") : "N/A";
-    const formatDate = (d) => d ? new Date(d).toLocaleDateString("vi-VN") : "N/A";
+    const getScoreColor = (scorePct) =>
+        scorePct >= 80 ? COLORS.success : scorePct >= 50 ? COLORS.warning : COLORS.danger;
 
-    // Loading state
+    const getScoreLabel = (scorePct) =>
+        scorePct >= 80 ? "Xuất sắc" : scorePct >= 50 ? "Đạt" : "Chưa đạt";
+
     if (loading) {
         return (
             <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", bgcolor: COLORS.bgLight }}>
                 <Stack spacing={2} alignItems="center">
                     <CircularProgress size={60} />
                     <Typography sx={{ fontWeight: 700 }}>Đang tải dữ liệu...</Typography>
-                    <Typography sx={{ fontSize: 14, color: COLORS.textSecondary }}>
-                        Check Console (F12) để xem chi tiết
-                    </Typography>
                 </Stack>
             </Box>
         );
     }
 
-    // Error state
     if (error) {
         return (
             <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", bgcolor: COLORS.bgLight, p: 3 }}>
@@ -266,17 +386,14 @@ export default function UserReview() {
                     <Typography sx={{ fontSize: 24, fontWeight: 900, mb: 2, color: COLORS.danger }}>
                         Đã xảy ra lỗi
                     </Typography>
-                    <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>
-                    <Typography sx={{ mb: 3, color: COLORS.textSecondary }}>
-                        Mở Console (F12) để xem chi tiết lỗi
-                    </Typography>
+                    <Alert severity="error" sx={{ mb: 3 }}>
+                        {error}
+                    </Alert>
                     <Stack direction="row" spacing={2} justifyContent="center">
-                        <Button variant="contained" onClick={() => window.location.reload()}
-                                sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700 }}>
+                        <Button variant="contained" onClick={() => window.location.reload()} sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700 }}>
                             Tải lại trang
                         </Button>
-                        <Button variant="outlined" onClick={() => window.location.href = "/login"}
-                                sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700 }}>
+                        <Button variant="outlined" onClick={() => (window.location.href = "/login")} sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700 }}>
                             Đăng nhập lại
                         </Button>
                     </Stack>
@@ -292,28 +409,47 @@ export default function UserReview() {
                     Đánh giá học tập
                 </Typography>
 
-                {/* Stats Cards */}
+                {/* ✅ Stats giống Dashboard */}
                 <Grid container spacing={3} sx={{ mb: 4 }}>
-                    {[
-                        { label: "Tổng bài test", value: stats.totalTests, icon: AssignmentIcon, color: COLORS.primaryBlue },
-                        { label: "Điểm TB", value: stats.averageScore.toFixed(1), icon: TrendingIcon, color: COLORS.success },
-                        { label: "Bài test đạt", value: stats.passedTests, icon: CheckIcon, color: COLORS.warning },
-                        { label: "Xếp hạng", value: `${stats.rank}/${stats.totalStudents}`, icon: SchoolIcon, color: COLORS.secondaryOrange },
-                    ].map((stat, i) => (
-                        <Grid item xs={12} md={3} key={i}>
-                            <Paper sx={{ p: 3, borderRadius: "16px", border: `1px solid ${COLORS.borderLight}` }}>
-                                <Stack direction="row" alignItems="center" spacing={2}>
-                                    <Box sx={{ width: 56, height: 56, borderRadius: "12px", bgcolor: stat.color + "20", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                        <stat.icon sx={{ color: stat.color, fontSize: 28 }} />
-                                    </Box>
-                                    <Box>
-                                        <Typography sx={{ fontSize: 14, color: COLORS.textSecondary, fontWeight: 700 }}>{stat.label}</Typography>
-                                        <Typography sx={{ fontSize: 28, fontWeight: 900, color: COLORS.textPrimary }}>{stat.value}</Typography>
-                                    </Box>
-                                </Stack>
-                            </Paper>
-                        </Grid>
-                    ))}
+                    <Grid item xs={12} md={3}>
+                        <StatCard
+                            icon={<AssignmentIcon />}
+                            title="HOÀN THÀNH"
+                            value={stats.completedLessons}
+                            subtitle="Bài kiểm tra đã nộp"
+                            color={COLORS.primaryBlue}
+                        />
+                    </Grid>
+
+                    <Grid item xs={12} md={3}>
+                        <StatCard
+                            icon={<Timer />}
+                            title="THỜI GIAN"
+                            value={`${stats.onlineTime}h`}
+                            subtitle="Tổng thời lượng học"
+                            color={COLORS.secondaryOrange}
+                        />
+                    </Grid>
+
+                    <Grid item xs={12} md={3}>
+                        <StatCard
+                            icon={<TrendingIcon />}
+                            title="ĐIỂM TB"
+                            value={stats.averageScore}
+                            subtitle="Trung bình các bài thi"
+                            color={COLORS.success}
+                        />
+                    </Grid>
+
+                    <Grid item xs={12} md={3}>
+                        <StatCard
+                            icon={<SchoolIcon />}
+                            title="XẾP HẠNG"
+                            value={`#${stats.rank}`}
+                            subtitle={`Trong tổng ${stats.totalStudents} học viên`}
+                            color={COLORS.secondaryOrange}
+                        />
+                    </Grid>
                 </Grid>
 
                 {/* Filters */}
@@ -322,7 +458,7 @@ export default function UserReview() {
                         <Stack direction="row" spacing={2}>
                             <TextField
                                 fullWidth
-                                placeholder="Tìm kiếm theo tên bài test, module..."
+                                placeholder="Tìm kiếm theo tên bài test, module, lớp..."
                                 value={searchText}
                                 onChange={(e) => setSearchText(e.target.value)}
                                 InputProps={{ startAdornment: <InputAdornment position="start"><Search /></InputAdornment> }}
@@ -344,29 +480,55 @@ export default function UserReview() {
                                     <FormControl fullWidth>
                                         <InputLabel>Module</InputLabel>
                                         <Select value={selectedModule} label="Module" onChange={(e) => setSelectedModule(e.target.value)} sx={{ borderRadius: "12px" }}>
-                                            {modules.map((m) => <MenuItem key={m} value={m}>{m}</MenuItem>)}
+                                            {modules.map((m) => (
+                                                <MenuItem key={m} value={m}>{m}</MenuItem>
+                                            ))}
                                         </Select>
                                     </FormControl>
                                 </Grid>
+
                                 <Grid item xs={12} md={3}>
                                     <FormControl fullWidth>
                                         <InputLabel>Lớp học</InputLabel>
                                         <Select value={selectedClass} label="Lớp học" onChange={(e) => setSelectedClass(e.target.value)} sx={{ borderRadius: "12px" }}>
-                                            {classes.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+                                            {classes.map((c) => (
+                                                <MenuItem key={c} value={c}>{c}</MenuItem>
+                                            ))}
                                         </Select>
                                     </FormControl>
                                 </Grid>
+
                                 <Grid item xs={12} md={2}>
-                                    <TextField fullWidth type="date" label="Từ ngày" value={startDate} onChange={(e) => setStartDate(e.target.value)}
-                                               InputLabelProps={{ shrink: true }} sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }} />
+                                    <TextField
+                                        fullWidth
+                                        type="date"
+                                        label="Từ ngày"
+                                        value={startDate}
+                                        onChange={(e) => setStartDate(e.target.value)}
+                                        InputLabelProps={{ shrink: true }}
+                                        sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
+                                    />
                                 </Grid>
+
                                 <Grid item xs={12} md={2}>
-                                    <TextField fullWidth type="date" label="Đến ngày" value={endDate} onChange={(e) => setEndDate(e.target.value)}
-                                               InputLabelProps={{ shrink: true }} sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }} />
+                                    <TextField
+                                        fullWidth
+                                        type="date"
+                                        label="Đến ngày"
+                                        value={endDate}
+                                        onChange={(e) => setEndDate(e.target.value)}
+                                        InputLabelProps={{ shrink: true }}
+                                        sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
+                                    />
                                 </Grid>
+
                                 <Grid item xs={12} md={2}>
-                                    <Button fullWidth variant="outlined" onClick={handleResetFilters}
-                                            sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700, height: "56px" }}>
+                                    <Button
+                                        fullWidth
+                                        variant="outlined"
+                                        onClick={handleResetFilters}
+                                        sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700, height: "56px" }}
+                                    >
                                         Xóa bộ lọc
                                     </Button>
                                 </Grid>
@@ -386,73 +548,87 @@ export default function UserReview() {
                             <TableHead>
                                 <TableRow sx={{ bgcolor: COLORS.bgLight }}>
                                     {["Tên bài test", "Module", "Lớp học", "Ngày làm", "Điểm", "Kết quả", "Chi tiết", ""].map((h) => (
-                                        <TableCell key={h} sx={{ fontWeight: 900, color: COLORS.textPrimary }}>{h}</TableCell>
+                                        <TableCell key={h} sx={{ fontWeight: 900, color: COLORS.textPrimary }}>
+                                            {h}
+                                        </TableCell>
                                     ))}
                                 </TableRow>
                             </TableHead>
+
                             <TableBody>
                                 {filteredTests.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
-                                            <Typography sx={{ color: COLORS.textSecondary, fontWeight: 700 }}>
-                                                Không có dữ liệu
-                                            </Typography>
+                                            <Typography sx={{ color: COLORS.textSecondary, fontWeight: 700 }}>Không có dữ liệu</Typography>
                                         </TableCell>
                                     </TableRow>
                                 ) : (
                                     filteredTests.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((test) => {
-                                        const id = test.id || test.attemptId;
+                                        const id = test.id;
                                         return (
                                             <React.Fragment key={id}>
                                                 <TableRow hover>
-                                                    <TableCell sx={{ fontWeight: 700 }}>
-                                                        {test.name || test.examName || "Bài test"}
-                                                    </TableCell>
+                                                    <TableCell sx={{ fontWeight: 700 }}>{test.name}</TableCell>
+
                                                     <TableCell>
-                                                        <Chip label={test.module || test.moduleName || "N/A"} size="small" sx={{ fontWeight: 700 }} />
+                                                        <Chip label={test.module} size="small" sx={{ fontWeight: 700 }} />
                                                     </TableCell>
-                                                    <TableCell sx={{ fontWeight: 700 }}>
-                                                        {test.className || test.class || "N/A"}
-                                                    </TableCell>
+
+                                                    <TableCell sx={{ fontWeight: 700 }}>{test.className}</TableCell>
+
                                                     <TableCell>
                                                         <Stack direction="row" alignItems="center" spacing={1}>
                                                             <CalendarToday sx={{ fontSize: 16, color: COLORS.textSecondary }} />
                                                             <Typography sx={{ fontSize: 14, fontWeight: 700 }}>
-                                                                {formatDate(test.date || test.submitTime)}
+                                                                {formatDate(test.submitTime || test.startTime)}
                                                             </Typography>
                                                         </Stack>
                                                     </TableCell>
+
                                                     <TableCell>
-                                                        <Typography sx={{ fontWeight: 900, color: getScoreColor(test.score || 0) }}>
-                                                            {test.score || 0}/{test.totalScore || 100}
+                                                        <Typography sx={{ fontWeight: 900, color: getScoreColor(test.scorePct) }}>
+                                                            {test.scorePct}/{test.totalScore}
                                                         </Typography>
                                                     </TableCell>
+
                                                     <TableCell>
-                                                        <Chip label={getScoreLabel(test.score || 0)}
-                                                              sx={{ bgcolor: getScoreColor(test.score || 0) + "20", color: getScoreColor(test.score || 0), fontWeight: 700 }} />
+                                                        <Chip
+                                                            label={getScoreLabel(test.scorePct)}
+                                                            sx={{
+                                                                bgcolor: getScoreColor(test.scorePct) + "20",
+                                                                color: getScoreColor(test.scorePct),
+                                                                fontWeight: 700,
+                                                            }}
+                                                        />
                                                     </TableCell>
+
                                                     <TableCell>
-                                                        <IconButton size="small" onClick={() => handleViewDetail(test)}
-                                                                    sx={{ bgcolor: COLORS.primaryBlue + "10", "&:hover": { bgcolor: COLORS.primaryBlue + "20" } }}>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleViewDetail(test)}
+                                                            sx={{ bgcolor: COLORS.primaryBlue + "10", "&:hover": { bgcolor: COLORS.primaryBlue + "20" } }}
+                                                        >
                                                             <Visibility sx={{ color: COLORS.primaryBlue }} />
                                                         </IconButton>
                                                     </TableCell>
+
                                                     <TableCell>
                                                         <IconButton size="small" onClick={() => handleExpandRow(id)}>
                                                             {expandedRow === id ? <ExpandLess /> : <ExpandMore />}
                                                         </IconButton>
                                                     </TableCell>
                                                 </TableRow>
+
                                                 <TableRow>
                                                     <TableCell colSpan={8} sx={{ p: 0, border: 0 }}>
                                                         <Collapse in={expandedRow === id} timeout="auto" unmountOnExit>
                                                             <Box sx={{ p: 3, bgcolor: COLORS.bgLight }}>
                                                                 <Grid container spacing={3}>
                                                                     {[
-                                                                        { label: "Thời gian", value: `${test.duration || 0} phút`, icon: Timer },
-                                                                        { label: "Tổng câu hỏi", value: `${test.questions || test.totalQuestions || 0} câu` },
-                                                                        { label: "Câu đúng", value: `${test.correctAnswers || 0}/${test.questions || test.totalQuestions || 0}`, icon: CheckCircle, color: COLORS.success },
-                                                                        { label: "Tỷ lệ đúng", value: `${(test.questions || test.totalQuestions) > 0 ? ((test.correctAnswers / (test.questions || test.totalQuestions)) * 100).toFixed(1) : 0}%` },
+                                                                        { label: "Thời gian", value: `${test.durationMinutes} phút`, icon: Timer },
+                                                                        { label: "Tổng câu hỏi", value: `${test.totalQuestions} câu` },
+                                                                        { label: "Câu đúng", value: `${test.correctAnswers}/${test.totalQuestions}`, icon: CheckCircle, color: COLORS.success },
+                                                                        { label: "Tỷ lệ đúng", value: `${test.accuracy}%` },
                                                                     ].map((item, i) => (
                                                                         <Grid item xs={12} md={3} key={i}>
                                                                             <Stack spacing={0.5}>
@@ -467,6 +643,12 @@ export default function UserReview() {
                                                                         </Grid>
                                                                     ))}
                                                                 </Grid>
+
+                                                                {test.totalQuestions > 0 && test._raw?.correctAnswers == null && test._raw?.correctCount == null && (
+                                                                    <Alert severity="info" sx={{ mt: 2 }}>
+                                                                        “Câu đúng” đang hiển thị theo ước tính dựa trên điểm phần trăm vì BE chưa trả trường correctCount.
+                                                                    </Alert>
+                                                                )}
                                                             </Box>
                                                         </Collapse>
                                                     </TableCell>
@@ -478,6 +660,7 @@ export default function UserReview() {
                             </TableBody>
                         </Table>
                     </TableContainer>
+
                     <TablePagination
                         component="div"
                         count={filteredTests.length}
@@ -491,56 +674,48 @@ export default function UserReview() {
                 </Paper>
 
                 {/* Detail Dialog */}
-                <Dialog open={detailDialogOpen} onClose={handleCloseDetail} maxWidth="md" fullWidth
-                        PaperProps={{ sx: { borderRadius: "16px" } }}>
+                <Dialog open={detailDialogOpen} onClose={handleCloseDetail} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: "16px" } }}>
                     <DialogTitle>
                         <Typography sx={{ fontWeight: 900 }}>Chi tiết bài test</Typography>
                     </DialogTitle>
                     <DialogContent>
                         {selectedTest && (
                             <Box>
-                                <Typography sx={{ fontWeight: 700, fontSize: 20, mb: 2 }}>
-                                    {selectedTest.name || selectedTest.examName}
-                                </Typography>
+                                <Typography sx={{ fontWeight: 700, fontSize: 20, mb: 2 }}>{selectedTest.name}</Typography>
                                 <Divider sx={{ mb: 2 }} />
                                 <Grid container spacing={2}>
                                     <Grid item xs={6}>
                                         <Typography sx={{ color: "#707EAE", fontWeight: 700, mb: 0.5 }}>Module</Typography>
-                                        <Chip label={selectedTest.module || selectedTest.moduleName || "N/A"} />
+                                        <Chip label={selectedTest.module} />
                                     </Grid>
                                     <Grid item xs={6}>
                                         <Typography sx={{ color: "#707EAE", fontWeight: 700, mb: 0.5 }}>Lớp học</Typography>
-                                        <Typography sx={{ fontWeight: 700 }}>
-                                            {selectedTest.className || selectedTest.class || "N/A"}
-                                        </Typography>
+                                        <Typography sx={{ fontWeight: 700 }}>{selectedTest.className}</Typography>
                                     </Grid>
                                     <Grid item xs={6}>
                                         <Typography sx={{ color: "#707EAE", fontWeight: 700, mb: 0.5 }}>Ngày làm bài</Typography>
-                                        <Typography sx={{ fontWeight: 700 }}>
-                                            {formatDateTime(selectedTest.date || selectedTest.submitTime)}
-                                        </Typography>
+                                        <Typography sx={{ fontWeight: 700 }}>{formatDateTime(selectedTest.submitTime || selectedTest.startTime)}</Typography>
                                     </Grid>
                                     <Grid item xs={6}>
                                         <Typography sx={{ color: "#707EAE", fontWeight: 700, mb: 0.5 }}>Thời gian</Typography>
-                                        <Typography sx={{ fontWeight: 700 }}>{selectedTest.duration || 0} phút</Typography>
+                                        <Typography sx={{ fontWeight: 700 }}>{selectedTest.durationMinutes} phút</Typography>
                                     </Grid>
                                     <Grid item xs={6}>
                                         <Typography sx={{ color: "#707EAE", fontWeight: 700, mb: 0.5 }}>Điểm số</Typography>
-                                        <Typography sx={{ fontWeight: 900, fontSize: 24, color: getScoreColor(selectedTest.score || 0) }}>
-                                            {selectedTest.score || 0}/{selectedTest.totalScore || 100}
+                                        <Typography sx={{ fontWeight: 900, fontSize: 24, color: getScoreColor(selectedTest.scorePct) }}>
+                                            {selectedTest.scorePct}/{selectedTest.totalScore}
                                         </Typography>
                                     </Grid>
                                     <Grid item xs={6}>
                                         <Typography sx={{ color: "#707EAE", fontWeight: 700, mb: 0.5 }}>Kết quả</Typography>
-                                        <Chip label={getScoreLabel(selectedTest.score || 0)}
-                                              sx={{ bgcolor: getScoreColor(selectedTest.score || 0) + "20", color: getScoreColor(selectedTest.score || 0), fontWeight: 700 }} />
+                                        <Chip
+                                            label={getScoreLabel(selectedTest.scorePct)}
+                                            sx={{ bgcolor: getScoreColor(selectedTest.scorePct) + "20", color: getScoreColor(selectedTest.scorePct), fontWeight: 700 }}
+                                        />
                                     </Grid>
                                     <Grid item xs={12}>
                                         <Alert severity="info" sx={{ mt: 2 }}>
-                                            Bạn đã trả lời đúng {selectedTest.correctAnswers || 0}/{selectedTest.questions || selectedTest.totalQuestions || 0} câu hỏi
-                                            ({(selectedTest.questions || selectedTest.totalQuestions) > 0
-                                            ? ((selectedTest.correctAnswers / (selectedTest.questions || selectedTest.totalQuestions)) * 100).toFixed(1)
-                                            : 0}%)
+                                            Bạn trả lời đúng {selectedTest.correctAnswers}/{selectedTest.totalQuestions} câu ({selectedTest.accuracy}%)
                                         </Alert>
                                     </Grid>
                                 </Grid>
@@ -548,8 +723,7 @@ export default function UserReview() {
                         )}
                     </DialogContent>
                     <DialogActions sx={{ p: 2 }}>
-                        <Button onClick={handleCloseDetail} variant="contained"
-                                sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700 }}>
+                        <Button onClick={handleCloseDetail} variant="contained" sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700 }}>
                             Đóng
                         </Button>
                     </DialogActions>
