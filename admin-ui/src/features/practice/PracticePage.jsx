@@ -789,7 +789,7 @@ export default function PracticePage() {
                 </Box>
             )}
 
-            <PracticeReviewDialog open={reviewOpen} onClose={() => setReviewOpen(false)} reviewData={reviewData} />
+            <PracticeReviewDialog open={reviewOpen} onClose={() => setReviewOpen(false)} review={reviewData} />
             <GlobalLoading open={loading} message={loadingMessage} />
         </Box>
     );

@@ -1,3 +1,4 @@
+// src/features/practice/components/PracticeResult.jsx
 import React, { useMemo } from "react";
 import { Box, Button, Paper, Typography, Divider, Chip, Stack } from "@mui/material";
 
@@ -11,14 +12,17 @@ export default function PracticeResult({
     const earned = useMemo(() => Number(result?.earnedPoints ?? 0), [result]);
     const totalPoints = useMemo(() => Number(result?.totalPoints ?? 0), [result]);
 
-    // % chuẩn: ưu tiên earned/total (chính xác cả mixed), fallback về result.score (0..100)
+    // ✅ BE score là source-of-truth (0..100). Fallback earned/total nếu thiếu score.
     const percent = useMemo(() => {
+        const p = Number(result?.score);
+        if (Number.isFinite(p)) return Math.max(0, Math.min(100, p));
+
         if (totalPoints > 0) {
-            const p = (earned / totalPoints) * 100;
-            return Math.max(0, Math.min(100, p));
+            const x = (earned / totalPoints) * 100;
+            return Math.max(0, Math.min(100, x));
         }
-        const p = Number(result?.score ?? 0);
-        return Math.max(0, Math.min(100, p));
+
+        return 0;
     }, [earned, totalPoints, result]);
 
     const percentText = useMemo(() => `${percent.toFixed(1)}%`, [percent]);
@@ -33,22 +37,20 @@ export default function PracticeResult({
     const passed = useMemo(() => percent >= 50, [percent]);
 
     const statusLabel = useMemo(() => {
-        // nếu BE trả status PASSED/FAILED thì ưu tiên
         const s = String(result?.status ?? "").toUpperCase();
         if (s === "PASSED") return "Passed";
         if (s === "FAILED") return "Failed";
         return passed ? "Passed" : "Failed";
     }, [result, passed]);
 
-    const statusColor = useMemo(() => (statusLabel === "Passed" ? "#1B5E20" : "#B00020"), [statusLabel]);
+    const statusColor = useMemo(
+        () => (statusLabel === "Passed" ? "#1B5E20" : "#B00020"),
+        [statusLabel]
+    );
 
-    // feedback hệ thống (rule-based)
     const feedback = useMemo(() => String(result?.feedback ?? "").trim(), [result]);
-
-    // AI feedback tổng quan (giải thích sai + gợi ý đọc lại)
     const aiFeedback = useMemo(() => String(result?.aiFeedback ?? "").trim(), [result]);
 
-    // UI phụ: vẫn giữ “x / y câu” nếu m có numberOfQuestions (nhưng mixed thì nó không phản ánh điểm)
     const totalQuestions = numberOfQuestions ?? 0;
 
     return (
@@ -77,14 +79,11 @@ export default function PracticeResult({
                         }}
                     />
                     <Chip label={percentText} sx={{ fontWeight: 900 }} />
-                    {totalQuestions > 0 ? (
-                        <Chip label={`Số câu: ${totalQuestions}`} sx={{ fontWeight: 900 }} />
-                    ) : null}
+                    {totalQuestions > 0 ? <Chip label={`Số câu: ${totalQuestions}`} sx={{ fontWeight: 900 }} /> : null}
                 </Stack>
 
                 <Divider sx={{ my: 2 }} />
 
-                {/* ✅ Yêu cầu hiển thị */}
                 <Box sx={{ display: "grid", gap: 0.75 }}>
                     <Typography sx={{ fontWeight: 900, color: "#1B2559" }}>
                         Điểm (thang 10):{" "}
@@ -99,7 +98,7 @@ export default function PracticeResult({
                             {earned}/{totalPoints > 0 ? totalPoints : "?"}
                         </Box>{" "}
                         <Box component="span" sx={{ color: "#6a26f1", fontWeight: 800 }}>
-                            ({totalPoints > 0 ? `${((earned / totalPoints) * 100).toFixed(1)}%` : percentText})
+                            ({percentText})
                         </Box>
                     </Typography>
 
@@ -107,23 +106,19 @@ export default function PracticeResult({
                         Status:{" "}
                         <Box component="span" sx={{ color: statusColor }}>
                             {statusLabel}
-                        </Box>{" "}
+                        </Box>
                     </Typography>
                 </Box>
 
                 <Divider sx={{ my: 2 }} />
 
-                {/* Nhận xét hệ thống */}
-                <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
-                    Nhận xét hệ thống
-                </Typography>
+                <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>Nhận xét hệ thống</Typography>
                 <Typography sx={{ mt: 1, color: "#252525", fontWeight: 600, whiteSpace: "pre-wrap" }}>
                     {feedback || "Chưa có nhận xét."}
                 </Typography>
 
                 <Divider sx={{ my: 2 }} />
 
-                {/* ✅ Nhận xét AI */}
                 <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
                     Nhận xét AI (giải thích sai + gợi ý đọc lại)
                 </Typography>
