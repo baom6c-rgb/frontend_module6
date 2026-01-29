@@ -1,18 +1,21 @@
 // src/features/practice/components/PracticePlayer.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+    forwardRef,
+    useEffect,
+    useImperativeHandle,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import { Box, Button, Paper, Typography, Divider } from "@mui/material";
 import QuestionCard from "./QuestionCard";
-import CountdownTimer from "../../../components/common/CountdownTimer";
 
 const attemptStorageKey = (attemptId) => `practice_attempt_${attemptId}`;
 
-export default function PracticePlayer({
-                                           attemptDetail,
-                                           durationMinutes,
-                                           attemptId,
-                                           onBackToConfig,
-                                           onSubmit,
-                                       }) {
+const PracticePlayer = forwardRef(function PracticePlayer(
+    { attemptDetail, attemptId, onSubmit },
+    ref
+) {
     const questions = attemptDetail?.questions || [];
     const total = questions.length;
 
@@ -26,7 +29,6 @@ export default function PracticePlayer({
      */
     const [answersMap, setAnswersMap] = useState({});
 
-    // ===== Utils =====
     const getQid = (q) => q?.questionId ?? q?.id ?? null;
 
     const currentQuestion = questions[index];
@@ -44,33 +46,30 @@ export default function PracticePlayer({
             const a = answersMap[qid];
 
             if (type === "MCQ") return !!a?.selectedAnswer;
-            // ESSAY
+            // ESSAY / SHORT_ANSWER
             return !!(a?.textAnswer && a.textAnswer.trim().length > 0);
         });
     }, [questions, answersMap]);
 
-    // ===== Persist startTs + answers (reload giữ giờ + giữ đáp án) =====
-    const startTimestamp = useMemo(() => {
-        if (!attemptId) return null;
-        try {
-            const raw = localStorage.getItem(attemptStorageKey(attemptId));
-            const parsed = raw ? JSON.parse(raw) : null;
-            const ts = parsed?.startTs;
-            return typeof ts === "number" ? ts : null;
-        } catch {
-            return null;
-        }
-    }, [attemptId]);
-
+    // ===== Persist startTs + answers (reload giữ đáp án) =====
     useEffect(() => {
         if (!attemptId) return;
 
         try {
             const raw = localStorage.getItem(attemptStorageKey(attemptId));
             const parsed = raw ? JSON.parse(raw) : null;
+
             const savedAnswers = parsed?.answers;
             if (savedAnswers && typeof savedAnswers === "object") {
                 setAnswersMap(savedAnswers);
+            }
+
+            // Nếu chưa có startTs thì set (PracticePage thường set rồi, nhưng giữ an toàn)
+            if (!parsed?.startTs) {
+                localStorage.setItem(
+                    attemptStorageKey(attemptId),
+                    JSON.stringify({ startTs: Date.now(), answers: savedAnswers || {} })
+                );
             }
         } catch {
             // ignore
@@ -79,6 +78,7 @@ export default function PracticePlayer({
 
     useEffect(() => {
         if (!attemptId) return;
+
         try {
             const raw = localStorage.getItem(attemptStorageKey(attemptId));
             const parsed = raw ? JSON.parse(raw) : {};
@@ -94,10 +94,11 @@ export default function PracticePlayer({
         }
     }, [attemptId, answersMap]);
 
-    // ===== Prevent accidental reload/back =====
+    // ===== Prevent accidental reload/back (chỉ khi chưa submit) =====
+    const submittedRef = useRef(false);
+
     useEffect(() => {
         const handler = (e) => {
-            // chỉ cảnh báo khi đang làm và chưa submit
             if (submittedRef.current) return;
             e.preventDefault();
             e.returnValue = "";
@@ -106,15 +107,7 @@ export default function PracticePlayer({
         return () => window.removeEventListener("beforeunload", handler);
     }, []);
 
-    const durationSeconds = useMemo(() => {
-        const m = Number(durationMinutes);
-        if (!Number.isFinite(m) || m <= 0) return 0;
-        return m * 60;
-    }, [durationMinutes]);
-
-    // ===== Submit =====
-    const submittedRef = useRef(false);
-
+    // ===== Build answers =====
     const buildAnswersArray = () => {
         return questions.map((q) => {
             const qid = getQid(q);
@@ -124,7 +117,7 @@ export default function PracticePlayer({
             if (type === "MCQ") {
                 return { questionId: qid, selectedAnswer: a?.selectedAnswer ?? null };
             }
-            // ESSAY
+            // ESSAY / SHORT_ANSWER
             return { questionId: qid, textAnswer: a?.textAnswer ?? "" };
         });
     };
@@ -137,6 +130,12 @@ export default function PracticePlayer({
         await onSubmit?.(answersArray, meta);
     };
 
+    // ===== Expose methods for "timer outside" to call =====
+    useImperativeHandle(ref, () => ({
+        getAnswersArray: () => buildAnswersArray(),
+        submit: (meta) => doSubmit(meta),
+    }));
+
     // ===== Render =====
     if (!questions.length) {
         return (
@@ -144,11 +143,6 @@ export default function PracticePlayer({
                 <Typography sx={{ fontWeight: 800, color: "#6C757D" }}>
                     Không có câu hỏi để làm.
                 </Typography>
-                <Box sx={{ mt: 2 }}>
-                    <Button variant="outlined" onClick={onBackToConfig}>
-                        Quay lại cấu hình
-                    </Button>
-                </Box>
             </Paper>
         );
     }
@@ -181,29 +175,15 @@ export default function PracticePlayer({
                 </Box>
 
                 <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
-                    {/* Timer: 10s cuối đỏ + hết giờ auto submit */}
-                    {startTimestamp && durationSeconds > 0 ? (
-                        <CountdownTimer
-                            startTimestamp={startTimestamp}
-                            durationSeconds={durationSeconds}
-                            dangerThreshold={10}
-                            onExpire={() => doSubmit({ timedOut: true })}
-                        />
-                    ) : (
-                        <Box sx={{ px: 1.5, py: 0.75, borderRadius: 2, border: "1px solid #E3E8EF" }}>
-                            <Typography sx={{ fontWeight: 900, color: "#6C757D" }}>--:--</Typography>
-                        </Box>
-                    )}
-
-                    <Button variant="outlined" onClick={onBackToConfig} disabled={submittedRef.current}>
-                        Quay lại cấu hình
-                    </Button>
-
                     <Button
                         variant="contained"
                         onClick={() => doSubmit({ timedOut: false })}
                         disabled={!isAllAnswered || submittedRef.current}
-                        sx={{ background: "#EC5E32", fontWeight: 900 }}
+                        sx={{
+                            background: "#EC5E32",
+                            fontWeight: 900,
+                            "&:hover": { background: "#d94f28" },
+                        }}
                     >
                         Nộp bài
                     </Button>
@@ -218,7 +198,10 @@ export default function PracticePlayer({
                 value={currentQid ? answersMap[currentQid] : null}
                 onChange={(nextValue) => {
                     if (!currentQid) return;
-                    setAnswersMap((prev) => ({ ...prev, [currentQid]: { ...(prev[currentQid] || {}), ...nextValue } }));
+                    setAnswersMap((prev) => ({
+                        ...prev,
+                        [currentQid]: { ...(prev[currentQid] || {}), ...nextValue },
+                    }));
                 }}
             />
 
@@ -239,12 +222,8 @@ export default function PracticePlayer({
                     Câu tiếp
                 </Button>
             </Box>
-
-            {!startTimestamp && (
-                <Typography sx={{ mt: 2, color: "#dc3545", fontWeight: 700 }}>
-                    Không tìm thấy thời điểm bắt đầu (startTs). Hãy kiểm tra PracticePage đã lưu localStorage sau khi start.
-                </Typography>
-            )}
         </Paper>
     );
-}
+});
+
+export default PracticePlayer;

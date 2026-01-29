@@ -115,6 +115,9 @@ export default function PracticePage() {
     const [reviewOpen, setReviewOpen] = useState(false);
     const [reviewData, setReviewData] = useState(null);
 
+    // ✅ player ref để timer ngoài gọi auto-submit
+    const playerRef = useRef(null);
+
     const messagesEndRef = useRef(null);
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -183,11 +186,6 @@ export default function PracticePage() {
         [appendMessage, attemptId]
     );
 
-    // Hard reset (nếu cần dùng chỗ khác)
-    const resetAll = useCallback(() => {
-        resetPracticeState({ keepMessages: false });
-    }, [resetPracticeState]);
-
     async function waitForExtractedTextOrReady(id) {
         const MAX_TRIES = 25;
         const SLEEP_MS = 700;
@@ -246,7 +244,11 @@ export default function PracticePage() {
                 console.error(e);
                 const status = e?.response?.status;
                 const serverMsg =
-                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Preview failed";
+                    e?.response?.data?.message ||
+                    e?.response?.data?.error ||
+                    e?.response?.data ||
+                    e?.message ||
+                    "Preview failed";
                 showToast(`Không tạo được preview${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
                 appendMessage({ role: "assistant", text: "Lỗi tạo preview (AI/Server). Thử đổi học liệu hoặc gửi lại." });
                 return { ok: false };
@@ -290,7 +292,11 @@ export default function PracticePage() {
                 console.error(e);
                 const status = e?.response?.status;
                 const serverMsg =
-                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Upload failed";
+                    e?.response?.data?.message ||
+                    e?.response?.data?.error ||
+                    e?.response?.data ||
+                    e?.message ||
+                    "Upload failed";
                 showToast(`Upload học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
                 appendMessage({ role: "assistant", text: "Không upload/đọc được file. Kiểm tra định dạng/size nhé." });
             } finally {
@@ -339,7 +345,11 @@ export default function PracticePage() {
                 console.error(e);
                 const status = e?.response?.status;
                 const serverMsg =
-                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Create material failed";
+                    e?.response?.data?.message ||
+                    e?.response?.data?.error ||
+                    e?.response?.data ||
+                    e?.message ||
+                    "Create material failed";
                 showToast(`Gửi học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
                 appendMessage({ role: "assistant", text: "Không tạo được học liệu từ text này. Thử lại nhé." });
             } finally {
@@ -385,10 +395,7 @@ export default function PracticePage() {
                             ? data.startTimestamp
                             : Date.now();
 
-                localStorage.setItem(
-                    attemptStorageKey(newAttemptId),
-                    JSON.stringify({ startTs: serverStartTs, answers: {} })
-                );
+                localStorage.setItem(attemptStorageKey(newAttemptId), JSON.stringify({ startTs: serverStartTs, answers: {} }));
 
                 const detailRes = await practiceApi.getAttempt(newAttemptId);
                 const detail = unwrap(detailRes);
@@ -403,9 +410,12 @@ export default function PracticePage() {
 
                 const status = e?.response?.status;
                 const msg =
-                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Start attempt failed";
+                    e?.response?.data?.message ||
+                    e?.response?.data?.error ||
+                    e?.response?.data ||
+                    e?.message ||
+                    "Start attempt failed";
 
-                // ✅ Preview expired -> regenerate 1 lần rồi start lại
                 if ((status === 410 || String(msg).includes("Preview expired")) && !retried) {
                     appendMessage({ role: "assistant", text: "Preview đã hết hạn. Mình tạo preview mới rồi bắt đầu lại nhé." });
 
@@ -455,7 +465,11 @@ export default function PracticePage() {
                 console.error(e);
                 const status = e?.response?.status;
                 const serverMsg =
-                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Submit failed";
+                    e?.response?.data?.message ||
+                    e?.response?.data?.error ||
+                    e?.response?.data ||
+                    e?.message ||
+                    "Submit failed";
                 showToast(`Nộp bài thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
                 appendMessage({ role: "assistant", text: "Không nộp bài được. Thử lại nhé." });
             } finally {
@@ -476,7 +490,11 @@ export default function PracticePage() {
             console.error(e);
             const status = e?.response?.status;
             const serverMsg =
-                e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Review failed";
+                e?.response?.data?.message ||
+                e?.response?.data?.error ||
+                e?.response?.data ||
+                e?.message ||
+                "Review failed";
             showToast(`Không tải được review${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
         }
     }, [attemptId, showToast]);
@@ -492,7 +510,6 @@ export default function PracticePage() {
         }
     }, [attemptId]);
 
-    // ✅ FIX: split view không phụ thuộc mode nữa
     const isSplit = Boolean(previewQuestions?.length || previewToken || attemptId || result);
 
     const normalizedPreview = useMemo(
@@ -563,7 +580,12 @@ export default function PracticePage() {
             ) : (
                 <Stack spacing={1}>
                     {(q.options || []).map((opt) => (
-                        <Button key={opt.key} variant="outlined" disabled sx={{ justifyContent: "flex-start", textTransform: "none", borderRadius: 2 }}>
+                        <Button
+                            key={opt.key}
+                            variant="outlined"
+                            disabled
+                            sx={{ justifyContent: "flex-start", textTransform: "none", borderRadius: 2 }}
+                        >
                             <b style={{ marginRight: 10 }}>{opt.key}.</b> {opt.text}
                         </Button>
                     ))}
@@ -582,9 +604,13 @@ export default function PracticePage() {
                         durationMinutes={durationMinutes}
                         onChangeQuestionCount={(v) => setQuestionCount(Number(v))}
                         onChangeDurationMinutes={(v) => setDurationMinutes(Number(v))}
-                        attemptId={attemptId}
-                        attemptStartTs={attemptStartTs}
-                        onTimeExpired={() => {}}
+                        // ✅ timer chỉ hiển thị khi đang làm bài -> nộp xong tự dừng
+                        attemptId={mode === MODE.DOING ? attemptId : null}
+                        attemptStartTs={mode === MODE.DOING ? attemptStartTs : null}
+                        onTimeExpired={() => {
+                            // ✅ source-of-truth timer ngoài: hết giờ -> submit từ PracticePlayer
+                            playerRef.current?.submit?.({ timedOut: true });
+                        }}
                     />
                 </Box>
 
@@ -695,14 +721,8 @@ export default function PracticePage() {
 
                     <Stack direction="row" spacing={1}>
                         <Tooltip title="Đổi học liệu">
-                            {/* ✅ FIX: dùng resetPracticeState để không rớt UI */}
                             <IconButton onClick={() => resetPracticeState({ keepMessages: true })} size="small">
                                 <RestartAltRoundedIcon />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title={isCanvasOpen ? "Đóng Canvas" : "Mở Canvas"}>
-                            <IconButton onClick={() => setIsCanvasOpen((v) => !v)} size="small">
-                                {isCanvasOpen ? <ChevronRightRoundedIcon /> : <ChevronLeftRoundedIcon />}
                             </IconButton>
                         </Tooltip>
                     </Stack>
@@ -745,10 +765,9 @@ export default function PracticePage() {
 
                     {mode === MODE.DOING && (
                         <PracticePlayer
+                            ref={playerRef}
                             attemptDetail={attemptDetail}
-                            durationMinutes={durationMinutes}
                             attemptId={attemptId}
-                            onBackToConfig={() => setMode(MODE.PREVIEW)}
                             onSubmit={(answersArray, meta) => submitAttempt(answersArray, meta)}
                         />
                     )}
@@ -778,12 +797,28 @@ export default function PracticePage() {
                             onClick={() => setIsCanvasOpen((v) => !v)}
                             sx={{
                                 borderRadius: 3,
-                                bgcolor: "#fff",
-                                border: `1px solid ${COLORS.border}`,
-                                boxShadow: "0 10px 30px rgba(15,23,42,0.10)",
+                                bgcolor: "#EC5E32",
+                                color: "#fff",
+                                border: "1px solid #EC5E32",
+                                boxShadow: "0 10px 30px rgba(236,94,50,0.35)",
+                                transition: "all 0.2s ease",
+                                "&:hover": {
+                                    bgcolor: "#d94f28",
+                                    borderColor: "#d94f28",
+                                    boxShadow: "0 12px 34px rgba(236,94,50,0.45)",
+                                },
+                                "&:active": {
+                                    bgcolor: "#c74724",
+                                    borderColor: "#c74724",
+                                    boxShadow: "0 6px 18px rgba(236,94,50,0.35)",
+                                },
                             }}
                         >
-                            {isCanvasOpen ? <ChevronRightRoundedIcon /> : <ChevronLeftRoundedIcon />}
+                            {isCanvasOpen ? (
+                                <ChevronRightRoundedIcon sx={{ color: "#fff" }} />
+                            ) : (
+                                <ChevronLeftRoundedIcon sx={{ color: "#fff" }} />
+                            )}
                         </IconButton>
                     </Tooltip>
                 </Box>
