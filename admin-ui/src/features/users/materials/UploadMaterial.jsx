@@ -1,7 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
-    Box, Paper, Typography, Button, Alert,
-    CircularProgress, LinearProgress
+    Box,
+    Typography,
+    Button,
+    Alert,
+    CircularProgress,
+    LinearProgress,
+    Divider,
+    Stack,
+    Chip,
 } from "@mui/material";
 import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import { materialApi } from "../../../api/materialApi";
@@ -15,8 +22,14 @@ export default function UserMaterialsUpload({ onUploaded }) {
     const [progress, setProgress] = useState(0);
     const [msg, setMsg] = useState({ type: "", text: "" });
 
-    // local state (không bắt buộc)
+    // local state (optional)
     const [materialId, setMaterialId] = useState(null);
+
+    const fileLabel = useMemo(() => {
+        if (!file) return "";
+        const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+        return `${file.name} (${sizeMB} MB)`;
+    }, [file]);
 
     const resetFileInput = (e) => {
         if (e?.target) e.target.value = "";
@@ -30,6 +43,7 @@ export default function UserMaterialsUpload({ onUploaded }) {
             setMsg({ type: "error", text: "File quá dung lượng (tối đa 10MB), không thể upload." });
             setFile(null);
             setProgress(0);
+            setMaterialId(null);
             resetFileInput(e);
             return;
         }
@@ -38,6 +52,7 @@ export default function UserMaterialsUpload({ onUploaded }) {
             setMsg({ type: "error", text: "Chọn file sai định dạng. Chỉ chọn được PDF / DOCX / TXT." });
             setFile(null);
             setProgress(0);
+            setMaterialId(null);
             resetFileInput(e);
             return;
         }
@@ -70,7 +85,6 @@ export default function UserMaterialsUpload({ onUploaded }) {
 
             // ✅ QUAN TRỌNG: báo cho parent biết materialId để auto-next step
             if (id) onUploaded?.(id);
-
         } catch (e) {
             const data = e.response?.data;
             setMsg({
@@ -83,57 +97,108 @@ export default function UserMaterialsUpload({ onUploaded }) {
     };
 
     return (
-        <Box sx={{ p: 3 }}>
-            <Paper sx={{ p: 3, borderRadius: 3 }}>
-                <Typography variant="h5" sx={{ fontWeight: 800, color: "#1B2559" }}>
-                    Upload tài liệu học (PDF / DOCX / TXT)
+        <Box sx={{ display: "grid", gap: 2 }}>
+            {/* Header */}
+            <Stack spacing={0.75}>
+                <Typography sx={{ fontWeight: 900, color: "#1B2559", fontSize: 20 }}>
+                    Upload tài liệu học
                 </Typography>
+                <Typography sx={{ color: "#6C757D", fontWeight: 600 }}>
+                    Hỗ trợ PDF / DOCX / TXT. Hệ thống sẽ tự trích xuất văn bản để AI tạo câu hỏi.
+                </Typography>
+            </Stack>
 
+            <Divider />
+
+            {/* Pick file */}
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.25, alignItems: "center" }}>
                 <Button
-                    sx={{ mt: 2 }}
                     variant="outlined"
                     component="label"
                     startIcon={<UploadFileRoundedIcon />}
                     disabled={loading}
+                    sx={{
+                        borderRadius: 2,
+                        fontWeight: 800,
+                        borderColor: "#E3E8EF",
+                        color: "#1B2559",
+                        "&:hover": { borderColor: "#2E2D84" },
+                    }}
                 >
                     Chọn file
                     <input hidden type="file" onChange={handlePick} accept=".pdf,.docx,.txt" />
                 </Button>
 
-                {file && (
-                    <Typography sx={{ mt: 1, fontWeight: 600, color: "#2B3674" }}>
-                        📄 {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                {file ? (
+                    <Chip
+                        label={`📄 ${fileLabel}`}
+                        sx={{
+                            fontWeight: 800,
+                            bgcolor: "#F7F9FC",
+                            color: "#2B3674",
+                            border: "1px solid #E3E8EF",
+                        }}
+                    />
+                ) : (
+                    <Chip
+                        label="Chưa chọn file"
+                        sx={{
+                            fontWeight: 800,
+                            bgcolor: "#F7F9FC",
+                            color: "#6C757D",
+                            border: "1px solid #E3E8EF",
+                        }}
+                    />
+                )}
+            </Box>
+
+            {/* Progress */}
+            {loading && (
+                <Box sx={{ mt: 0.5 }}>
+                    <Typography sx={{ mb: 1, fontWeight: 700, color: "#1B2559" }}>
+                        Đang upload... {progress}%
                     </Typography>
-                )}
-
-                {loading && (
-                    <Box sx={{ mt: 2 }}>
-                        <Typography sx={{ mb: 1, fontWeight: 600 }}>
-                            Đang upload... {progress}%
-                        </Typography>
-                        <LinearProgress variant="determinate" value={progress} />
-                    </Box>
-                )}
-
-                {msg.text && <Alert severity={msg.type} sx={{ mt: 2 }}>{msg.text}</Alert>}
-
-                <Box sx={{ mt: 2 }}>
-                    <Button variant="contained" onClick={handleUpload} disabled={loading}>
-                        {loading ? <CircularProgress size={22} /> : "Upload"}
-                    </Button>
+                    <LinearProgress variant="determinate" value={progress} />
                 </Box>
+            )}
 
-                <Alert severity="info" sx={{ mt: 2 }}>
-                    Chỉ hỗ trợ PDF / DOCX / TXT, dung lượng tối đa 10MB. Upload xong hệ thống tự trích xuất & lưu DB.
+            {/* Message */}
+            {msg.text && (
+                <Alert severity={msg.type} sx={{ mt: 0.5 }}>
+                    {msg.text}
                 </Alert>
+            )}
 
-                {/* (optional) debug */}
-                {materialId && (
-                    <Typography sx={{ mt: 1, fontWeight: 700, color: "#6C757D" }}>
-                        MaterialId: {materialId}
-                    </Typography>
-                )}
-            </Paper>
+            {/* Actions */}
+            <Box sx={{ display: "flex", gap: 1.25, justifyContent: "flex-end", alignItems: "center" }}>
+                <Button
+                    variant="contained"
+                    onClick={handleUpload}
+                    disabled={loading || !file}
+                    sx={{
+                        bgcolor: "#FF8C00",
+                        fontWeight: 900,
+                        borderRadius: 2,
+                        px: 2.5,
+                        "&:hover": { bgcolor: "#e67e00" },
+                        "&.Mui-disabled": { bgcolor: "#E9ECEF", color: "#6C757D" },
+                    }}
+                >
+                    {loading ? <CircularProgress size={22} /> : "Upload"}
+                </Button>
+            </Box>
+
+            {/* Info */}
+            <Alert severity="info">
+                Chỉ hỗ trợ PDF / DOCX / TXT, dung lượng tối đa 10MB. Upload xong hệ thống tự trích xuất & lưu DB.
+            </Alert>
+
+            {/* Optional debug */}
+            {materialId && (
+                <Typography sx={{ fontWeight: 800, color: "#6C757D" }}>
+                    MaterialId: {materialId}
+                </Typography>
+            )}
         </Box>
     );
 }

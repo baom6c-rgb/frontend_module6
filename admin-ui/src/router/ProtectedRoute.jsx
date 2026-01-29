@@ -26,7 +26,6 @@ export default function ProtectedRoute({ allowedRoles }) {
         useSelector((state) => state.auth || {});
 
     const token = reduxToken || localStorage.getItem("accessToken");
-
     const storedUser = getStoredUser();
 
     const rawStatus =
@@ -63,7 +62,12 @@ export default function ProtectedRoute({ allowedRoles }) {
         return isCompleteProfilePath ? <Outlet /> : <Navigate to="/complete-profile" replace />;
     }
 
-    // For non-ACTIVE statuses (REJECTED/BLOCKED/UNKNOWN), back to login
+    // ✅ Optional: if later BE returns NOT_FOUND after reject-delete polling
+    if (status === "NOT_FOUND") {
+        return <Navigate to="/login" replace />;
+    }
+
+    // For non-ACTIVE statuses (BLOCKED/UNKNOWN), back to login
     if (status && status !== "ACTIVE") {
         return <Navigate to="/login" replace />;
     }

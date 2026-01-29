@@ -1,380 +1,796 @@
 // src/features/practice/PracticePage.jsx
-import React, { useMemo, useState, useCallback } from "react";
-import { Box, Paper, Typography, Stepper, Step, StepLabel, Divider } from "@mui/material";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+    Box,
+    Paper,
+    Typography,
+    TextField,
+    IconButton,
+    Button,
+    Divider,
+    Stack,
+    Avatar,
+    Tooltip,
+} from "@mui/material";
+
+import SendRoundedIcon from "@mui/icons-material/SendRounded";
+import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
+import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
+import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
+import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
+import QuizRoundedIcon from "@mui/icons-material/QuizRounded";
+import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
 
 import { practiceApi } from "../../api/practiceApi";
+import { materialApi } from "../../api/materialApi";
 
-// Components
-import MaterialStep from "./components/MaterialStep";
-import PracticeConfigPanel from "./components/PracticeConfigPanel";
-import PracticePreviewDialog from "./components/PracticePreviewDialog";
+import GlobalLoading from "../../components/common/GlobalLoading";
+import { useToast } from "../../components/common/AppToast";
+
+import PracticeHeaderConfig from "./components/chatbot/PracticeHeaderConfig";
 import PracticePlayer from "./components/PracticePlayer";
 import PracticeResult from "./components/PracticeResult";
 import PracticeReviewDialog from "./components/PracticeReviewDialog";
 
-// Common
-import GlobalLoading from "../../components/common/GlobalLoading";
-import { useToast } from "../../components/common/AppToast";
-
-const STEPS = ["Upload học liệu", "Cấu hình đề", "Làm bài", "Kết quả"];
-
-const STEP_KEYS = {
-    MATERIAL: 0,
-    CONFIG: 1,
-    DOING: 2,
-    RESULT: 3,
+const COLORS = {
+    border: "#E3E8EF",
+    textPrimary: "#1B2559",
+    textSecondary: "#6C757D",
+    orange: "#FF8C00",
+    orangeHover: "#e67e00",
+    bg: "#F8FAFC",
 };
+
+const MODE = {
+    IDLE: "IDLE",
+    PREVIEW: "PREVIEW",
+    DOING: "DOING",
+    RESULT: "RESULT",
+};
+
+const attemptStorageKey = (attemptId) => `practice_attempt_${attemptId}`;
+const unwrap = (res) => (res && typeof res === "object" && "data" in res ? res.data : res);
+
+function uid(prefix = "m") {
+    return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizePreviewQuestion(q, idx) {
+    const id = q?.questionId ?? q?.id ?? idx;
+    const type = (q?.questionType ?? q?.type ?? "MCQ").toString().toUpperCase();
+    const text = q?.question ?? q?.content ?? q?.text ?? q?.title ?? `Câu ${idx + 1}`;
+
+    let options = [];
+    if (Array.isArray(q?.options)) {
+        options = q.options.map((x, i) => ({ key: String.fromCharCode(65 + i), text: String(x) }));
+    } else if (q?.options && typeof q.options === "object") {
+        options = Object.entries(q.options).map(([k, v]) => ({ key: k, text: String(v) }));
+        const order = ["A", "B", "C", "D"];
+        options.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+    }
+
+    return { id, type, text, options };
+}
 
 export default function PracticePage() {
     const { showToast } = useToast();
 
-    const [activeStep, setActiveStep] = useState(STEP_KEYS.MATERIAL);
-
-    // ✅ global loading (Backdrop)
+    // ===== loading =====
     const [loading, setLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState("Vui lòng chờ...");
 
-    // ===== Step 1 (Material) =====
-    const [materialId, setMaterialId] = useState(null);
-
-    // ✅ prevent auto-next loop
-    const [materialReady, setMaterialReady] = useState(false);
-
-    // ===== Step 2 (Config) =====
+    // ===== config =====
     const [questionCount, setQuestionCount] = useState(10);
     const [durationMinutes, setDurationMinutes] = useState(15);
 
-    // Preview dialog
-    const [previewOpen, setPreviewOpen] = useState(false);
+    // ===== material =====
+    const [materialId, setMaterialId] = useState(null);
+    const materialIdRef = useRef(null);
+
+    // ===== preview =====
     const [previewQuestions, setPreviewQuestions] = useState([]);
-
-    // ✅ previewToken để start() dùng cache => tránh gọi AI lần 2
     const [previewToken, setPreviewToken] = useState("");
+    const previewTokenRef = useRef("");
 
-    // ===== Step 3 (Attempt) =====
+    // ===== chat =====
+    const [messages, setMessages] = useState([
+        {
+            id: uid("a"),
+            role: "assistant",
+            text: "Gửi học liệu (upload/paste). Mình sẽ tạo preview câu hỏi và mở Learning Canvas bên phải.",
+        },
+    ]);
+    const [input, setInput] = useState("");
+
+    // ===== split/canvas =====
+    const [mode, setMode] = useState(MODE.IDLE);
+    const [isCanvasOpen, setIsCanvasOpen] = useState(true);
+
+    // ===== attempt =====
     const [attemptId, setAttemptId] = useState(null);
     const [attemptDetail, setAttemptDetail] = useState(null);
 
-    // ===== Step 4 (Result) =====
+    // ===== result/review =====
     const [result, setResult] = useState(null);
-
-    // ✅ Review dialog
     const [reviewOpen, setReviewOpen] = useState(false);
     const [reviewData, setReviewData] = useState(null);
 
-    const canGenerate = useMemo(() => {
-        const n = Number(questionCount);
-        return !!materialId && Number.isFinite(n) && n >= 1;
-    }, [materialId, questionCount]);
+    const messagesEndRef = useRef(null);
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [messages]);
 
-    const buildConfigPayload = useCallback(() => {
-        return {
-            materialId,
+    const appendMessage = useCallback((msg) => {
+        setMessages((prev) => [...prev, { id: uid(msg.role?.[0] || "m"), ...msg }]);
+    }, []);
+
+    const configOk = useMemo(() => {
+        const n = Number(questionCount);
+        const d = Number(durationMinutes);
+        return Number.isFinite(n) && n >= 1 && Number.isFinite(d) && d >= 1;
+    }, [questionCount, durationMinutes]);
+
+    const buildConfigPayload = useCallback(
+        (matId) => ({
+            materialId: matId,
             numberOfQuestions: Number(questionCount),
             durationMinutes: Number(durationMinutes),
-        };
-    }, [materialId, questionCount, durationMinutes]);
+        }),
+        [questionCount, durationMinutes]
+    );
 
-    // ✅ reset preview khi đổi config (để tránh dùng token cũ sai cấu hình)
-    const resetPreviewCache = useCallback(() => {
-        setPreviewOpen(false);
-        setPreviewQuestions([]);
-        setPreviewToken("");
-    }, []);
+    // ✅ Reset data đúng cách, không làm "rớt UI"
+    const resetPracticeState = useCallback(
+        (opts = { keepMessages: true }) => {
+            if (attemptId) localStorage.removeItem(attemptStorageKey(attemptId));
 
-    const resetForNewMaterial = useCallback(() => {
-        setActiveStep(STEP_KEYS.MATERIAL);
+            // material
+            setMaterialId(null);
+            materialIdRef.current = null;
 
-        setMaterialId(null);
-        setMaterialReady(false);
+            // preview
+            setPreviewQuestions([]);
+            setPreviewToken("");
+            previewTokenRef.current = "";
 
-        setPreviewOpen(false);
-        setPreviewQuestions([]);
-        setPreviewToken("");
+            // attempt
+            setAttemptId(null);
+            setAttemptDetail(null);
 
-        setAttemptId(null);
-        setAttemptDetail(null);
+            // result/review
+            setResult(null);
+            setReviewOpen(false);
+            setReviewData(null);
 
-        setResult(null);
+            // back to upload mode
+            setMode(MODE.IDLE);
 
-        // ✅ reset review
-        setReviewOpen(false);
-        setReviewData(null);
+            // keep input to allow new paste right away
+            setInput("");
 
-        // optional: reset config default
-        setQuestionCount(10);
-        setDurationMinutes(15);
-    }, []);
+            // keep canvas open state stable
+            setIsCanvasOpen(true);
 
-    const resetForRetry = useCallback(() => {
-        setActiveStep(STEP_KEYS.CONFIG);
+            if (opts?.keepMessages) {
+                appendMessage({
+                    role: "assistant",
+                    text: "Ok! Gửi học liệu mới (upload/paste) để mình tạo bộ câu hỏi mới nhé.",
+                });
+            } else {
+                setMessages([{ id: uid("a"), role: "assistant", text: "Ok! Gửi học liệu mới để bắt đầu." }]);
+            }
+        },
+        [appendMessage, attemptId]
+    );
 
-        setPreviewOpen(false);
-        setPreviewQuestions([]);
-        setPreviewToken("");
+    // Hard reset (nếu cần dùng chỗ khác)
+    const resetAll = useCallback(() => {
+        resetPracticeState({ keepMessages: false });
+    }, [resetPracticeState]);
 
-        setAttemptId(null);
-        setAttemptDetail(null);
+    async function waitForExtractedTextOrReady(id) {
+        const MAX_TRIES = 25;
+        const SLEEP_MS = 700;
 
-        setResult(null);
-
-        // ✅ reset review
-        setReviewOpen(false);
-        setReviewData(null);
-    }, []);
-
-    // ===== Actions =====
-
-    const handleOpenPreview = async () => {
-        if (!canGenerate) {
-            showToast?.("Vui lòng upload học liệu và nhập số câu hợp lệ", "warning");
-            return;
+        for (let i = 0; i < MAX_TRIES; i++) {
+            try {
+                const res = await materialApi.getExtractedText(id);
+                const data = unwrap(res);
+                const t = typeof data === "string" ? data : data?.text ?? data?.extractedText ?? "";
+                if (t && t.trim().length > 0) return t.trim();
+            } catch {
+                // ignore
+            }
+            await new Promise((r) => setTimeout(r, SLEEP_MS));
         }
+        return "";
+    }
 
-        try {
-            setLoadingMessage("Đang sinh đề xem trước...");
+    const generatePreview = useCallback(
+        async (matId) => {
+            const effectiveMaterialId = matId ?? materialIdRef.current ?? materialId;
+
+            if (!effectiveMaterialId || !configOk) {
+                showToast("Chưa có học liệu hoặc cấu hình chưa hợp lệ.", "warning");
+                return { ok: false };
+            }
+
             setLoading(true);
+            setLoadingMessage("Đang tạo bộ câu hỏi (preview)…");
+            appendMessage({ role: "assistant", text: "Đang tạo bộ câu hỏi… (preview)" });
 
-            const res = await practiceApi.generatePreview(buildConfigPayload());
+            try {
+                const res = await practiceApi.generatePreview(buildConfigPayload(effectiveMaterialId));
+                const data = unwrap(res);
 
-            // ✅ shape BE: { previewToken, questions, ... }
-            const token = res.data?.previewToken ?? "";
-            const questions = res.data?.questions ?? [];
+                const qs = data?.questions || data?.previewQuestions || [];
+                const token = data?.previewToken || data?.token || data?.preview_token || "";
 
-            setPreviewToken(token);
-            setPreviewQuestions(Array.isArray(questions) ? questions : []);
-            setPreviewOpen(true);
+                if (!Array.isArray(qs) || qs.length === 0) throw new Error("Preview questions empty");
+                if (!token) throw new Error("Missing previewToken from server");
 
-            showToast?.("Đã sinh đề xem trước", "success");
-        } catch (e) {
-            const msg =
-                typeof e.response?.data === "string"
-                    ? e.response.data
-                    : "Không thể sinh đề xem trước";
-            showToast?.(msg, "error");
-        } finally {
-            setLoading(false);
-        }
-    };
+                setPreviewQuestions(qs);
+                setPreviewToken(token);
+                previewTokenRef.current = token;
 
-    const handleStartAttempt = async () => {
-        if (!canGenerate) {
-            showToast?.("Vui lòng upload học liệu và nhập số câu hợp lệ", "warning");
-            return;
-        }
+                setMode(MODE.PREVIEW);
+                setIsCanvasOpen(true);
 
-        // ✅ bắt buộc preview trước để start() không gọi AI lần 2
-        if (!previewToken) {
-            showToast?.("Hãy bấm 'Xem trước đề' trước khi bắt đầu", "warning");
-            return;
-        }
+                appendMessage({
+                    role: "assistant",
+                    text: `Đã tạo ${qs.length} câu hỏi preview. Bấm “Bắt đầu làm bài” ở Canvas bên phải nhé.`,
+                });
 
-        try {
-            setLoadingMessage("Đang khởi tạo bài luyện tập...");
+                return { ok: true, questions: qs, token };
+            } catch (e) {
+                console.error(e);
+                const status = e?.response?.status;
+                const serverMsg =
+                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Preview failed";
+                showToast(`Không tạo được preview${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
+                appendMessage({ role: "assistant", text: "Lỗi tạo preview (AI/Server). Thử đổi học liệu hoặc gửi lại." });
+                return { ok: false };
+            } finally {
+                setLoading(false);
+            }
+        },
+        [appendMessage, buildConfigPayload, configOk, materialId, showToast]
+    );
+
+    const handleUploadFile = useCallback(
+        async (file) => {
+            if (!file) return;
+
+            appendMessage({ role: "user", text: `📄 Upload: ${file.name}` });
             setLoading(true);
+            setLoadingMessage("Đang upload & trích xuất…");
 
-            const payload = {
-                ...buildConfigPayload(),
-                previewToken, // ✅ quan trọng: cache hit ở BE
-            };
+            try {
+                const res = await materialApi.upload(file, () => {});
+                const data = unwrap(res);
+                const id = data?.id || data?.materialId;
+                if (!id) throw new Error("Missing materialId from upload response");
 
-            const startRes = await practiceApi.start(payload);
-            const newAttemptId = startRes.data?.attemptId ?? startRes.data?.id;
-            if (!newAttemptId) throw new Error("Missing attemptId from server");
+                setMaterialId(id);
+                materialIdRef.current = id;
 
-            setAttemptId(newAttemptId);
+                setPreviewQuestions([]);
+                setPreviewToken("");
+                previewTokenRef.current = "";
+                setMode(MODE.IDLE);
 
-            setLoadingMessage("Đang tải đề để làm bài...");
-            const detailRes = await practiceApi.getAttempt(newAttemptId);
-            setAttemptDetail(detailRes.data);
+                const extracted = await waitForExtractedTextOrReady(id);
+                appendMessage({
+                    role: "assistant",
+                    text: extracted ? "Upload xong & đã trích xuất. Mình tạo preview ngay." : "Upload xong. Mình tạo preview ngay.",
+                });
 
-            setActiveStep(STEP_KEYS.DOING);
-            showToast?.("Bắt đầu làm bài", "success");
-        } catch (e) {
-            const msg =
-                typeof e.response?.data === "string"
-                    ? e.response.data
-                    : e.message || "Không thể bắt đầu làm bài";
-            showToast?.(msg, "error");
-        } finally {
-            setLoading(false);
-        }
-    };
+                await generatePreview(id);
+            } catch (e) {
+                console.error(e);
+                const status = e?.response?.status;
+                const serverMsg =
+                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Upload failed";
+                showToast(`Upload học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
+                appendMessage({ role: "assistant", text: "Không upload/đọc được file. Kiểm tra định dạng/size nhé." });
+            } finally {
+                setLoading(false);
+            }
+        },
+        [appendMessage, generatePreview, showToast]
+    );
 
-    const handleSubmit = async (answersArray) => {
-        if (!attemptId) {
-            showToast?.("Thiếu attemptId, không thể nộp bài", "error");
-            return;
-        }
+    const handleSendText = useCallback(
+        async () => {
+            const rawText = input.trim();
+            if (!rawText) return;
 
-        try {
-            setLoadingMessage("Đang nộp bài và chấm điểm...");
+            appendMessage({
+                role: "user",
+                text: rawText.length > 500 ? rawText.slice(0, 500) + "…" : rawText,
+            });
+            setInput("");
+
             setLoading(true);
+            setLoadingMessage("Đang tạo học liệu…");
 
-            const payload = { answers: answersArray };
-            const res = await practiceApi.submit(attemptId, payload);
+            try {
+                const res = await materialApi.createFromText({ title: "Pasted material", rawText });
+                const data = unwrap(res);
+                const id = data?.id || data?.materialId;
+                if (!id) throw new Error("Missing materialId from createFromText response");
 
-            setResult(res.data);
-            setActiveStep(STEP_KEYS.RESULT);
+                setMaterialId(id);
+                materialIdRef.current = id;
 
-            // ✅ nếu backend trả sẵn review thì cache luôn (optional)
-            if (res.data?.review) setReviewData(res.data.review);
+                setPreviewQuestions([]);
+                setPreviewToken("");
+                previewTokenRef.current = "";
+                setMode(MODE.IDLE);
 
-            showToast?.("Nộp bài thành công", "success");
-        } catch (e) {
-            const msg =
-                typeof e.response?.data === "string" ? e.response.data : "Nộp bài thất bại";
-            showToast?.(msg, "error");
-        } finally {
-            setLoading(false);
-        }
-    };
+                const extracted = await waitForExtractedTextOrReady(id);
+                appendMessage({
+                    role: "assistant",
+                    text: extracted ? "Đã nhận & trích xuất. Mình tạo preview ngay." : "Đã nhận học liệu. Mình tạo preview ngay.",
+                });
 
-    // ✅ mở review (ưu tiên dùng cache, không có thì gọi API)
-    const handleOpenReview = async () => {
-        if (!attemptId) {
-            showToast?.("Thiếu attemptId, không thể xem lại", "error");
-            return;
-        }
+                await generatePreview(id);
+            } catch (e) {
+                console.error(e);
+                const status = e?.response?.status;
+                const serverMsg =
+                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Create material failed";
+                showToast(`Gửi học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
+                appendMessage({ role: "assistant", text: "Không tạo được học liệu từ text này. Thử lại nhé." });
+            } finally {
+                setLoading(false);
+            }
+        },
+        [appendMessage, generatePreview, input, showToast]
+    );
 
-        // 1) có cache thì mở luôn
-        if (reviewData) {
-            setReviewOpen(true);
-            return;
-        }
+    // ✅ auto-retry one time when preview expired (410)
+    const startAttempt = useCallback(
+        async ({ retried = false } = {}) => {
+            const effectiveMaterialId = materialIdRef.current ?? materialId;
+            const effectiveToken = previewTokenRef.current ?? previewToken;
 
-        // 2) không có cache -> gọi API
-        try {
-            setLoadingMessage("Đang tải dữ liệu xem lại...");
+            if (!effectiveMaterialId || !effectiveToken) {
+                showToast("Chưa có bộ câu hỏi preview hợp lệ.", "warning");
+                return;
+            }
+
             setLoading(true);
+            setLoadingMessage("Đang tạo attempt…");
 
+            try {
+                const payload = {
+                    ...buildConfigPayload(effectiveMaterialId),
+                    previewToken: effectiveToken,
+                    preview_token: effectiveToken,
+                };
+
+                const res = await practiceApi.start(payload);
+                const data = unwrap(res);
+
+                const newAttemptId = data?.attemptId || data?.id;
+                if (!newAttemptId) throw new Error("Missing attemptId");
+
+                setAttemptId(newAttemptId);
+
+                const serverStartTs =
+                    typeof data?.startTs === "number"
+                        ? data.startTs
+                        : typeof data?.startTimestamp === "number"
+                            ? data.startTimestamp
+                            : Date.now();
+
+                localStorage.setItem(
+                    attemptStorageKey(newAttemptId),
+                    JSON.stringify({ startTs: serverStartTs, answers: {} })
+                );
+
+                const detailRes = await practiceApi.getAttempt(newAttemptId);
+                const detail = unwrap(detailRes);
+
+                setAttemptDetail(detail);
+                setMode(MODE.DOING);
+                setIsCanvasOpen(true);
+
+                appendMessage({ role: "assistant", text: "Bắt đầu rồi! Làm bài ở Canvas bên phải nhé." });
+            } catch (e) {
+                console.error(e);
+
+                const status = e?.response?.status;
+                const msg =
+                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Start attempt failed";
+
+                // ✅ Preview expired -> regenerate 1 lần rồi start lại
+                if ((status === 410 || String(msg).includes("Preview expired")) && !retried) {
+                    appendMessage({ role: "assistant", text: "Preview đã hết hạn. Mình tạo preview mới rồi bắt đầu lại nhé." });
+
+                    const r = await generatePreview(effectiveMaterialId);
+                    if (r?.ok) {
+                        setLoading(false);
+                        return startAttempt({ retried: true });
+                    }
+
+                    setLoading(false);
+                    return;
+                }
+
+                showToast(`Không start được attempt${status ? ` (${status})` : ""}: ${String(msg)}`, "error");
+                appendMessage({ role: "assistant", text: "Không tạo được attempt. Thử tạo preview lại hoặc đổi học liệu." });
+            } finally {
+                setLoading(false);
+            }
+        },
+        [appendMessage, buildConfigPayload, generatePreview, materialId, previewToken, showToast]
+    );
+
+    const submitAttempt = useCallback(
+        async (answersArray, meta = {}) => {
+            if (!attemptId) return;
+
+            setLoading(true);
+            setLoadingMessage(meta?.timedOut ? "Hết giờ! Đang tự nộp…" : "Đang nộp bài…");
+
+            try {
+                const payload = {
+                    answers: Array.isArray(answersArray) ? answersArray : [],
+                    timedOut: !!meta?.timedOut,
+                };
+                const res = await practiceApi.submit(attemptId, payload);
+                const data = unwrap(res);
+
+                setResult(data);
+                setMode(MODE.RESULT);
+                setIsCanvasOpen(true);
+
+                appendMessage({
+                    role: "assistant",
+                    text: `Đã nộp bài. Kết quả: ${data?.status || "—"} (${data?.score ?? "?"}%).`,
+                });
+            } catch (e) {
+                console.error(e);
+                const status = e?.response?.status;
+                const serverMsg =
+                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Submit failed";
+                showToast(`Nộp bài thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
+                appendMessage({ role: "assistant", text: "Không nộp bài được. Thử lại nhé." });
+            } finally {
+                setLoading(false);
+            }
+        },
+        [attemptId, appendMessage, showToast]
+    );
+
+    const openReview = useCallback(async () => {
+        if (!attemptId) return;
+        try {
             const res = await practiceApi.getReview(attemptId);
-            setReviewData(res.data);
+            const data = unwrap(res);
+            setReviewData(data);
             setReviewOpen(true);
         } catch (e) {
-            const msg =
-                typeof e.response?.data === "string"
-                    ? e.response.data
-                    : "Không thể tải dữ liệu xem lại";
-            showToast?.(msg, "error");
-        } finally {
-            setLoading(false);
+            console.error(e);
+            const status = e?.response?.status;
+            const serverMsg =
+                e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Review failed";
+            showToast(`Không tải được review${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
         }
+    }, [attemptId, showToast]);
+
+    const attemptStartTs = useMemo(() => {
+        if (!attemptId) return null;
+        try {
+            const raw = localStorage.getItem(attemptStorageKey(attemptId));
+            const parsed = raw ? JSON.parse(raw) : null;
+            return typeof parsed?.startTs === "number" ? parsed.startTs : null;
+        } catch {
+            return null;
+        }
+    }, [attemptId]);
+
+    // ✅ FIX: split view không phụ thuộc mode nữa
+    const isSplit = Boolean(previewQuestions?.length || previewToken || attemptId || result);
+
+    const normalizedPreview = useMemo(
+        () => (previewQuestions || []).map((q, idx) => normalizePreviewQuestion(q, idx)),
+        [previewQuestions]
+    );
+
+    const ChatBubble = ({ role, text }) => {
+        const isUser = role === "user";
+        return (
+            <Box sx={{ display: "flex", gap: 1.5, mb: 2.5, flexDirection: isUser ? "row-reverse" : "row" }}>
+                <Avatar
+                    sx={{
+                        width: 32,
+                        height: 32,
+                        bgcolor: isUser ? "primary.main" : "transparent",
+                        border: isUser ? "none" : `1px solid ${COLORS.border}`,
+                    }}
+                >
+                    {isUser ? "U" : <AutoAwesomeRoundedIcon sx={{ fontSize: 18, color: "primary.main" }} />}
+                </Avatar>
+
+                <Box sx={{ maxWidth: "80%" }}>
+                    <Typography
+                        sx={{
+                            fontSize: 12,
+                            fontWeight: 800,
+                            color: COLORS.textSecondary,
+                            mb: 0.5,
+                            textAlign: isUser ? "right" : "left",
+                        }}
+                    >
+                        {isUser ? "You" : "AI"}
+                    </Typography>
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            p: 1.5,
+                            borderRadius: 3,
+                            bgcolor: isUser ? "primary.light" : "grey.100",
+                            color: isUser ? "primary.contrastText" : "text.primary",
+                            whiteSpace: "pre-wrap",
+                            border: isUser ? "none" : `1px solid ${COLORS.border}`,
+                        }}
+                    >
+                        <Typography sx={{ fontSize: 14, lineHeight: 1.6 }}>{text}</Typography>
+                    </Paper>
+                </Box>
+            </Box>
+        );
     };
 
-    // ===== UI =====
+    const PreviewCard = ({ q }) => (
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, borderColor: "divider", bgcolor: "#fff" }}>
+            <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary, mb: 1 }}>
+                {q.type === "ESSAY" || q.type === "SHORT_ANSWER" ? "Tự luận" : "Trắc nghiệm"} • {q.text}
+            </Typography>
+
+            {q.type === "ESSAY" || q.type === "SHORT_ANSWER" ? (
+                <TextField
+                    fullWidth
+                    multiline
+                    minRows={3}
+                    placeholder="Ô trả lời tự luận (preview)"
+                    disabled
+                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                />
+            ) : (
+                <Stack spacing={1}>
+                    {(q.options || []).map((opt) => (
+                        <Button key={opt.key} variant="outlined" disabled sx={{ justifyContent: "flex-start", textTransform: "none", borderRadius: 2 }}>
+                            <b style={{ marginRight: 10 }}>{opt.key}.</b> {opt.text}
+                        </Button>
+                    ))}
+                </Stack>
+            )}
+        </Paper>
+    );
 
     return (
-        <Box sx={{ p: { xs: 2, md: 3 }, bgcolor: "#F7F9FC", minHeight: "100vh" }}>
-            <GlobalLoading open={loading} message={loadingMessage} />
+        <Box sx={{ display: "flex", height: "100vh", width: "100%", bgcolor: COLORS.bg, overflow: "hidden" }}>
+            {/* LEFT: Chat Panel */}
+            <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", position: "relative" }}>
+                <Box sx={{ p: 2, pb: 0 }}>
+                    <PracticeHeaderConfig
+                        questionCount={questionCount}
+                        durationMinutes={durationMinutes}
+                        onChangeQuestionCount={(v) => setQuestionCount(Number(v))}
+                        onChangeDurationMinutes={(v) => setDurationMinutes(Number(v))}
+                        attemptId={attemptId}
+                        attemptStartTs={attemptStartTs}
+                        onTimeExpired={() => {}}
+                    />
+                </Box>
 
-            <Paper
-                elevation={0}
+                <Box sx={{ flex: 1, overflowY: "auto", px: 2, pb: 14, pt: 2, display: "flex", justifyContent: "center" }}>
+                    <Box sx={{ width: "100%", maxWidth: 860 }}>
+                        {messages.map((m) => (
+                            <ChatBubble key={m.id} role={m.role} text={m.text} />
+                        ))}
+                        <div ref={messagesEndRef} />
+                    </Box>
+                </Box>
+
+                {/* Input fixed bottom */}
+                <Box
+                    sx={{
+                        position: "absolute",
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        p: 2,
+                        bgcolor: "rgba(248,250,252,0.9)",
+                        backdropFilter: "blur(10px)",
+                        borderTop: `1px solid ${COLORS.border}`,
+                    }}
+                >
+                    <Box sx={{ maxWidth: 860, mx: "auto", display: "flex", gap: 1 }}>
+                        <Tooltip title="Upload file">
+                            <IconButton component="label" sx={{ border: `1px solid ${COLORS.border}`, borderRadius: 2 }}>
+                                <UploadFileRoundedIcon />
+                                <input
+                                    hidden
+                                    type="file"
+                                    accept=".pdf,.docx,.txt"
+                                    onChange={(e) => {
+                                        const f = e.target.files?.[0];
+                                        if (f) handleUploadFile(f);
+                                        e.target.value = "";
+                                    }}
+                                />
+                            </IconButton>
+                        </Tooltip>
+
+                        <TextField
+                            fullWidth
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            placeholder="Paste nội dung học liệu hoặc nhập yêu cầu…"
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSendText();
+                                }
+                            }}
+                            multiline
+                            maxRows={4}
+                            sx={{ "& .MuiOutlinedInput-root": { borderRadius: 3, bgcolor: "#fff" } }}
+                        />
+
+                        <IconButton
+                            onClick={handleSendText}
+                            disabled={loading || !input.trim()}
+                            sx={{
+                                borderRadius: 2,
+                                bgcolor: input.trim() ? COLORS.orange : "transparent",
+                                color: input.trim() ? "#fff" : "action.disabled",
+                                "&:hover": { bgcolor: input.trim() ? COLORS.orangeHover : "transparent" },
+                                border: input.trim() ? "none" : `1px solid ${COLORS.border}`,
+                            }}
+                        >
+                            <SendRoundedIcon />
+                        </IconButton>
+                    </Box>
+
+                    <Typography sx={{ mt: 1, textAlign: "center", fontSize: 12, color: COLORS.textSecondary }}>
+                        AI có thể sai. Hãy kiểm chứng lại nội dung quan trọng.
+                    </Typography>
+                </Box>
+            </Box>
+
+            {/* RIGHT: Canvas Panel */}
+            <Box
                 sx={{
-                    p: { xs: 2, md: 3 },
-                    borderRadius: 3,
-                    border: "1px solid #E3E8EF",
-                    maxWidth: 1200,
-                    mx: "auto",
-                    bgcolor: "#fff",
+                    width: isCanvasOpen && isSplit ? { xs: 0, md: "45%" } : 0,
+                    minWidth: isCanvasOpen && isSplit ? { xs: 0, md: 380 } : 0,
+                    height: "100%",
+                    borderLeft: `1px solid ${COLORS.border}`,
+                    bgcolor: "#F8F9FA",
+                    transition: "width 0.25s ease, min-width 0.25s ease",
+                    overflow: "hidden",
+                    display: { xs: "none", md: "flex" },
+                    flexDirection: "column",
                 }}
             >
-                <Typography sx={{ fontSize: 22, fontWeight: 800, color: "#1B2559" }}>
-                    Practice – AI Quiz từ học liệu
-                </Typography>
+                <Box
+                    sx={{
+                        p: 1.5,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        bgcolor: "#fff",
+                        borderBottom: `1px solid ${COLORS.border}`,
+                    }}
+                >
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                        <QuizRoundedIcon sx={{ color: "primary.main" }} />
+                        <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary }}>Learning Canvas</Typography>
+                    </Stack>
 
-                <Typography sx={{ mt: 0.5, color: "#6C757D", fontWeight: 600 }}>
-                    Upload tài liệu → hệ thống xử lý → sinh đề → làm bài → nhận điểm & nhận xét
-                </Typography>
+                    <Stack direction="row" spacing={1}>
+                        <Tooltip title="Đổi học liệu">
+                            {/* ✅ FIX: dùng resetPracticeState để không rớt UI */}
+                            <IconButton onClick={() => resetPracticeState({ keepMessages: true })} size="small">
+                                <RestartAltRoundedIcon />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title={isCanvasOpen ? "Đóng Canvas" : "Mở Canvas"}>
+                            <IconButton onClick={() => setIsCanvasOpen((v) => !v)} size="small">
+                                {isCanvasOpen ? <ChevronRightRoundedIcon /> : <ChevronLeftRoundedIcon />}
+                            </IconButton>
+                        </Tooltip>
+                    </Stack>
+                </Box>
 
-                <Divider sx={{ my: 2 }} />
+                <Box sx={{ flex: 1, overflowY: "auto", p: 2.5 }}>
+                    {mode === MODE.PREVIEW && (
+                        <Box>
+                            <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary, mb: 0.5, fontSize: 18 }}>
+                                Preview câu hỏi
+                            </Typography>
+                            <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 2 }}>
+                                Đây là bộ câu hỏi mẫu. Nhấn “Bắt đầu làm bài” để tạo attempt và bật đồng hồ.
+                            </Typography>
 
-                <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 2 }}>
-                    {STEPS.map((label) => (
-                        <Step key={label}>
-                            <StepLabel sx={{ "& .MuiStepLabel-label": { fontWeight: 700 } }}>
-                                {label}
-                            </StepLabel>
-                        </Step>
-                    ))}
-                </Stepper>
+                            <Stack spacing={2}>
+                                {normalizedPreview.slice(0, 20).map((q) => (
+                                    <PreviewCard key={q.id} q={q} />
+                                ))}
+                            </Stack>
 
-                {/* STEP 1: MATERIAL */}
-                {activeStep === STEP_KEYS.MATERIAL && (
-                    <MaterialStep
-                        materialId={materialReady ? materialId : null}
-                        onMaterialUploaded={(id) => {
-                            setMaterialId(id);
-                            setMaterialReady(true);
+                            <Divider sx={{ my: 2 }} />
 
-                            // ✅ material đổi => reset preview/token
-                            resetPreviewCache();
+                            <Button
+                                fullWidth
+                                variant="contained"
+                                onClick={() => startAttempt({ retried: false })}
+                                disabled={loading}
+                                sx={{
+                                    borderRadius: 3,
+                                    fontWeight: 900,
+                                    bgcolor: COLORS.orange,
+                                    "&:hover": { bgcolor: COLORS.orangeHover },
+                                }}
+                            >
+                                Bắt đầu làm bài
+                            </Button>
+                        </Box>
+                    )}
 
-                            showToast?.("Upload thành công, đang xử lý học liệu…", "success");
-                            setActiveStep(STEP_KEYS.CONFIG);
-                        }}
-                        onAutoNext={() => {
-                            if (materialReady && materialId) setActiveStep(STEP_KEYS.CONFIG);
-                        }}
-                    />
-                )}
-
-                {/* STEP 2: CONFIG */}
-                {activeStep === STEP_KEYS.CONFIG && (
-                    <>
-                        <PracticeConfigPanel
-                            materialId={materialId}
-                            questionCount={questionCount}
+                    {mode === MODE.DOING && (
+                        <PracticePlayer
+                            attemptDetail={attemptDetail}
                             durationMinutes={durationMinutes}
-                            onChangeQuestionCount={setQuestionCount}
-                            onChangeDuration={setDurationMinutes}
-                            onConfigChanged={resetPreviewCache} // ✅ QUAN TRỌNG
-                            onBack={() => {
-                                setActiveStep(STEP_KEYS.MATERIAL);
-                                setMaterialReady(false);
-                            }}
-                            onPreview={handleOpenPreview}
-                            onStart={handleStartAttempt}
-                            loading={loading}
+                            attemptId={attemptId}
+                            onBackToConfig={() => setMode(MODE.PREVIEW)}
+                            onSubmit={(answersArray, meta) => submitAttempt(answersArray, meta)}
                         />
+                    )}
 
-                        <PracticePreviewDialog
-                            open={previewOpen}
-                            onClose={() => setPreviewOpen(false)}
-                            questions={previewQuestions}
-                        />
-                    </>
-                )}
-
-                {/* STEP 3: DOING */}
-                {activeStep === STEP_KEYS.DOING && (
-                    <PracticePlayer
-                        attemptDetail={attemptDetail}
-                        durationMinutes={durationMinutes}
-                        onBackToConfig={() => setActiveStep(STEP_KEYS.CONFIG)}
-                        onSubmit={handleSubmit}
-                    />
-                )}
-
-                {/* STEP 4: RESULT */}
-                {activeStep === STEP_KEYS.RESULT && (
-                    <>
+                    {mode === MODE.RESULT && (
                         <PracticeResult
                             result={result}
-                            numberOfQuestions={questionCount}
-                            onRetry={resetForRetry}
-                            onNewMaterial={resetForNewMaterial}
-                            onViewReview={handleOpenReview}
+                            numberOfQuestions={Number(questionCount)}
+                            onRetry={() => {
+                                setMode(MODE.PREVIEW);
+                                setResult(null);
+                                setAttemptDetail(null);
+                                if (attemptId) localStorage.removeItem(attemptStorageKey(attemptId));
+                                setAttemptId(null);
+                            }}
+                            onNewMaterial={() => resetPracticeState({ keepMessages: true })}
+                            onViewReview={openReview}
                         />
+                    )}
+                </Box>
+            </Box>
 
-                        <PracticeReviewDialog
-                            open={reviewOpen}
-                            onClose={() => setReviewOpen(false)}
-                            review={reviewData}
-                        />
-                    </>
-                )}
-            </Paper>
+            {isSplit && (
+                <Box sx={{ position: "fixed", right: 16, bottom: 110, display: { xs: "none", md: "block" } }}>
+                    <Tooltip title={isCanvasOpen ? "Đóng Canvas" : "Mở Canvas"}>
+                        <IconButton
+                            onClick={() => setIsCanvasOpen((v) => !v)}
+                            sx={{
+                                borderRadius: 3,
+                                bgcolor: "#fff",
+                                border: `1px solid ${COLORS.border}`,
+                                boxShadow: "0 10px 30px rgba(15,23,42,0.10)",
+                            }}
+                        >
+                            {isCanvasOpen ? <ChevronRightRoundedIcon /> : <ChevronLeftRoundedIcon />}
+                        </IconButton>
+                    </Tooltip>
+                </Box>
+            )}
+
+            <PracticeReviewDialog open={reviewOpen} onClose={() => setReviewOpen(false)} reviewData={reviewData} />
+            <GlobalLoading open={loading} message={loadingMessage} />
         </Box>
     );
 }
