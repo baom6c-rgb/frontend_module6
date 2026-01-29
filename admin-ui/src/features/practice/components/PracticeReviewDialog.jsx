@@ -19,12 +19,21 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
     const [onlyWrong, setOnlyWrong] = useState(false);
 
     const items = review?.items || [];
-    const filtered = useMemo(() => {
-        if (!onlyWrong) return items;
-        return items.filter((x) => x?.isCorrect === false);
-    }, [items, onlyWrong]);
 
-    const aiFeedback = review?.aiFeedback || "";
+    // ✅ giữ số câu gốc trước khi lọc
+    const itemsWithNo = useMemo(() => {
+        return items.map((it, index) => ({
+            ...it,
+            _no: index + 1,
+        }));
+    }, [items]);
+
+    const filtered = useMemo(() => {
+        if (!onlyWrong) return itemsWithNo;
+        return itemsWithNo.filter((x) => x?.isCorrect === false);
+    }, [itemsWithNo, onlyWrong]);
+
+    const aiFeedback = useMemo(() => String(review?.aiFeedback ?? "").trim(), [review]);
 
     return (
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
@@ -55,8 +64,8 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                 </Stack>
 
                 {filtered.length === 0 ? (
-                    <Typography sx={{ color: "#ff0202", fontWeight: 700 }}>
-                        Không có dữ liệu để hiển thị.
+                    <Typography sx={{ color: onlyWrong ? "#1B5E20" : "#ff0202", fontWeight: 800 }}>
+                        {onlyWrong ? "Không có câu sai 🎉" : "Không có dữ liệu để hiển thị."}
                     </Typography>
                 ) : (
                     filtered.map((q, idx) => {
@@ -64,7 +73,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
 
                         return (
                             <Box
-                                key={q.questionId || idx}
+                                key={q.questionId || `${q._no}_${idx}`}
                                 sx={{
                                     p: 2,
                                     borderRadius: 3,
@@ -75,7 +84,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                             >
                                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1, flexWrap: "wrap" }}>
                                     <Typography sx={{ fontWeight: 900, color: "#1B2559" }}>
-                                        Câu {idx + 1}: {q.content}
+                                        Câu {q._no}: {q.content}
                                     </Typography>
 
                                     <Chip
@@ -99,11 +108,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                     />
 
                                     {Number.isFinite(q?.score) && Number.isFinite(q?.maxScore) ? (
-                                        <Chip
-                                            size="small"
-                                            label={`Điểm: ${q.score}/${q.maxScore}`}
-                                            sx={{ fontWeight: 900 }}
-                                        />
+                                        <Chip size="small" label={`Điểm: ${q.score}/${q.maxScore}`} sx={{ fontWeight: 900 }} />
                                     ) : null}
                                 </Stack>
 
@@ -125,11 +130,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                                         p: 1.2,
                                                         borderRadius: 2,
                                                         border: "2px solid",
-                                                        borderColor: isCorrect
-                                                            ? "#1B5E20"
-                                                            : isWrongSelected
-                                                                ? "#B00020"
-                                                                : "#E3E8EF",
+                                                        borderColor: isCorrect ? "#1B5E20" : isWrongSelected ? "#B00020" : "#E3E8EF",
                                                         bgcolor: isCorrect
                                                             ? "rgba(27,94,32,0.08)"
                                                             : isWrongSelected
@@ -148,15 +149,8 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
 
                                                     <Box sx={{ flex: 1 }} />
 
-                                                    {isCorrect && (
-                                                        <Chip size="small" label="Đáp án đúng" sx={{ fontWeight: 900 }} />
-                                                    )}
-                                                    {isWrongSelected && (
-                                                        <Chip size="small" label="Bạn chọn" sx={{ fontWeight: 900 }} />
-                                                    )}
-                                                    {isSelected && isCorrect && (
-                                                        <Chip size="small" label="Bạn chọn" sx={{ fontWeight: 900 }} />
-                                                    )}
+                                                    {isCorrect && <Chip size="small" label="Đáp án đúng" sx={{ fontWeight: 900 }} />}
+                                                    {isSelected && <Chip size="small" label="Bạn chọn" sx={{ fontWeight: 900 }} />}
                                                 </Box>
                                             );
                                         })}
@@ -186,9 +180,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                         <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
                                             Giải thích / Gợi ý học lại
                                         </Typography>
-                                        <Typography
-                                            sx={{ mt: 0.5, color: "#716f6f", fontWeight: 700, whiteSpace: "pre-wrap" }}
-                                        >
+                                        <Typography sx={{ mt: 0.5, color: "#716f6f", fontWeight: 700, whiteSpace: "pre-wrap" }}>
                                             {q.feedback}
                                         </Typography>
                                     </Box>

@@ -344,7 +344,7 @@ const UserDashboard = () => {
                                     Điểm số hiện tại
                                 </Typography>
                                 <Typography variant="h5" fontWeight={900}>
-                                    {stats?.averageScore}/10.0
+                                    {stats?.averageScore}/100
                                 </Typography>
                             </Box>
 
