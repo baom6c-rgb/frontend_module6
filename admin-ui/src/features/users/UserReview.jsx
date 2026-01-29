@@ -437,39 +437,6 @@ export default function UserReview() {
                                                             <Visibility sx={{ color: COLORS.primaryBlue }} />
                                                         </IconButton>
                                                     </TableCell>
-                                                    <TableCell>
-                                                        <IconButton size="small" onClick={() => handleExpandRow(id)}>
-                                                            {expandedRow === id ? <ExpandLess /> : <ExpandMore />}
-                                                        </IconButton>
-                                                    </TableCell>
-                                                </TableRow>
-                                                <TableRow>
-                                                    <TableCell colSpan={8} sx={{ p: 0, border: 0 }}>
-                                                        <Collapse in={expandedRow === id} timeout="auto" unmountOnExit>
-                                                            <Box sx={{ p: 3, bgcolor: COLORS.bgLight }}>
-                                                                <Grid container spacing={3}>
-                                                                    {[
-                                                                        { label: "Thời gian", value: `${test.duration || 0} phút`, icon: Timer },
-                                                                        { label: "Tổng câu hỏi", value: `${test.questions || test.totalQuestions || 0} câu` },
-                                                                        { label: "Câu đúng", value: `${test.correctAnswers || 0}/${test.questions || test.totalQuestions || 0}`, icon: CheckCircle, color: COLORS.success },
-                                                                        { label: "Tỷ lệ đúng", value: `${(test.questions || test.totalQuestions) > 0 ? ((test.correctAnswers / (test.questions || test.totalQuestions)) * 100).toFixed(1) : 0}%` },
-                                                                    ].map((item, i) => (
-                                                                        <Grid item xs={12} md={3} key={i}>
-                                                                            <Stack spacing={0.5}>
-                                                                                <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#707EAE" }}>
-                                                                                    {item.label}
-                                                                                </Typography>
-                                                                                <Stack direction="row" spacing={0.5} alignItems="center">
-                                                                                    {item.icon && <item.icon sx={{ fontSize: 18, color: item.color || COLORS.primaryBlue }} />}
-                                                                                    <Typography sx={{ fontWeight: 700 }}>{item.value}</Typography>
-                                                                                </Stack>
-                                                                            </Stack>
-                                                                        </Grid>
-                                                                    ))}
-                                                                </Grid>
-                                                            </Box>
-                                                        </Collapse>
-                                                    </TableCell>
                                                 </TableRow>
                                             </React.Fragment>
                                         );
@@ -534,14 +501,6 @@ export default function UserReview() {
                                         <Typography sx={{ color: "#707EAE", fontWeight: 700, mb: 0.5 }}>Kết quả</Typography>
                                         <Chip label={getScoreLabel(selectedTest.score || 0)}
                                               sx={{ bgcolor: getScoreColor(selectedTest.score || 0) + "20", color: getScoreColor(selectedTest.score || 0), fontWeight: 700 }} />
-                                    </Grid>
-                                    <Grid item xs={12}>
-                                        <Alert severity="info" sx={{ mt: 2 }}>
-                                            Bạn đã trả lời đúng {selectedTest.correctAnswers || 0}/{selectedTest.questions || selectedTest.totalQuestions || 0} câu hỏi
-                                            ({(selectedTest.questions || selectedTest.totalQuestions) > 0
-                                            ? ((selectedTest.correctAnswers / (selectedTest.questions || selectedTest.totalQuestions)) * 100).toFixed(1)
-                                            : 0}%)
-                                        </Alert>
                                     </Grid>
                                 </Grid>
                             </Box>
