@@ -611,47 +611,6 @@ export default function UserReview() {
                                                             <Visibility sx={{ color: COLORS.primaryBlue }} />
                                                         </IconButton>
                                                     </TableCell>
-
-                                                    <TableCell>
-                                                        <IconButton size="small" onClick={() => handleExpandRow(id)}>
-                                                            {expandedRow === id ? <ExpandLess /> : <ExpandMore />}
-                                                        </IconButton>
-                                                    </TableCell>
-                                                </TableRow>
-
-                                                <TableRow>
-                                                    <TableCell colSpan={8} sx={{ p: 0, border: 0 }}>
-                                                        <Collapse in={expandedRow === id} timeout="auto" unmountOnExit>
-                                                            <Box sx={{ p: 3, bgcolor: COLORS.bgLight }}>
-                                                                <Grid container spacing={3}>
-                                                                    {[
-                                                                        { label: "Thời gian", value: `${test.durationMinutes} phút`, icon: Timer },
-                                                                        { label: "Tổng câu hỏi", value: `${test.totalQuestions} câu` },
-                                                                        { label: "Câu đúng", value: `${test.correctAnswers}/${test.totalQuestions}`, icon: CheckCircle, color: COLORS.success },
-                                                                        { label: "Tỷ lệ đúng", value: `${test.accuracy}%` },
-                                                                    ].map((item, i) => (
-                                                                        <Grid item xs={12} md={3} key={i}>
-                                                                            <Stack spacing={0.5}>
-                                                                                <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#707EAE" }}>
-                                                                                    {item.label}
-                                                                                </Typography>
-                                                                                <Stack direction="row" spacing={0.5} alignItems="center">
-                                                                                    {item.icon && <item.icon sx={{ fontSize: 18, color: item.color || COLORS.primaryBlue }} />}
-                                                                                    <Typography sx={{ fontWeight: 700 }}>{item.value}</Typography>
-                                                                                </Stack>
-                                                                            </Stack>
-                                                                        </Grid>
-                                                                    ))}
-                                                                </Grid>
-
-                                                                {test.totalQuestions > 0 && test._raw?.correctAnswers == null && test._raw?.correctCount == null && (
-                                                                    <Alert severity="info" sx={{ mt: 2 }}>
-                                                                        “Câu đúng” đang hiển thị theo ước tính dựa trên điểm phần trăm vì BE chưa trả trường correctCount.
-                                                                    </Alert>
-                                                                )}
-                                                            </Box>
-                                                        </Collapse>
-                                                    </TableCell>
                                                 </TableRow>
                                             </React.Fragment>
                                         );
@@ -712,11 +671,6 @@ export default function UserReview() {
                                             label={getScoreLabel(selectedTest.scorePct)}
                                             sx={{ bgcolor: getScoreColor(selectedTest.scorePct) + "20", color: getScoreColor(selectedTest.scorePct), fontWeight: 700 }}
                                         />
-                                    </Grid>
-                                    <Grid item xs={12}>
-                                        <Alert severity="info" sx={{ mt: 2 }}>
-                                            Bạn trả lời đúng {selectedTest.correctAnswers}/{selectedTest.totalQuestions} câu ({selectedTest.accuracy}%)
-                                        </Alert>
                                     </Grid>
                                 </Grid>
                             </Box>
