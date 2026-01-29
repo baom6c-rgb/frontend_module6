@@ -51,6 +51,9 @@ const MODE = {
 const attemptStorageKey = (attemptId) => `practice_attempt_${attemptId}`;
 const unwrap = (res) => (res && typeof res === "object" && "data" in res ? res.data : res);
 
+// ✅ session key để resume sau reload (kèm config để timer không reset về default)
+const ACTIVE_SESSION_KEY = "practice_active_session_v1";
+
 function uid(prefix = "m") {
     return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
@@ -142,9 +145,29 @@ export default function PracticePage() {
         [questionCount, durationMinutes]
     );
 
+    // ✅ helpers: active session persistence
+    const saveActiveSession = useCallback((next) => {
+        try {
+            localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(next));
+        } catch {
+            // ignore
+        }
+    }, []);
+
+    const clearActiveSession = useCallback(() => {
+        try {
+            localStorage.removeItem(ACTIVE_SESSION_KEY);
+        } catch {
+            // ignore
+        }
+    }, []);
+
     // ✅ Reset data đúng cách, không làm "rớt UI"
     const resetPracticeState = useCallback(
         (opts = { keepMessages: true }) => {
+            // ✅ clear resume session
+            clearActiveSession();
+
             if (attemptId) localStorage.removeItem(attemptStorageKey(attemptId));
 
             // material
@@ -155,6 +178,7 @@ export default function PracticePage() {
             setPreviewQuestions([]);
             setPreviewToken("");
             previewTokenRef.current = "";
+            setMode(MODE.IDLE);
 
             // attempt
             setAttemptId(null);
@@ -164,9 +188,6 @@ export default function PracticePage() {
             setResult(null);
             setReviewOpen(false);
             setReviewData(null);
-
-            // back to upload mode
-            setMode(MODE.IDLE);
 
             // keep input to allow new paste right away
             setInput("");
@@ -183,7 +204,7 @@ export default function PracticePage() {
                 setMessages([{ id: uid("a"), role: "assistant", text: "Ok! Gửi học liệu mới để bắt đầu." }]);
             }
         },
-        [appendMessage, attemptId]
+        [appendMessage, attemptId, clearActiveSession]
     );
 
     async function waitForExtractedTextOrReady(id) {
@@ -395,7 +416,26 @@ export default function PracticePage() {
                             ? data.startTimestamp
                             : Date.now();
 
-                localStorage.setItem(attemptStorageKey(newAttemptId), JSON.stringify({ startTs: serverStartTs, answers: {} }));
+                // ✅ không overwrite nếu đã có (trường hợp start lại / refresh nhanh)
+                try {
+                    const raw = localStorage.getItem(attemptStorageKey(newAttemptId));
+                    const parsed = raw ? JSON.parse(raw) : null;
+                    const existingStartTs = typeof parsed?.startTs === "number" ? parsed.startTs : null;
+
+                    localStorage.setItem(
+                        attemptStorageKey(newAttemptId),
+                        JSON.stringify({
+                            startTs: existingStartTs ?? serverStartTs,
+                            answers: parsed?.answers && typeof parsed.answers === "object" ? parsed.answers : {},
+                            index: Number.isFinite(parsed?.index) ? parsed.index : 0,
+                        })
+                    );
+                } catch {
+                    localStorage.setItem(
+                        attemptStorageKey(newAttemptId),
+                        JSON.stringify({ startTs: serverStartTs, answers: {}, index: 0 })
+                    );
+                }
 
                 const detailRes = await practiceApi.getAttempt(newAttemptId);
                 const detail = unwrap(detailRes);
@@ -403,6 +443,14 @@ export default function PracticePage() {
                 setAttemptDetail(detail);
                 setMode(MODE.DOING);
                 setIsCanvasOpen(true);
+
+                // ✅ save active session để reload resume (kèm config để timer không reset)
+                saveActiveSession({
+                    mode: MODE.DOING,
+                    attemptId: newAttemptId,
+                    durationMinutes: Number(durationMinutes),
+                    questionCount: Number(questionCount),
+                });
 
                 appendMessage({ role: "assistant", text: "Bắt đầu rồi! Làm bài ở Canvas bên phải nhé." });
             } catch (e) {
@@ -435,7 +483,17 @@ export default function PracticePage() {
                 setLoading(false);
             }
         },
-        [appendMessage, buildConfigPayload, generatePreview, materialId, previewToken, showToast]
+        [
+            appendMessage,
+            buildConfigPayload,
+            durationMinutes,
+            generatePreview,
+            materialId,
+            previewToken,
+            questionCount,
+            saveActiveSession,
+            showToast,
+        ]
     );
 
     const submitAttempt = useCallback(
@@ -457,6 +515,9 @@ export default function PracticePage() {
                 setMode(MODE.RESULT);
                 setIsCanvasOpen(true);
 
+                // ✅ clear active session để reload không quay lại DOING nữa
+                clearActiveSession();
+
                 appendMessage({
                     role: "assistant",
                     text: `Đã nộp bài. Kết quả: ${data?.status || "—"} (${data?.score ?? "?"}%).`,
@@ -476,7 +537,7 @@ export default function PracticePage() {
                 setLoading(false);
             }
         },
-        [attemptId, appendMessage, showToast]
+        [attemptId, appendMessage, clearActiveSession, showToast]
     );
 
     const openReview = useCallback(async () => {
@@ -516,6 +577,64 @@ export default function PracticePage() {
         () => (previewQuestions || []).map((q, idx) => normalizePreviewQuestion(q, idx)),
         [previewQuestions]
     );
+
+    // ✅ RESUME after reload: nếu đang DOING mà refresh, load lại attempt + restore config
+    useEffect(() => {
+        let cancelled = false;
+
+        const resume = async () => {
+            try {
+                const raw = localStorage.getItem(ACTIVE_SESSION_KEY);
+                const sess = raw ? JSON.parse(raw) : null;
+
+                if (!sess || sess?.mode !== MODE.DOING || !sess?.attemptId) return;
+
+                // restore config (để timer không nhảy về 15p)
+                if (typeof sess?.durationMinutes === "number") setDurationMinutes(sess.durationMinutes);
+                if (typeof sess?.questionCount === "number") setQuestionCount(sess.questionCount);
+
+                // nếu đang có attempt rồi thì khỏi resume
+                if (attemptId) return;
+
+                setLoading(true);
+                setLoadingMessage("Đang khôi phục bài làm…");
+
+                const aId = sess.attemptId;
+
+                setAttemptId(aId);
+                setMode(MODE.DOING);
+                setIsCanvasOpen(true);
+
+                const detailRes = await practiceApi.getAttempt(aId);
+                const detail = unwrap(detailRes);
+
+                if (cancelled) return;
+
+                setAttemptDetail(detail);
+
+                appendMessage({
+                    role: "assistant",
+                    text: "Mình đã khôi phục phiên làm bài trước đó (reload không làm mất tiến độ).",
+                });
+            } catch (e) {
+                console.error(e);
+                // nếu resume fail thì clear session để tránh loop lỗi
+                try {
+                    localStorage.removeItem(ACTIVE_SESSION_KEY);
+                } catch {
+                    // ignore
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+
+        resume();
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // chỉ chạy 1 lần khi mount
 
     const ChatBubble = ({ role, text }) => {
         const isUser = role === "user";
@@ -777,6 +896,9 @@ export default function PracticePage() {
                             result={result}
                             numberOfQuestions={Number(questionCount)}
                             onRetry={() => {
+                                // ✅ retry là quay về preview => clear session DOING
+                                clearActiveSession();
+
                                 setMode(MODE.PREVIEW);
                                 setResult(null);
                                 setAttemptDetail(null);

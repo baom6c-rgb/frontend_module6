@@ -51,7 +51,7 @@ const PracticePlayer = forwardRef(function PracticePlayer(
         });
     }, [questions, answersMap]);
 
-    // ===== Persist startTs + answers (reload giữ đáp án) =====
+    // ===== Persist startTs + answers + index (reload giữ đáp án + đang ở câu nào) =====
     useEffect(() => {
         if (!attemptId) return;
 
@@ -64,17 +64,33 @@ const PracticePlayer = forwardRef(function PracticePlayer(
                 setAnswersMap(savedAnswers);
             }
 
-            // Nếu chưa có startTs thì set (PracticePage thường set rồi, nhưng giữ an toàn)
+            // restore index nếu hợp lệ
+            const savedIndex = Number(parsed?.index);
+            if (!Number.isNaN(savedIndex) && savedIndex >= 0) {
+                setIndex(savedIndex);
+            }
+
+            // Nếu chưa có startTs thì set (KHÔNG overwrite nếu đã có)
             if (!parsed?.startTs) {
                 localStorage.setItem(
                     attemptStorageKey(attemptId),
-                    JSON.stringify({ startTs: Date.now(), answers: savedAnswers || {} })
+                    JSON.stringify({
+                        startTs: Date.now(),
+                        answers: savedAnswers || {},
+                        index: Number.isFinite(savedIndex) ? savedIndex : 0,
+                    })
                 );
             }
         } catch {
             // ignore
         }
     }, [attemptId]);
+
+    // clamp index khi questions load xong (tránh index vượt quá total sau reload)
+    useEffect(() => {
+        if (!total) return;
+        setIndex((i) => Math.max(0, Math.min(i, total - 1)));
+    }, [total]);
 
     useEffect(() => {
         if (!attemptId) return;
@@ -87,12 +103,13 @@ const PracticePlayer = forwardRef(function PracticePlayer(
                 JSON.stringify({
                     startTs: parsed?.startTs ?? Date.now(),
                     answers: answersMap,
+                    index,
                 })
             );
         } catch {
             // ignore
         }
-    }, [attemptId, answersMap]);
+    }, [attemptId, answersMap, index]);
 
     // ===== Prevent accidental reload/back (chỉ khi chưa submit) =====
     const submittedRef = useRef(false);
