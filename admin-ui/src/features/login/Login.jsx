@@ -117,14 +117,34 @@ export default function Login() {
         navigate("/users/dashboard", { replace: true });
     };
 
-    const extractErrMsg = (err) => {
+    const extractLoginErrMsg = (err) => {
+        const status = err?.response?.status;
         const data = err?.response?.data;
+
+        // BE trả string / message
         if (typeof data === "string" && data.trim()) return data;
         if (data?.message) return data.message;
-        if (typeof err === "string" && err.trim()) return err;
+
+        // Map theo status cho UX rõ ràng
+        switch (status) {
+            case 400:
+                return "Thông tin đăng nhập không hợp lệ";
+            case 401:
+                return "Email hoặc mật khẩu không đúng";
+            case 403:
+                return "Tài khoản chưa được phê duyệt hoặc đã bị khóa";
+            case 404:
+                return "Tài khoản không tồn tại";
+            case 500:
+                return "Hệ thống đang gặp sự cố, vui lòng thử lại sau";
+            default:
+                break;
+        }
+
         if (err?.message) return err.message;
-        return "Đăng nhập thất bại";
+        return "Đăng nhập không thành công";
     };
+
 
     // ======================
     // NORMAL LOGIN
@@ -148,7 +168,7 @@ export default function Login() {
             handlePostLogin(res);
             showToast("Đăng nhập thành công", "success");
         } catch (err) {
-            showToast(extractErrMsg(err), "error");
+            showToast(extractLoginErrMsg(err), "error");
         } finally {
             setLoading(false);
         }
@@ -179,7 +199,7 @@ export default function Login() {
             handlePostLogin(res);
             showToast("Đăng nhập Google thành công", "success");
         } catch (err) {
-            showToast(extractErrMsg(err), "error");
+            showToast(extractLoginErrMsg(err), "error");
             // eslint-disable-next-line no-console
             console.error("Google login failed:", err);
         } finally {
@@ -242,7 +262,7 @@ export default function Login() {
 
                         <GoogleLogin
                             onSuccess={onGoogleSuccess}
-                            onError={() => showToast("Google Login Failed", "error")}
+                            onError={() => showToast("Đăng nhập Google thất bại", "error")}
                             useOneTap={false}
                             scope="openid email profile"
                             disabled={loading}
