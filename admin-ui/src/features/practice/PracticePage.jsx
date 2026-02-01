@@ -7,7 +7,6 @@ import {
     TextField,
     IconButton,
     Button,
-    Divider,
     Stack,
     Avatar,
     Tooltip,
@@ -43,40 +42,81 @@ const COLORS = {
 
 const MODE = {
     IDLE: "IDLE",
-    PREVIEW: "PREVIEW",
+    READY: "READY",
     DOING: "DOING",
     RESULT: "RESULT",
 };
 
-const attemptStorageKey = (attemptId) => `practice_attempt_${attemptId}`;
-const unwrap = (res) => (res && typeof res === "object" && "data" in res ? res.data : res);
+const ACTIVE_SESSION_KEY = "practice_active_session_v2";
 
-// ✅ session key để resume sau reload (kèm config để timer không reset về default)
-const ACTIVE_SESSION_KEY = "practice_active_session_v1";
+const unwrap = (res) => (res && typeof res === "object" && "data" in res ? res.data : res);
 
 function uid(prefix = "m") {
     return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
-function normalizePreviewQuestion(q, idx) {
-    const id = q?.questionId ?? q?.id ?? idx;
-    const type = (q?.questionType ?? q?.type ?? "MCQ").toString().toUpperCase();
-    const text = q?.question ?? q?.content ?? q?.text ?? q?.title ?? `Câu ${idx + 1}`;
+// ✅ Adapter: dùng questionKey làm questionId (ổn định -> reload không mất đáp án)
+function buildAttemptDetailFromV2(serverRes, sessionToken) {
+    const qs = Array.isArray(serverRes?.questions) ? serverRes.questions : [];
 
-    let options = [];
-    if (Array.isArray(q?.options)) {
-        options = q.options.map((x, i) => ({ key: String.fromCharCode(65 + i), text: String(x) }));
-    } else if (q?.options && typeof q.options === "object") {
-        options = Object.entries(q.options).map(([k, v]) => ({ key: k, text: String(v) }));
-        const order = ["A", "B", "C", "D"];
-        options.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
-    }
+    const questions = qs
+        .map((q) => ({
+            questionId: q?.questionKey, // ✅ stable id
+            questionType: q?.questionType,
+            content: q?.content,
+            options: q?.options || null,
+        }))
+        .filter((q) => !!q.questionId);
 
-    return { id, type, text, options };
+    return {
+        attemptId: null,
+        examId: null,
+        durationMinutes: serverRes?.durationMinutes ?? null,
+        questions,
+        sessionToken: sessionToken || serverRes?.sessionToken || "",
+    };
 }
+
+// ===== Upload validate =====
+const MAX_SIZE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_EXT_REGEX = /\.(pdf|docx|txt|xlsx)$/i;
 
 export default function PracticePage() {
     const { showToast } = useToast();
+
+    // ===== Optional: basic anti-devtools (UX only, NOT security) =====
+    useEffect(() => {
+        const onContextMenu = (e) => {
+            e.preventDefault();
+        };
+
+        const onKeyDown = (e) => {
+            const key = String(e.key || "").toLowerCase();
+            const ctrl = e.ctrlKey || e.metaKey;
+
+            if (e.key === "F12") {
+                e.preventDefault();
+                return;
+            }
+
+            if (ctrl && e.shiftKey && ["i", "j", "c"].includes(key)) {
+                e.preventDefault();
+                return;
+            }
+
+            if (ctrl && key === "u") {
+                e.preventDefault();
+            }
+        };
+
+        document.addEventListener("contextmenu", onContextMenu);
+        window.addEventListener("keydown", onKeyDown);
+
+        return () => {
+            document.removeEventListener("contextmenu", onContextMenu);
+            window.removeEventListener("keydown", onKeyDown);
+        };
+    }, []);
 
     // ===== loading =====
     const [loading, setLoading] = useState(false);
@@ -84,33 +124,25 @@ export default function PracticePage() {
 
     // ===== config =====
     const [questionCount, setQuestionCount] = useState(10);
-    const [durationMinutes, setDurationMinutes] = useState(15);
+    const [durationMinutes, setDurationMinutes] = useState(0); // auto from BE
 
     // ===== material =====
     const [materialId, setMaterialId] = useState(null);
     const materialIdRef = useRef(null);
 
-    // ===== preview =====
-    const [previewQuestions, setPreviewQuestions] = useState([]);
-    const [previewToken, setPreviewToken] = useState("");
-    const previewTokenRef = useRef("");
-
-    // ===== chat =====
-    const [messages, setMessages] = useState([
-        {
-            id: uid("a"),
-            role: "assistant",
-            text: "Gửi học liệu (upload/paste). Mình sẽ tạo preview câu hỏi và mở Learning Canvas bên phải.",
-        },
-    ]);
-    const [input, setInput] = useState("");
-
-    // ===== split/canvas =====
+    // ===== session =====
     const [mode, setMode] = useState(MODE.IDLE);
+    const [sessionToken, setSessionToken] = useState("");
+    const sessionTokenRef = useRef("");
+
+    // timing from BE
+    const [startedAtIso, setStartedAtIso] = useState(null);
+    const [deadlineIso, setDeadlineIso] = useState(null);
+
+    // ===== Canvas =====
     const [isCanvasOpen, setIsCanvasOpen] = useState(true);
 
-    // ===== attempt =====
-    const [attemptId, setAttemptId] = useState(null);
+    // ===== attempt detail =====
     const [attemptDetail, setAttemptDetail] = useState(null);
 
     // ===== result/review =====
@@ -118,8 +150,19 @@ export default function PracticePage() {
     const [reviewOpen, setReviewOpen] = useState(false);
     const [reviewData, setReviewData] = useState(null);
 
-    // ✅ player ref để timer ngoài gọi auto-submit
+    // player ref (timer outside auto-submit)
     const playerRef = useRef(null);
+
+    // ===== chat =====
+    const [messages, setMessages] = useState([
+        {
+            id: uid("a"),
+            role: "assistant",
+            text:
+                "Gửi học liệu (upload/paste). Sau đó bấm nút Gửi để AI tạo đề. Khi tạo xong sẽ hiện “Bắt đầu làm bài” ở Canvas.",
+        },
+    ]);
+    const [input, setInput] = useState("");
 
     const messagesEndRef = useRef(null);
     useEffect(() => {
@@ -132,20 +175,10 @@ export default function PracticePage() {
 
     const configOk = useMemo(() => {
         const n = Number(questionCount);
-        const d = Number(durationMinutes);
-        return Number.isFinite(n) && n >= 1 && Number.isFinite(d) && d >= 1;
-    }, [questionCount, durationMinutes]);
+        return Number.isFinite(n) && n >= 1;
+    }, [questionCount]);
 
-    const buildConfigPayload = useCallback(
-        (matId) => ({
-            materialId: matId,
-            numberOfQuestions: Number(questionCount),
-            durationMinutes: Number(durationMinutes),
-        }),
-        [questionCount, durationMinutes]
-    );
-
-    // ✅ helpers: active session persistence
+    // ===== active session persistence =====
     const saveActiveSession = useCallback((next) => {
         try {
             localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(next));
@@ -162,51 +195,44 @@ export default function PracticePage() {
         }
     }, []);
 
-    // ✅ Reset data đúng cách, không làm "rớt UI"
+    // ===== Reset state =====
     const resetPracticeState = useCallback(
         (opts = { keepMessages: true }) => {
-            // ✅ clear resume session
             clearActiveSession();
 
-            if (attemptId) localStorage.removeItem(attemptStorageKey(attemptId));
-
-            // material
             setMaterialId(null);
             materialIdRef.current = null;
 
-            // preview
-            setPreviewQuestions([]);
-            setPreviewToken("");
-            previewTokenRef.current = "";
-            setMode(MODE.IDLE);
+            setSessionToken("");
+            sessionTokenRef.current = "";
 
-            // attempt
-            setAttemptId(null);
+            setStartedAtIso(null);
+            setDeadlineIso(null);
+
             setAttemptDetail(null);
 
-            // result/review
             setResult(null);
             setReviewOpen(false);
             setReviewData(null);
 
-            // keep input to allow new paste right away
+            setMode(MODE.IDLE);
+            setDurationMinutes(0);
             setInput("");
-
-            // keep canvas open state stable
             setIsCanvasOpen(true);
 
             if (opts?.keepMessages) {
                 appendMessage({
                     role: "assistant",
-                    text: "Ok! Gửi học liệu mới (upload/paste) để mình tạo bộ câu hỏi mới nhé.",
+                    text: "Ok! Upload/paste học liệu mới rồi bấm Gửi để tạo đề nhé.",
                 });
             } else {
                 setMessages([{ id: uid("a"), role: "assistant", text: "Ok! Gửi học liệu mới để bắt đầu." }]);
             }
         },
-        [appendMessage, attemptId, clearActiveSession]
+        [appendMessage, clearActiveSession]
     );
 
+    // ===== poll extracted text =====
     async function waitForExtractedTextOrReady(id) {
         const MAX_TRIES = 25;
         const SLEEP_MS = 700;
@@ -225,64 +251,27 @@ export default function PracticePage() {
         return "";
     }
 
-    const generatePreview = useCallback(
-        async (matId) => {
-            const effectiveMaterialId = matId ?? materialIdRef.current ?? materialId;
-
-            if (!effectiveMaterialId || !configOk) {
-                showToast("Chưa có học liệu hoặc cấu hình chưa hợp lệ.", "warning");
-                return { ok: false };
-            }
-
-            setLoading(true);
-            setLoadingMessage("Đang tạo bộ câu hỏi (preview)…");
-            appendMessage({ role: "assistant", text: "Đang tạo bộ câu hỏi… (preview)" });
-
-            try {
-                const res = await practiceApi.generatePreview(buildConfigPayload(effectiveMaterialId));
-                const data = unwrap(res);
-
-                const qs = data?.questions || data?.previewQuestions || [];
-                const token = data?.previewToken || data?.token || data?.preview_token || "";
-
-                if (!Array.isArray(qs) || qs.length === 0) throw new Error("Preview questions empty");
-                if (!token) throw new Error("Missing previewToken from server");
-
-                setPreviewQuestions(qs);
-                setPreviewToken(token);
-                previewTokenRef.current = token;
-
-                setMode(MODE.PREVIEW);
-                setIsCanvasOpen(true);
-
-                appendMessage({
-                    role: "assistant",
-                    text: `Đã tạo ${qs.length} câu hỏi preview. Bấm “Bắt đầu làm bài” ở Canvas bên phải nhé.`,
-                });
-
-                return { ok: true, questions: qs, token };
-            } catch (e) {
-                console.error(e);
-                const status = e?.response?.status;
-                const serverMsg =
-                    e?.response?.data?.message ||
-                    e?.response?.data?.error ||
-                    e?.response?.data ||
-                    e?.message ||
-                    "Preview failed";
-                showToast(`Không tạo được preview${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
-                appendMessage({ role: "assistant", text: "Lỗi tạo preview (AI/Server). Thử đổi học liệu hoặc gửi lại." });
-                return { ok: false };
-            } finally {
-                setLoading(false);
-            }
-        },
-        [appendMessage, buildConfigPayload, configOk, materialId, showToast]
-    );
-
+    // =========================
+    // Upload file -> chỉ tạo materialId
+    // =========================
     const handleUploadFile = useCallback(
         async (file) => {
             if (!file) return;
+
+            // ✅ validate (format/size) ngay tại đây để tránh gọi API vô ích
+            if (file.size > MAX_SIZE_BYTES) {
+                showToast("File quá dung lượng (tối đa 10MB).", "error");
+                appendMessage({ role: "assistant", text: "File quá dung lượng (tối đa 10MB). Hãy chọn file nhỏ hơn." });
+                return;
+            }
+            if (!ALLOWED_EXT_REGEX.test(file.name)) {
+                showToast("Sai định dạng. Chỉ hỗ trợ PDF/DOCX/TXT/XLSX.", "error");
+                appendMessage({
+                    role: "assistant",
+                    text: "Sai định dạng. Chỉ hỗ trợ PDF/DOCX/TXT/XLSX. Hãy chọn lại file.",
+                });
+                return;
+            }
 
             appendMessage({ role: "user", text: `📄 Upload: ${file.name}` });
             setLoading(true);
@@ -297,18 +286,29 @@ export default function PracticePage() {
                 setMaterialId(id);
                 materialIdRef.current = id;
 
-                setPreviewQuestions([]);
-                setPreviewToken("");
-                previewTokenRef.current = "";
+                // reset session state
+                setSessionToken("");
+                sessionTokenRef.current = "";
+                setStartedAtIso(null);
+                setDeadlineIso(null);
+                setAttemptDetail(null);
+                setResult(null);
+                setReviewOpen(false);
+                setReviewData(null);
                 setMode(MODE.IDLE);
+                setDurationMinutes(0);
+                clearActiveSession();
 
                 const extracted = await waitForExtractedTextOrReady(id);
+
                 appendMessage({
                     role: "assistant",
-                    text: extracted ? "Upload xong & đã trích xuất. Mình tạo preview ngay." : "Upload xong. Mình tạo preview ngay.",
+                    text: extracted
+                        ? "Upload xong & đã trích xuất. Bây giờ để trống ô nhập và bấm Gửi để AI tạo đề nhé."
+                        : "Upload xong. Bây giờ để trống ô nhập và bấm Gửi để AI tạo đề nhé.",
                 });
 
-                await generatePreview(id);
+                showToast("Đã nhận học liệu. Bấm Gửi để tạo đề.", "success");
             } catch (e) {
                 console.error(e);
                 const status = e?.response?.status;
@@ -324,44 +324,133 @@ export default function PracticePage() {
                 setLoading(false);
             }
         },
-        [appendMessage, generatePreview, showToast]
+        [appendMessage, clearActiveSession, showToast]
     );
 
-    const handleSendText = useCallback(
-        async () => {
-            const rawText = input.trim();
-            if (!rawText) return;
+    // =========================
+    // Paste text -> tạo materialId
+    // =========================
+    const handleSendText = useCallback(async () => {
+        const rawText = input.trim();
+        if (!rawText) return;
+
+        appendMessage({
+            role: "user",
+            text: rawText.length > 500 ? rawText.slice(0, 500) + "…" : rawText,
+        });
+        setInput("");
+
+        setLoading(true);
+        setLoadingMessage("Đang tạo học liệu…");
+
+        try {
+            const res = await materialApi.createFromText({ title: "Pasted material", rawText });
+            const data = unwrap(res);
+            const id = data?.id || data?.materialId;
+            if (!id) throw new Error("Missing materialId from createFromText response");
+
+            setMaterialId(id);
+            materialIdRef.current = id;
+
+            // reset session state
+            setSessionToken("");
+            sessionTokenRef.current = "";
+            setStartedAtIso(null);
+            setDeadlineIso(null);
+            setAttemptDetail(null);
+            setResult(null);
+            setReviewOpen(false);
+            setReviewData(null);
+            setMode(MODE.IDLE);
+            setDurationMinutes(0);
+            clearActiveSession();
+
+            const extracted = await waitForExtractedTextOrReady(id);
 
             appendMessage({
-                role: "user",
-                text: rawText.length > 500 ? rawText.slice(0, 500) + "…" : rawText,
+                role: "assistant",
+                text: extracted
+                    ? "Đã nhận & trích xuất. Bây giờ để trống ô nhập và bấm Gửi để AI tạo đề nhé."
+                    : "Đã nhận học liệu. Bây giờ để trống ô nhập và bấm Gửi để AI tạo đề nhé.",
             });
-            setInput("");
+
+            showToast("Đã nhận học liệu. Bấm Gửi để tạo đề.", "success");
+        } catch (e) {
+            console.error(e);
+            const status = e?.response?.status;
+            const serverMsg =
+                e?.response?.data?.message ||
+                e?.response?.data?.error ||
+                e?.response?.data ||
+                e?.message ||
+                "Create material failed";
+            showToast(`Gửi học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
+            appendMessage({ role: "assistant", text: "Không tạo được học liệu từ text này. Thử lại nhé." });
+        } finally {
+            setLoading(false);
+        }
+    }, [appendMessage, clearActiveSession, input, showToast]);
+
+    // =========================
+    // V2 Step 1: Generate session
+    // =========================
+    const generateSessionV2 = useCallback(
+        async () => {
+            const matId = materialIdRef.current ?? materialId;
+
+            if (!matId) {
+                showToast("Chưa có học liệu. Hãy upload/paste trước.", "warning");
+                return { ok: false };
+            }
+            if (!configOk) {
+                showToast("Số câu hỏi chưa hợp lệ.", "warning");
+                return { ok: false };
+            }
 
             setLoading(true);
-            setLoadingMessage("Đang tạo học liệu…");
+            setLoadingMessage("AI đang tạo đề…");
+            appendMessage({ role: "assistant", text: "AI đang tạo đề… (tự tính thời gian theo số câu)" });
 
             try {
-                const res = await materialApi.createFromText({ title: "Pasted material", rawText });
-                const data = unwrap(res);
-                const id = data?.id || data?.materialId;
-                if (!id) throw new Error("Missing materialId from createFromText response");
-
-                setMaterialId(id);
-                materialIdRef.current = id;
-
-                setPreviewQuestions([]);
-                setPreviewToken("");
-                previewTokenRef.current = "";
-                setMode(MODE.IDLE);
-
-                const extracted = await waitForExtractedTextOrReady(id);
-                appendMessage({
-                    role: "assistant",
-                    text: extracted ? "Đã nhận & trích xuất. Mình tạo preview ngay." : "Đã nhận học liệu. Mình tạo preview ngay.",
+                const data = await practiceApi.generateSessionV2({
+                    materialId: matId,
+                    numberOfQuestions: Number(questionCount),
                 });
 
-                await generatePreview(id);
+                const token = data?.sessionToken;
+                const dur = data?.durationMinutes;
+
+                if (!token) throw new Error("Missing sessionToken from server");
+                if (!Number.isFinite(Number(dur))) throw new Error("Missing durationMinutes from server");
+
+                setSessionToken(token);
+                sessionTokenRef.current = token;
+
+                setDurationMinutes(Number(dur));
+
+                setStartedAtIso(null);
+                setDeadlineIso(null);
+
+                setMode(MODE.READY);
+                setIsCanvasOpen(true);
+
+                saveActiveSession({
+                    mode: MODE.READY,
+                    sessionToken: token,
+                    attemptId: token,
+                    materialId: matId,
+                    questionCount: Number(questionCount),
+                    durationMinutes: Number(dur),
+                    startedAtIso: null,
+                    deadlineIso: null,
+                });
+
+                appendMessage({
+                    role: "assistant",
+                    text: `Đã tạo đề xong. Thời gian làm bài: ${Number(dur)} phút. Bấm “Bắt đầu làm bài” ở Canvas.`,
+                });
+
+                return { ok: true, token, durationMinutes: Number(dur) };
             } catch (e) {
                 console.error(e);
                 const status = e?.response?.status;
@@ -370,153 +459,121 @@ export default function PracticePage() {
                     e?.response?.data?.error ||
                     e?.response?.data ||
                     e?.message ||
-                    "Create material failed";
-                showToast(`Gửi học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
-                appendMessage({ role: "assistant", text: "Không tạo được học liệu từ text này. Thử lại nhé." });
+                    "Generate failed";
+                showToast(`Không tạo được đề${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
+                appendMessage({ role: "assistant", text: "Lỗi tạo đề (AI/Server). Thử gửi lại hoặc đổi học liệu." });
+                return { ok: false };
             } finally {
                 setLoading(false);
             }
         },
-        [appendMessage, generatePreview, input, showToast]
+        [appendMessage, configOk, materialId, questionCount, saveActiveSession, showToast]
     );
 
-    // ✅ auto-retry one time when preview expired (410)
-    const startAttempt = useCallback(
-        async ({ retried = false } = {}) => {
-            const effectiveMaterialId = materialIdRef.current ?? materialId;
-            const effectiveToken = previewTokenRef.current ?? previewToken;
+    // =========================
+    // V2 Step 2: Start session
+    // =========================
+    const startSessionV2 = useCallback(
+        async () => {
+            const token = sessionTokenRef.current || sessionToken;
 
-            if (!effectiveMaterialId || !effectiveToken) {
-                showToast("Chưa có bộ câu hỏi preview hợp lệ.", "warning");
+            if (!token) {
+                showToast("Chưa có đề. Hãy bấm Gửi để tạo đề trước.", "warning");
                 return;
             }
 
             setLoading(true);
-            setLoadingMessage("Đang tạo attempt…");
+            setLoadingMessage("Đang bắt đầu làm bài…");
 
             try {
-                const payload = {
-                    ...buildConfigPayload(effectiveMaterialId),
-                    previewToken: effectiveToken,
-                    preview_token: effectiveToken,
-                };
+                const data = await practiceApi.startSessionV2({ sessionToken: token });
 
-                const res = await practiceApi.start(payload);
-                const data = unwrap(res);
-
-                const newAttemptId = data?.attemptId || data?.id;
-                if (!newAttemptId) throw new Error("Missing attemptId");
-
-                setAttemptId(newAttemptId);
-
-                const serverStartTs =
-                    typeof data?.startTs === "number"
-                        ? data.startTs
-                        : typeof data?.startTimestamp === "number"
-                            ? data.startTimestamp
-                            : Date.now();
-
-                // ✅ không overwrite nếu đã có (trường hợp start lại / refresh nhanh)
-                try {
-                    const raw = localStorage.getItem(attemptStorageKey(newAttemptId));
-                    const parsed = raw ? JSON.parse(raw) : null;
-                    const existingStartTs = typeof parsed?.startTs === "number" ? parsed.startTs : null;
-
-                    localStorage.setItem(
-                        attemptStorageKey(newAttemptId),
-                        JSON.stringify({
-                            startTs: existingStartTs ?? serverStartTs,
-                            answers: parsed?.answers && typeof parsed.answers === "object" ? parsed.answers : {},
-                            index: Number.isFinite(parsed?.index) ? parsed.index : 0,
-                        })
-                    );
-                } catch {
-                    localStorage.setItem(
-                        attemptStorageKey(newAttemptId),
-                        JSON.stringify({ startTs: serverStartTs, answers: {}, index: 0 })
-                    );
+                if (Number.isFinite(Number(data?.durationMinutes))) {
+                    setDurationMinutes(Number(data.durationMinutes));
                 }
 
-                const detailRes = await practiceApi.getAttempt(newAttemptId);
-                const detail = unwrap(detailRes);
-
+                const detail = buildAttemptDetailFromV2(data, token);
                 setAttemptDetail(detail);
+
+                const startedAt = data?.startedAt || null;
+                const deadline = data?.deadline || null;
+
+                setStartedAtIso(startedAt);
+                setDeadlineIso(deadline);
+
                 setMode(MODE.DOING);
                 setIsCanvasOpen(true);
 
-                // ✅ save active session để reload resume (kèm config để timer không reset)
                 saveActiveSession({
                     mode: MODE.DOING,
-                    attemptId: newAttemptId,
-                    durationMinutes: Number(durationMinutes),
+                    sessionToken: token,
+                    attemptId: token,
+                    materialId: materialIdRef.current ?? materialId,
                     questionCount: Number(questionCount),
+                    durationMinutes: Number.isFinite(Number(data?.durationMinutes))
+                        ? Number(data.durationMinutes)
+                        : Number(durationMinutes),
+                    startedAtIso: startedAt,
+                    deadlineIso: deadline,
                 });
 
                 appendMessage({ role: "assistant", text: "Bắt đầu rồi! Làm bài ở Canvas bên phải nhé." });
             } catch (e) {
                 console.error(e);
-
                 const status = e?.response?.status;
                 const msg =
                     e?.response?.data?.message ||
                     e?.response?.data?.error ||
                     e?.response?.data ||
                     e?.message ||
-                    "Start attempt failed";
-
-                if ((status === 410 || String(msg).includes("Preview expired")) && !retried) {
-                    appendMessage({ role: "assistant", text: "Preview đã hết hạn. Mình tạo preview mới rồi bắt đầu lại nhé." });
-
-                    const r = await generatePreview(effectiveMaterialId);
-                    if (r?.ok) {
-                        setLoading(false);
-                        return startAttempt({ retried: true });
-                    }
-
-                    setLoading(false);
-                    return;
-                }
-
-                showToast(`Không start được attempt${status ? ` (${status})` : ""}: ${String(msg)}`, "error");
-                appendMessage({ role: "assistant", text: "Không tạo được attempt. Thử tạo preview lại hoặc đổi học liệu." });
+                    "Start session failed";
+                showToast(`Không bắt đầu được${status ? ` (${status})` : ""}: ${String(msg)}`, "error");
+                appendMessage({
+                    role: "assistant",
+                    text: "Không start được. Session có thể đã hết hạn, hãy bấm Gửi để tạo lại đề.",
+                });
             } finally {
                 setLoading(false);
             }
         },
-        [
-            appendMessage,
-            buildConfigPayload,
-            durationMinutes,
-            generatePreview,
-            materialId,
-            previewToken,
-            questionCount,
-            saveActiveSession,
-            showToast,
-        ]
+        [appendMessage, durationMinutes, materialId, questionCount, saveActiveSession, sessionToken, showToast]
     );
 
-    const submitAttempt = useCallback(
+    // =========================
+    // Submit V2
+    // =========================
+    const submitSessionV2 = useCallback(
         async (answersArray, meta = {}) => {
-            if (!attemptId) return;
+            const token = sessionTokenRef.current || sessionToken;
+            if (!token) return;
 
             setLoading(true);
             setLoadingMessage(meta?.timedOut ? "Hết giờ! Đang tự nộp…" : "Đang nộp bài…");
 
             try {
+                const answers = Array.isArray(answersArray) ? answersArray : [];
+
                 const payload = {
-                    answers: Array.isArray(answersArray) ? answersArray : [],
-                    timedOut: !!meta?.timedOut,
+                    answers: answers
+                        .filter((a) => a && a.questionId)
+                        .map((a) => ({
+                            questionKey: a.questionId,
+                            selectedAnswer: a.selectedAnswer || "",
+                            textAnswer: a.textAnswer || "",
+                        })),
                 };
-                const res = await practiceApi.submit(attemptId, payload);
-                const data = unwrap(res);
+
+                const data = await practiceApi.submitSessionV2(token, payload);
 
                 setResult(data);
                 setMode(MODE.RESULT);
                 setIsCanvasOpen(true);
 
-                // ✅ clear active session để reload không quay lại DOING nữa
-                clearActiveSession();
+                saveActiveSession({
+                    mode: MODE.RESULT,
+                    sessionToken: token,
+                    attemptId: data?.attemptId ?? null,
+                });
 
                 appendMessage({
                     role: "assistant",
@@ -537,14 +594,20 @@ export default function PracticePage() {
                 setLoading(false);
             }
         },
-        [attemptId, appendMessage, clearActiveSession, showToast]
+        [appendMessage, saveActiveSession, sessionToken, showToast]
     );
 
+    // =========================
+    // Review
+    // =========================
     const openReview = useCallback(async () => {
-        if (!attemptId) return;
+        const attemptId = result?.attemptId;
+        if (!attemptId) {
+            showToast("Chưa có attemptId để xem review.", "warning");
+            return;
+        }
         try {
-            const res = await practiceApi.getReview(attemptId);
-            const data = unwrap(res);
+            const data = await practiceApi.review(attemptId);
             setReviewData(data);
             setReviewOpen(true);
         } catch (e) {
@@ -558,27 +621,11 @@ export default function PracticePage() {
                 "Review failed";
             showToast(`Không tải được review${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
         }
-    }, [attemptId, showToast]);
+    }, [result?.attemptId, showToast]);
 
-    const attemptStartTs = useMemo(() => {
-        if (!attemptId) return null;
-        try {
-            const raw = localStorage.getItem(attemptStorageKey(attemptId));
-            const parsed = raw ? JSON.parse(raw) : null;
-            return typeof parsed?.startTs === "number" ? parsed.startTs : null;
-        } catch {
-            return null;
-        }
-    }, [attemptId]);
-
-    const isSplit = Boolean(previewQuestions?.length || previewToken || attemptId || result);
-
-    const normalizedPreview = useMemo(
-        () => (previewQuestions || []).map((q, idx) => normalizePreviewQuestion(q, idx)),
-        [previewQuestions]
-    );
-
-    // ✅ RESUME after reload: nếu đang DOING mà refresh, load lại attempt + restore config
+    // =========================
+    // RESUME after reload
+    // =========================
     useEffect(() => {
         let cancelled = false;
 
@@ -586,39 +633,85 @@ export default function PracticePage() {
             try {
                 const raw = localStorage.getItem(ACTIVE_SESSION_KEY);
                 const sess = raw ? JSON.parse(raw) : null;
+                if (!sess?.sessionToken) return;
 
-                if (!sess || sess?.mode !== MODE.DOING || !sess?.attemptId) return;
+                const token = String(sess.sessionToken);
+                sessionTokenRef.current = token;
+                setSessionToken(token);
 
-                // restore config (để timer không nhảy về 15p)
-                if (typeof sess?.durationMinutes === "number") setDurationMinutes(sess.durationMinutes);
                 if (typeof sess?.questionCount === "number") setQuestionCount(sess.questionCount);
+                if (typeof sess?.durationMinutes === "number") setDurationMinutes(sess.durationMinutes);
 
-                // nếu đang có attempt rồi thì khỏi resume
-                if (attemptId) return;
+                if (sess?.mode === MODE.RESULT) {
+                    if (!cancelled) {
+                        setMode(MODE.RESULT);
+                        setIsCanvasOpen(true);
+                    }
+                    return;
+                }
 
                 setLoading(true);
-                setLoadingMessage("Đang khôi phục bài làm…");
+                setLoadingMessage("Đang khôi phục phiên làm bài…");
 
-                const aId = sess.attemptId;
+                const data = await practiceApi.getSessionV2(token);
 
-                setAttemptId(aId);
-                setMode(MODE.DOING);
-                setIsCanvasOpen(true);
+                if (Number.isFinite(Number(data?.durationMinutes))) {
+                    setDurationMinutes(Number(data.durationMinutes));
+                }
 
-                const detailRes = await practiceApi.getAttempt(aId);
-                const detail = unwrap(detailRes);
+                const startedAt = data?.startedAt || null;
+                const deadline = data?.deadline || null;
 
-                if (cancelled) return;
+                setStartedAtIso(startedAt);
+                setDeadlineIso(deadline);
 
-                setAttemptDetail(detail);
+                if (startedAt) {
+                    const detail = buildAttemptDetailFromV2(data, token);
 
-                appendMessage({
-                    role: "assistant",
-                    text: "Mình đã khôi phục phiên làm bài trước đó (reload không làm mất tiến độ).",
-                });
+                    if (!cancelled) {
+                        setAttemptDetail(detail);
+                        setMode(MODE.DOING);
+                        setIsCanvasOpen(true);
+
+                        appendMessage({
+                            role: "assistant",
+                            text: "Mình đã khôi phục phiên làm bài trước đó (reload không làm mất tiến độ).",
+                        });
+                    }
+
+                    saveActiveSession({
+                        mode: MODE.DOING,
+                        sessionToken: token,
+                        attemptId: token,
+                        materialId: sess?.materialId ?? null,
+                        questionCount: typeof sess?.questionCount === "number" ? sess.questionCount : questionCount,
+                        durationMinutes: Number.isFinite(Number(data?.durationMinutes))
+                            ? Number(data.durationMinutes)
+                            : Number(sess?.durationMinutes || 0),
+                        startedAtIso: startedAt,
+                        deadlineIso: deadline,
+                    });
+                } else {
+                    if (!cancelled) {
+                        setMode(MODE.READY);
+                        setIsCanvasOpen(true);
+                    }
+
+                    saveActiveSession({
+                        mode: MODE.READY,
+                        sessionToken: token,
+                        attemptId: token,
+                        materialId: sess?.materialId ?? null,
+                        questionCount: typeof sess?.questionCount === "number" ? sess.questionCount : questionCount,
+                        durationMinutes: Number.isFinite(Number(data?.durationMinutes))
+                            ? Number(data.durationMinutes)
+                            : Number(sess?.durationMinutes || 0),
+                        startedAtIso: null,
+                        deadlineIso: null,
+                    });
+                }
             } catch (e) {
                 console.error(e);
-                // nếu resume fail thì clear session để tránh loop lỗi
                 try {
                     localStorage.removeItem(ACTIVE_SESSION_KEY);
                 } catch {
@@ -634,7 +727,23 @@ export default function PracticePage() {
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // chỉ chạy 1 lần khi mount
+    }, []);
+
+    // ===== Timer startTs (source-of-truth from BE) =====
+    const attemptStartTs = useMemo(() => {
+        if (startedAtIso) {
+            const ts = Date.parse(startedAtIso);
+            return Number.isFinite(ts) ? ts : null;
+        }
+        if (deadlineIso && Number(durationMinutes) > 0) {
+            const dts = Date.parse(deadlineIso);
+            if (!Number.isFinite(dts)) return null;
+            return dts - Number(durationMinutes) * 60 * 1000;
+        }
+        return null;
+    }, [deadlineIso, durationMinutes, startedAtIso]);
+
+    const isSplit = Boolean(materialId || sessionToken || attemptDetail || result);
 
     const ChatBubble = ({ role, text }) => {
         const isUser = role === "user";
@@ -681,59 +790,61 @@ export default function PracticePage() {
         );
     };
 
-    const PreviewCard = ({ q }) => (
-        <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, borderColor: "divider", bgcolor: "#fff" }}>
-            <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary, mb: 1 }}>
-                {q.type === "ESSAY" || q.type === "SHORT_ANSWER" ? "Tự luận" : "Trắc nghiệm"} • {q.text}
-            </Typography>
+    const canClickSend = useMemo(() => {
+        const hasMaterial = !!(materialIdRef.current ?? materialId);
+        const hasText = !!input.trim();
+        if (loading) return false;
+        if (hasText) return true;
+        return hasMaterial;
+    }, [input, loading, materialId]);
 
-            {q.type === "ESSAY" || q.type === "SHORT_ANSWER" ? (
-                <TextField
-                    fullWidth
-                    multiline
-                    minRows={3}
-                    placeholder="Ô trả lời tự luận (preview)"
-                    disabled
-                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
-                />
-            ) : (
-                <Stack spacing={1}>
-                    {(q.options || []).map((opt) => (
-                        <Button
-                            key={opt.key}
-                            variant="outlined"
-                            disabled
-                            sx={{ justifyContent: "flex-start", textTransform: "none", borderRadius: 2 }}
-                        >
-                            <b style={{ marginRight: 10 }}>{opt.key}.</b> {opt.text}
-                        </Button>
-                    ))}
-                </Stack>
-            )}
-        </Paper>
-    );
+    const handleBottomSend = useCallback(async () => {
+        if (loading) return;
+
+        if (input.trim()) {
+            await handleSendText();
+            return;
+        }
+
+        await generateSessionV2();
+    }, [generateSessionV2, handleSendText, input, loading]);
+
+    const doingAttemptId = useMemo(() => {
+        const t = sessionTokenRef.current || sessionToken;
+        return t || null;
+    }, [sessionToken]);
 
     return (
         <Box sx={{ display: "flex", height: "100vh", width: "100%", bgcolor: COLORS.bg, overflow: "hidden" }}>
-            {/* LEFT: Chat Panel */}
+            {/* LEFT: Chat */}
             <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", position: "relative" }}>
                 <Box sx={{ p: 2, pb: 0 }}>
                     <PracticeHeaderConfig
                         questionCount={questionCount}
                         durationMinutes={durationMinutes}
                         onChangeQuestionCount={(v) => setQuestionCount(Number(v))}
-                        onChangeDurationMinutes={(v) => setDurationMinutes(Number(v))}
-                        // ✅ timer chỉ hiển thị khi đang làm bài -> nộp xong tự dừng
-                        attemptId={mode === MODE.DOING ? attemptId : null}
+                        onChangeDurationMinutes={() => {
+                            showToast("Thời gian được hệ thống tính tự động theo số câu hỏi.", "info");
+                        }}
+                        attemptId={mode === MODE.DOING ? doingAttemptId : null}
                         attemptStartTs={mode === MODE.DOING ? attemptStartTs : null}
                         onTimeExpired={() => {
-                            // ✅ source-of-truth timer ngoài: hết giờ -> submit từ PracticePlayer
                             playerRef.current?.submit?.({ timedOut: true });
                         }}
                     />
                 </Box>
 
-                <Box sx={{ flex: 1, overflowY: "auto", px: 2, pb: 14, pt: 2, display: "flex", justifyContent: "center" }}>
+                <Box
+                    sx={{
+                        flex: 1,
+                        overflowY: "auto",
+                        px: 2,
+                        pb: 14,
+                        pt: 2,
+                        display: "flex",
+                        justifyContent: "center",
+                    }}
+                >
                     <Box sx={{ width: "100%", maxWidth: 860 }}>
                         {messages.map((m) => (
                             <ChatBubble key={m.id} role={m.role} text={m.text} />
@@ -742,7 +853,7 @@ export default function PracticePage() {
                     </Box>
                 </Box>
 
-                {/* Input fixed bottom */}
+                {/* Input bottom */}
                 <Box
                     sx={{
                         position: "absolute",
@@ -756,13 +867,13 @@ export default function PracticePage() {
                     }}
                 >
                     <Box sx={{ maxWidth: 860, mx: "auto", display: "flex", gap: 1 }}>
-                        <Tooltip title="Upload file">
+                        <Tooltip title="Upload file (PDF/DOCX/TXT/XLSX)">
                             <IconButton component="label" sx={{ border: `1px solid ${COLORS.border}`, borderRadius: 2 }}>
                                 <UploadFileRoundedIcon />
                                 <input
                                     hidden
                                     type="file"
-                                    accept=".pdf,.docx,.txt"
+                                    accept=".pdf,.docx,.txt,.xlsx"
                                     onChange={(e) => {
                                         const f = e.target.files?.[0];
                                         if (f) handleUploadFile(f);
@@ -776,11 +887,11 @@ export default function PracticePage() {
                             fullWidth
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder="Paste nội dung học liệu hoặc nhập yêu cầu…"
+                            placeholder="Paste nội dung học liệu… (Enter để gửi text). Nếu đã upload rồi, để trống và bấm Gửi để tạo đề."
                             onKeyDown={(e) => {
                                 if (e.key === "Enter" && !e.shiftKey) {
                                     e.preventDefault();
-                                    handleSendText();
+                                    handleBottomSend();
                                 }
                             }}
                             multiline
@@ -789,14 +900,14 @@ export default function PracticePage() {
                         />
 
                         <IconButton
-                            onClick={handleSendText}
-                            disabled={loading || !input.trim()}
+                            onClick={handleBottomSend}
+                            disabled={!canClickSend}
                             sx={{
                                 borderRadius: 2,
-                                bgcolor: input.trim() ? COLORS.orange : "transparent",
-                                color: input.trim() ? "#fff" : "action.disabled",
-                                "&:hover": { bgcolor: input.trim() ? COLORS.orangeHover : "transparent" },
-                                border: input.trim() ? "none" : `1px solid ${COLORS.border}`,
+                                bgcolor: canClickSend ? COLORS.orange : "transparent",
+                                color: canClickSend ? "#fff" : "action.disabled",
+                                "&:hover": { bgcolor: canClickSend ? COLORS.orangeHover : "transparent" },
+                                border: canClickSend ? "none" : `1px solid ${COLORS.border}`,
                             }}
                         >
                             <SendRoundedIcon />
@@ -809,7 +920,7 @@ export default function PracticePage() {
                 </Box>
             </Box>
 
-            {/* RIGHT: Canvas Panel */}
+            {/* RIGHT: Canvas */}
             <Box
                 sx={{
                     width: isCanvasOpen && isSplit ? { xs: 0, md: "45%" } : 0,
@@ -848,28 +959,21 @@ export default function PracticePage() {
                 </Box>
 
                 <Box sx={{ flex: 1, overflowY: "auto", p: 2.5 }}>
-                    {mode === MODE.PREVIEW && (
+                    {mode === MODE.IDLE && (
                         <Box>
                             <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary, mb: 0.5, fontSize: 18 }}>
-                                Preview câu hỏi
+                                Sẵn sàng tạo đề
                             </Typography>
                             <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 2 }}>
-                                Đây là bộ câu hỏi mẫu. Nhấn “Bắt đầu làm bài” để tạo attempt và bật đồng hồ.
+                                Upload/paste học liệu xong, bấm <b>Gửi</b> để AI tạo đề. Thời gian làm bài sẽ{" "}
+                                <b>tự tính theo số câu</b>.
                             </Typography>
-
-                            <Stack spacing={2}>
-                                {normalizedPreview.slice(0, 20).map((q) => (
-                                    <PreviewCard key={q.id} q={q} />
-                                ))}
-                            </Stack>
-
-                            <Divider sx={{ my: 2 }} />
 
                             <Button
                                 fullWidth
                                 variant="contained"
-                                onClick={() => startAttempt({ retried: false })}
-                                disabled={loading}
+                                onClick={generateSessionV2}
+                                disabled={loading || !(materialIdRef.current ?? materialId)}
                                 sx={{
                                     borderRadius: 3,
                                     fontWeight: 900,
@@ -877,8 +981,56 @@ export default function PracticePage() {
                                     "&:hover": { bgcolor: COLORS.orangeHover },
                                 }}
                             >
-                                Bắt đầu làm bài
+                                Tạo đề ngay
                             </Button>
+
+                            {!materialId && (
+                                <Typography sx={{ mt: 2, fontSize: 12, color: COLORS.textSecondary }}>
+                                    * Bạn cần upload/paste trước khi tạo đề.
+                                </Typography>
+                            )}
+                        </Box>
+                    )}
+
+                    {mode === MODE.READY && (
+                        <Box>
+                            <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary, mb: 0.5, fontSize: 18 }}>
+                                Đã tạo đề xong
+                            </Typography>
+                            <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 1.5 }}>
+                                Số câu: <b>{Number(questionCount)}</b> • Thời gian:{" "}
+                                <b>{Number(durationMinutes) || "—"} phút</b>
+                            </Typography>
+                            <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 2 }}>
+                                Bấm “Bắt đầu làm bài” để vào làm. Nếu muốn đổi học liệu thì bấm “Gửi lại tài liệu”.
+                            </Typography>
+
+                            <Stack spacing={1.5}>
+                                <Button
+                                    fullWidth
+                                    variant="contained"
+                                    onClick={startSessionV2}
+                                    disabled={loading}
+                                    sx={{
+                                        borderRadius: 3,
+                                        fontWeight: 900,
+                                        bgcolor: COLORS.orange,
+                                        "&:hover": { bgcolor: COLORS.orangeHover },
+                                    }}
+                                >
+                                    Bắt đầu làm bài
+                                </Button>
+
+                                <Button
+                                    fullWidth
+                                    variant="outlined"
+                                    onClick={() => resetPracticeState({ keepMessages: true })}
+                                    disabled={loading}
+                                    sx={{ borderRadius: 3, fontWeight: 900 }}
+                                >
+                                    Gửi lại tài liệu
+                                </Button>
+                            </Stack>
                         </Box>
                     )}
 
@@ -886,8 +1038,9 @@ export default function PracticePage() {
                         <PracticePlayer
                             ref={playerRef}
                             attemptDetail={attemptDetail}
-                            attemptId={attemptId}
-                            onSubmit={(answersArray, meta) => submitAttempt(answersArray, meta)}
+                            attemptId={doingAttemptId}
+                            attemptStartTs={attemptStartTs}
+                            onSubmit={(answersArray, meta) => submitSessionV2(answersArray, meta)}
                         />
                     )}
 
@@ -896,14 +1049,19 @@ export default function PracticePage() {
                             result={result}
                             numberOfQuestions={Number(questionCount)}
                             onRetry={() => {
-                                // ✅ retry là quay về preview => clear session DOING
-                                clearActiveSession();
-
-                                setMode(MODE.PREVIEW);
                                 setResult(null);
                                 setAttemptDetail(null);
-                                if (attemptId) localStorage.removeItem(attemptStorageKey(attemptId));
-                                setAttemptId(null);
+                                setStartedAtIso(null);
+                                setDeadlineIso(null);
+                                setMode(MODE.IDLE);
+
+                                setSessionToken("");
+                                sessionTokenRef.current = "";
+
+                                setDurationMinutes(0);
+
+                                clearActiveSession();
+                                appendMessage({ role: "assistant", text: "Ok! Bạn có thể bấm “Tạo đề ngay” để làm lại." });
                             }}
                             onNewMaterial={() => resetPracticeState({ keepMessages: true })}
                             onViewReview={openReview}

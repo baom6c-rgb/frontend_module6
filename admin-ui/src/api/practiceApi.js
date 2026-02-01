@@ -1,22 +1,35 @@
-// src/features/practice/practiceApi.js
-import axiosPrivate from "../api/axiosPrivate";
+// src/api/practiceApi.js
+import axiosPrivate from "./axiosPrivate";
 
 export const practiceApi = {
-    // Preview câu hỏi (không tạo attempt)
+    // ===== V1 (cũ) =====
     generatePreview: (payload) =>
-        axiosPrivate.post("/student/practice/generate", payload),
+        axiosPrivate.post("/student/practice/generate", payload).then((r) => r.data),
 
-    // Bắt đầu làm bài -> tạo attemptId
-    start: (payload) => axiosPrivate.post("/student/practice/start", payload),
+    start: (payload) =>
+        axiosPrivate.post("/student/practice/start", payload).then((r) => r.data),
 
-    // Lấy đề theo attemptId để làm
     getAttempt: (attemptId) =>
-        axiosPrivate.get(`/student/practice/attempts/${attemptId}`),
+        axiosPrivate.get(`/student/practice/attempts/${attemptId}`).then((r) => r.data),
 
-    // Nộp bài -> điểm + feedback
     submit: (attemptId, payload) =>
-        axiosPrivate.post(`/student/practice/attempts/${attemptId}/submit`, payload),
-    
-    getReview: (attemptId) =>
-        axiosPrivate.get(`/student/practice/attempts/${attemptId}/review`),
+        axiosPrivate.post(`/student/practice/attempts/${attemptId}/submit`, payload).then((r) => r.data),
+
+    review: (attemptId) =>
+        axiosPrivate.get(`/student/practice/attempts/${attemptId}/review`).then((r) => r.data),
+
+    // ===== V2 (mới) =====
+    generateSessionV2: (payload) =>
+        axiosPrivate.post("/student/practice/v2/generate", payload).then((r) => r.data),
+
+    startSessionV2: (payload) =>
+        axiosPrivate.post("/student/practice/v2/start", payload).then((r) => r.data),
+
+    getSessionV2: (sessionToken) =>
+        axiosPrivate.get(`/student/practice/v2/sessions/${sessionToken}`).then((r) => r.data),
+
+    submitSessionV2: (sessionToken, payload) =>
+        axiosPrivate
+            .post(`/student/practice/v2/sessions/${sessionToken}/submit`, payload)
+            .then((r) => r.data),
 };

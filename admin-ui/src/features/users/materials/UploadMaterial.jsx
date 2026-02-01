@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
     Box,
     Typography,
@@ -14,15 +14,16 @@ import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import { materialApi } from "../../../api/materialApi";
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
-const ALLOWED_EXT_REGEX = /\.(pdf|docx|txt)$/i;
+const ALLOWED_EXT_REGEX = /\.(pdf|docx|txt|xlsx)$/i;
 
 export default function UserMaterialsUpload({ onUploaded }) {
+    const inputRef = useRef(null);
+
     const [file, setFile] = useState(null);
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [msg, setMsg] = useState({ type: "", text: "" });
 
-    // local state (optional)
     const [materialId, setMaterialId] = useState(null);
 
     const fileLabel = useMemo(() => {
@@ -31,8 +32,14 @@ export default function UserMaterialsUpload({ onUploaded }) {
         return `${file.name} (${sizeMB} MB)`;
     }, [file]);
 
-    const resetFileInput = (e) => {
-        if (e?.target) e.target.value = "";
+    const resetInput = () => {
+        if (inputRef.current) inputRef.current.value = "";
+    };
+
+    const clearState = () => {
+        setFile(null);
+        setProgress(0);
+        setMaterialId(null);
     };
 
     const handlePick = (e) => {
@@ -41,19 +48,15 @@ export default function UserMaterialsUpload({ onUploaded }) {
 
         if (f.size > MAX_SIZE_BYTES) {
             setMsg({ type: "error", text: "File quá dung lượng (tối đa 10MB), không thể upload." });
-            setFile(null);
-            setProgress(0);
-            setMaterialId(null);
-            resetFileInput(e);
+            clearState();
+            resetInput();
             return;
         }
 
         if (!ALLOWED_EXT_REGEX.test(f.name)) {
-            setMsg({ type: "error", text: "Chọn file sai định dạng. Chỉ chọn được PDF / DOCX / TXT." });
-            setFile(null);
-            setProgress(0);
-            setMaterialId(null);
-            resetFileInput(e);
+            setMsg({ type: "error", text: "Chọn file sai định dạng. Chỉ chọn được PDF / DOCX / TXT / XLSX." });
+            clearState();
+            resetInput();
             return;
         }
 
@@ -65,7 +68,7 @@ export default function UserMaterialsUpload({ onUploaded }) {
 
     const handleUpload = async () => {
         if (!file) {
-            setMsg({ type: "error", text: "Vui lòng chọn file (PDF / DOCX / TXT)." });
+            setMsg({ type: "error", text: "Vui lòng chọn file (PDF / DOCX / TXT / XLSX)." });
             return;
         }
 
@@ -80,10 +83,13 @@ export default function UserMaterialsUpload({ onUploaded }) {
             const message = res.data?.message || "Tải tài liệu thành công!";
 
             setMsg({ type: "success", text: message });
-            setFile(null);
             setMaterialId(id);
 
-            // ✅ QUAN TRỌNG: báo cho parent biết materialId để auto-next step
+            // reset để user có thể chọn lại đúng file cũ
+            setFile(null);
+            setProgress(0);
+            resetInput();
+
             if (id) onUploaded?.(id);
         } catch (e) {
             const data = e.response?.data;
@@ -98,19 +104,17 @@ export default function UserMaterialsUpload({ onUploaded }) {
 
     return (
         <Box sx={{ display: "grid", gap: 2 }}>
-            {/* Header */}
             <Stack spacing={0.75}>
                 <Typography sx={{ fontWeight: 900, color: "#1B2559", fontSize: 20 }}>
                     Upload tài liệu học
                 </Typography>
                 <Typography sx={{ color: "#6C757D", fontWeight: 600 }}>
-                    Hỗ trợ PDF / DOCX / TXT. Hệ thống sẽ tự trích xuất văn bản để AI tạo câu hỏi.
+                    Hỗ trợ PDF / DOCX / TXT / XLSX. Hệ thống sẽ tự trích xuất văn bản để AI tạo câu hỏi.
                 </Typography>
             </Stack>
 
             <Divider />
 
-            {/* Pick file */}
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.25, alignItems: "center" }}>
                 <Button
                     variant="outlined"
@@ -126,7 +130,13 @@ export default function UserMaterialsUpload({ onUploaded }) {
                     }}
                 >
                     Chọn file
-                    <input hidden type="file" onChange={handlePick} accept=".pdf,.docx,.txt" />
+                    <input
+                        ref={inputRef}
+                        hidden
+                        type="file"
+                        onChange={handlePick}
+                        accept=".pdf,.docx,.txt,.xlsx"
+                    />
                 </Button>
 
                 {file ? (
@@ -152,7 +162,6 @@ export default function UserMaterialsUpload({ onUploaded }) {
                 )}
             </Box>
 
-            {/* Progress */}
             {loading && (
                 <Box sx={{ mt: 0.5 }}>
                     <Typography sx={{ mb: 1, fontWeight: 700, color: "#1B2559" }}>
@@ -162,14 +171,12 @@ export default function UserMaterialsUpload({ onUploaded }) {
                 </Box>
             )}
 
-            {/* Message */}
             {msg.text && (
                 <Alert severity={msg.type} sx={{ mt: 0.5 }}>
                     {msg.text}
                 </Alert>
             )}
 
-            {/* Actions */}
             <Box sx={{ display: "flex", gap: 1.25, justifyContent: "flex-end", alignItems: "center" }}>
                 <Button
                     variant="contained"
@@ -188,12 +195,10 @@ export default function UserMaterialsUpload({ onUploaded }) {
                 </Button>
             </Box>
 
-            {/* Info */}
             <Alert severity="info">
-                Chỉ hỗ trợ PDF / DOCX / TXT, dung lượng tối đa 10MB. Upload xong hệ thống tự trích xuất & lưu DB.
+                Hỗ trợ PDF / DOCX / TXT / XLSX, dung lượng tối đa 10MB. Upload xong hệ thống tự trích xuất & lưu DB.
             </Alert>
 
-            {/* Optional debug */}
             {materialId && (
                 <Typography sx={{ fontWeight: 800, color: "#6C757D" }}>
                     MaterialId: {materialId}
