@@ -467,7 +467,7 @@ export default function UserLayout() {
                                 <ListItemIcon>
                                     <PersonRounded fontSize="small" sx={{ color: COLORS.primaryBlue }} />
                                 </ListItemIcon>
-                                <Typography sx={{ fontWeight: 800 }}>Hồ sơ</Typography>
+                                <Typography sx={{ fontWeight: 800 }}>Hồ sơ cá nhân</Typography>
                             </MenuItem>
 
                             <Divider />

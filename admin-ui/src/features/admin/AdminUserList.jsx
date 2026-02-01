@@ -7,20 +7,14 @@ import {
     Stack,
     Alert,
     Button,
-    TextField,
-    InputAdornment,
     IconButton,
     Tooltip,
     useMediaQuery,
-    MenuItem,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import { DataGrid } from "@mui/x-data-grid";
 
-import SearchIcon from "@mui/icons-material/Search";
-import RefreshIcon from "@mui/icons-material/Refresh";
 import PersonAddAlt1Icon from "@mui/icons-material/PersonAddAlt1";
-
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import BlockRoundedIcon from "@mui/icons-material/BlockRounded";
 import LockOpenRoundedIcon from "@mui/icons-material/LockOpenRounded";
@@ -40,6 +34,7 @@ import { useToast } from "../../components/common/AppToast";
 import AppPagination from "../../components/common/AppPagination";
 import AppConfirm from "../../components/common/AppConfirm";
 import GlobalLoading from "../../components/common/GlobalLoading";
+import FilterPanel from "../../components/common/FilterPanel";
 
 import EditUserModal from "./EditUserModal";
 import AdminCreateUserModal from "./AdminCreateUserModal";
@@ -48,15 +43,21 @@ import { useLocation } from "react-router-dom";
 /** ---------------- helpers ---------------- */
 const statusChip = (status) => {
     const s = String(status || "").toUpperCase();
-    if (s === "ACTIVE") return <Chip label="Đang hoạt động" color="success" size="small" />;
-    if (s === "BLOCKED") return <Chip label="Bị khóa" color="error" size="small" />;
+
+    const commonSx = {
+        my: 0.25,
+        px: 0.5,
+        height: 26,
+        "& .MuiChip-label": { px: 1, fontWeight: 700, lineHeight: 1 },
+    };
+
+    if (s === "ACTIVE") return <Chip label="Đang hoạt động" color="success" size="small" sx={commonSx} />;
+    if (s === "BLOCKED") return <Chip label="Bị khóa" color="error" size="small" sx={commonSx} />;
     if (s === "PENDING" || s === "WAITING_APPROVAL")
-        return <Chip label="Chờ duyệt" color="warning" size="small" />;
+        return <Chip label="Chờ duyệt" color="warning" size="small" sx={commonSx} />;
+    if (s === "CREATED") return <Chip label="Mới tạo" color="default" size="small" sx={commonSx} />;
 
-    // CREATED vẫn có thể tồn tại trong data, nhưng dropdown filter không có
-    if (s === "CREATED") return <Chip label="Mới tạo" color="default" size="small" />;
-
-    return <Chip label={s || "UNKNOWN"} size="small" />;
+    return <Chip label={s || "UNKNOWN"} size="small" sx={commonSx} />;
 };
 
 const normalizeUserRow = (u) => ({
@@ -67,11 +68,9 @@ const normalizeUserRow = (u) => ({
     role: u?.role ?? u?.roleName ?? "",
     className: u?.className ?? u?.class?.name ?? u?.class?.className ?? "",
     moduleName: u?.moduleName ?? u?.module?.name ?? u?.module?.moduleName ?? "",
-    // internal: for "new row on top"
     __newTs: u?.__newTs ?? 0,
 });
 
-// Handle common backend shapes: res.data | res.data.data | res.data.content | res.data.result
 const normalizeList = (res) => {
     const data = res?.data;
     if (Array.isArray(data)) return data;
@@ -103,7 +102,6 @@ const mapModuleOptions = (arr) =>
 
 const toErrorText = (err, fallback = "Request failed.") => {
     const data = err?.response?.data;
-
     if (!data) return fallback;
     if (typeof data === "string") return data;
     if (typeof data?.message === "string") return data.message;
@@ -114,7 +112,6 @@ const toErrorText = (err, fallback = "Request failed.") => {
             .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v)}`)
             .join(" | ");
     }
-
     return fallback;
 };
 
@@ -126,6 +123,13 @@ const statusPriority = (s) => {
     if (x === "BLOCKED") return 3;
     return 99;
 };
+
+const isAdminRole = (role) => {
+    const r = String(role || "").toUpperCase();
+    return r === "ADMIN" || r.includes("ADMIN");
+};
+
+const rolePriority = (role) => (isAdminRole(role) ? 1 : 0);
 
 const actionBtnSx = (tone = "default") => {
     const toneMap = {
@@ -141,13 +145,12 @@ const actionBtnSx = (tone = "default") => {
         borderRadius: "10px",
         transition: "all 160ms ease",
         color: t.color,
-        "&:hover": {
-            bgcolor: `${t.hoverBg}14`,
-            transform: "translateY(-1px)",
-        },
+        "&:hover": { bgcolor: `${t.hoverBg}14`, transform: "translateY(-1px)" },
         "&:active": { transform: "translateY(0px)" },
     };
 };
+
+const ALL = "ALL";
 
 /** ---------------- component ---------------- */
 export default function AdminUserList() {
@@ -156,37 +159,34 @@ export default function AdminUserList() {
     const downMd = useMediaQuery(theme.breakpoints.down("md"));
     const { showToast } = useToast();
 
-    // data
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
     const [errMsg, setErrMsg] = useState("");
 
-    // ✅ GlobalLoading for actions (Block/Unblock/Approve/Reject)
     const [actionLoading, setActionLoading] = useState(false);
     const [actionMessage, setActionMessage] = useState("");
 
-    // filters
-    const [q, setQ] = useState("");
-    const [statusFilter, setStatusFilter] = useState("ALL");
-    const [refreshing, setRefreshing] = useState(false);
+    // filter state
+    const [searchText, setSearchText] = useState("");
+    const [showFilters, setShowFilters] = useState(false);
+    const [selectedModule, setSelectedModule] = useState(ALL);
+    const [selectedClass, setSelectedClass] = useState(ALL);
+    const [selectedStatus, setSelectedStatus] = useState(ALL);
 
-    // pagination (client-side)
+    const [filterModules, setFilterModules] = useState([{ value: ALL, label: "Tất cả" }]);
+    const [filterClasses, setFilterClasses] = useState([{ value: ALL, label: "Tất cả" }]);
+
     const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
 
-    // options (for create/edit)
     const [roleOptions, setRoleOptions] = useState([]);
     const [classOptions, setClassOptions] = useState([]);
     const [moduleOptions, setModuleOptions] = useState([]);
     const [optionsLoading, setOptionsLoading] = useState(false);
 
-    // create modal
     const [createOpen, setCreateOpen] = useState(false);
-
-    // edit modal
     const [editOpen, setEditOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
 
-    // confirm
     const [confirm, setConfirm] = useState({
         open: false,
         title: "Xác nhận",
@@ -194,14 +194,6 @@ export default function AdminUserList() {
         onConfirm: null,
     });
 
-    // ✅ nếu lỡ có state cũ set REJECTED (localStorage/query/legacy) → reset về ALL
-    useEffect(() => {
-        if (String(statusFilter || "").toUpperCase() === "REJECTED") {
-            setStatusFilter("ALL");
-        }
-    }, [statusFilter]);
-
-    // ✅ wrap confirm to include GlobalLoading
     const openConfirm = ({ title = "Xác nhận", message, loadingMessage, onConfirm }) => {
         setConfirm({
             open: true,
@@ -241,25 +233,50 @@ export default function AdminUserList() {
         }
     }, []);
 
+    const fetchFilterOptions = useCallback(async () => {
+        try {
+            const [modsRes, classesRes] = await Promise.allSettled([getAllModulesApi(), getAllClassesApi()]);
+
+            if (modsRes.status === "fulfilled") {
+                const list = normalizeList(modsRes.value);
+                const opts = list
+                    .map((m) => m?.name ?? m?.moduleName ?? "")
+                    .filter(Boolean)
+                    .map((name) => ({ value: name, label: name }));
+                setFilterModules([{ value: ALL, label: "Tất cả" }, ...opts]);
+            }
+
+            if (classesRes.status === "fulfilled") {
+                const list = normalizeList(classesRes.value);
+                const opts = list
+                    .map((c) => c?.name ?? c?.className ?? "")
+                    .filter(Boolean)
+                    .map((name) => ({ value: name, label: name }));
+                setFilterClasses([{ value: ALL, label: "Tất cả" }, ...opts]);
+            }
+        } catch {
+            // ignore
+        }
+    }, []);
+
     useEffect(() => {
         fetchUsers();
-    }, [fetchUsers]);
+        fetchFilterOptions();
+    }, [fetchUsers, fetchFilterOptions]);
 
-    // ✅ auto filter khi click chuông pending approvals
     useEffect(() => {
         const sp = new URLSearchParams(location.search);
         const status = sp.get("status");
-
         if (status === "WAITING_APPROVAL") {
-            setStatusFilter("WAITING_APPROVAL");
-            fetchUsers(); // reload list
+            setSelectedStatus("WAITING_APPROVAL");
+            setPaginationModel((p) => ({ ...p, page: 0 }));
+            setShowFilters(true);
         }
-    }, [location.search, fetchUsers]);
+    }, [location.search]);
 
     const fetchOptions = useCallback(async () => {
         try {
             setOptionsLoading(true);
-
             const [rolesRes, classesRes, modulesRes] = await Promise.all([
                 getRoleOptionsApi(),
                 getAllClassesApi(),
@@ -298,34 +315,40 @@ export default function AdminUserList() {
     }, [rows]);
 
     const filteredRows = useMemo(() => {
-        const keyword = q.trim().toLowerCase();
+        const q = String(searchText || "").trim().toLowerCase();
 
         return rows.filter((r) => {
+            const okSearch =
+                !q ||
+                String(r.fullName || "").toLowerCase().includes(q) ||
+                String(r.email || "").toLowerCase().includes(q) ||
+                String(r.className || "").toLowerCase().includes(q) ||
+                String(r.moduleName || "").toLowerCase().includes(q) ||
+                String(r.role || "").toLowerCase().includes(q);
+
+            const okModule = selectedModule === ALL ? true : String(r.moduleName || "") === String(selectedModule);
+            const okClass = selectedClass === ALL ? true : String(r.className || "") === String(selectedClass);
+
             const okStatus =
-                statusFilter === "ALL"
+                selectedStatus === ALL
                     ? true
-                    : String(r.status || "").toUpperCase() === statusFilter;
+                    : String(r.status || "").toUpperCase() === String(selectedStatus).toUpperCase();
 
-            const okQ =
-                !keyword ||
-                String(r.fullName || "").toLowerCase().includes(keyword) ||
-                String(r.email || "").toLowerCase().includes(keyword) ||
-                String(r.className || "").toLowerCase().includes(keyword) ||
-                String(r.moduleName || "").toLowerCase().includes(keyword) ||
-                String(r.role || "").toLowerCase().includes(keyword);
-
-            return okStatus && okQ;
+            return okSearch && okModule && okClass && okStatus;
         });
-    }, [rows, q, statusFilter]);
+    }, [rows, searchText, selectedModule, selectedClass, selectedStatus]);
 
     const sortedRows = useMemo(() => {
         const arr = [...filteredRows];
         arr.sort((a, b) => {
+            const ra = rolePriority(a.role);
+            const rb = rolePriority(b.role);
+            if (ra !== rb) return ra - rb; // ✅ ADMIN at bottom
+
             const pa = statusPriority(a.status);
             const pb = statusPriority(b.status);
             if (pa !== pb) return pa - pb;
 
-            // ✅ new rows first (within same status)
             const na = Number(a.__newTs || 0);
             const nb = Number(b.__newTs || 0);
             if (na !== nb) return nb - na;
@@ -335,7 +358,6 @@ export default function AdminUserList() {
         return arr;
     }, [filteredRows]);
 
-    /** ===== actions (with confirm) ===== */
     const approveUser = (id) =>
         openConfirm({
             message: "Bạn có chắc muốn phê duyệt tài khoản này không?",
@@ -353,12 +375,9 @@ export default function AdminUserList() {
             loadingMessage: "Đang từ chối & xóa người dùng...",
             onConfirm: async () => {
                 await adminUserApi.rejectPendingUser(id);
-
-                // ✅ optimistic remove row (đỡ giật, đúng yêu cầu)
                 setRows((prev) => prev.filter((r) => String(r.id) !== String(id)));
-
                 showToast("Đã từ chối và xóa người dùng", "success");
-                await fetchUsers(); // sync
+                await fetchUsers();
             },
         });
 
@@ -384,9 +403,30 @@ export default function AdminUserList() {
             },
         });
 
-    /** ===== columns ===== */
+    // ✅ reset icon in header
+    const resetFilters = async () => {
+        setSearchText("");
+        setSelectedModule(ALL);
+        setSelectedClass(ALL);
+        setSelectedStatus(ALL);
+        setPaginationModel((p) => ({ ...p, page: 0 }));
+        await fetchUsers();
+    };
+
     const columns = useMemo(() => {
         const pageOffset = paginationModel.page * paginationModel.pageSize;
+
+        const centerCell = (children) => (
+            <Box sx={{ width: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                {children}
+            </Box>
+        );
+
+        const statusCellWrapper = (children) => (
+            <Box sx={{ width: "100%", display: "flex", justifyContent: "center", alignItems: "center", py: 0.6 }}>
+                {children}
+            </Box>
+        );
 
         return [
             {
@@ -395,55 +435,80 @@ export default function AdminUserList() {
                 width: 80,
                 sortable: false,
                 filterable: false,
+                headerAlign: "center",
+                align: "center",
                 renderCell: (params) => {
                     const idx = params.api.getRowIndexRelativeToVisibleRows(params.id);
-                    return pageOffset + idx + 1;
+                    return centerCell(pageOffset + idx + 1);
                 },
             },
             { field: "fullName", headerName: "Họ tên", flex: 1.1, minWidth: 170 },
             { field: "email", headerName: "Email", flex: 1.3, minWidth: 220 },
-            { field: "className", headerName: "Lớp", flex: 0.65, minWidth: 120 },
+            {
+                field: "className",
+                headerName: "Lớp",
+                flex: 0.65,
+                minWidth: 120,
+                headerAlign: "center",
+                align: "center",
+            },
             {
                 field: "moduleName",
                 headerName: "Module",
                 flex: 1.0,
                 minWidth: 170,
                 hide: downMd,
+                headerAlign: "center",
+                align: "center",
             },
             {
                 field: "status",
                 headerName: "Trạng thái",
-                flex: 0.65,
-                minWidth: 160,
-                renderCell: (params) => statusChip(params.value),
+                flex: 0.7,
+                minWidth: 170,
                 sortable: false,
+                headerAlign: "center",
+                align: "center",
+                renderCell: (params) => statusCellWrapper(statusChip(params.value)),
             },
-            { field: "role", headerName: "Vai trò", flex: 0.6, minWidth: 120 },
+            {
+                field: "role",
+                headerName: "Vai trò",
+                flex: 0.6,
+                minWidth: 120,
+                headerAlign: "center",
+                align: "center",
+            },
             {
                 field: "actions",
                 headerName: "Hành động",
-                width: 200,
+                width: 132,
+                minWidth: 120,
                 sortable: false,
                 filterable: false,
+                headerAlign: "center",
+                align: "center",
                 renderCell: (params) => {
                     const row = params.row;
                     const status = String(row.status || "").toUpperCase();
                     const role = String(row.role || "").toUpperCase();
-                    const isAdmin = role === "ADMIN";
+                    const isAdmin = isAdminRole(role);
 
                     const isPending = status === "WAITING_APPROVAL" || status === "PENDING";
                     const isActive = status === "ACTIVE";
                     const isBlocked = status === "BLOCKED";
 
-                    return (
-                        <Stack direction="row" spacing={0.5}>
+                    return centerCell(
+                        <Stack
+                            direction="row"
+                            spacing={0.25}
+                            justifyContent="center"
+                            alignItems="center"
+                            sx={{ width: "100%", "& .MuiIconButton-root": { p: 0.75 } }}
+                        >
                             <Tooltip title="Chỉnh sửa">
                                 <span>
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => openEdit(row.id)}
-                                        sx={actionBtnSx("primary")}
-                                    >
+                                    <IconButton size="small" onClick={() => openEdit(row.id)} sx={actionBtnSx("primary")}>
                                         <EditRoundedIcon fontSize="small" />
                                     </IconButton>
                                 </span>
@@ -453,11 +518,7 @@ export default function AdminUserList() {
                                 <>
                                     <Tooltip title="Phê duyệt">
                                         <span>
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => approveUser(row.id)}
-                                                sx={actionBtnSx("success")}
-                                            >
+                                            <IconButton size="small" onClick={() => approveUser(row.id)} sx={actionBtnSx("success")}>
                                                 <CheckCircleRoundedIcon fontSize="small" />
                                             </IconButton>
                                         </span>
@@ -465,11 +526,7 @@ export default function AdminUserList() {
 
                                     <Tooltip title="Từ chối & xóa">
                                         <span>
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => rejectUser(row.id)}
-                                                sx={actionBtnSx("error")}
-                                            >
+                                            <IconButton size="small" onClick={() => rejectUser(row.id)} sx={actionBtnSx("error")}>
                                                 <CancelRoundedIcon fontSize="small" />
                                             </IconButton>
                                         </span>
@@ -480,12 +537,7 @@ export default function AdminUserList() {
                             {isActive && (
                                 <Tooltip title={isAdmin ? "Không thể khóa ADMIN" : "Khóa tài khoản"}>
                                     <span>
-                                        <IconButton
-                                            size="small"
-                                            disabled={isAdmin}
-                                            onClick={() => blockUser(row.id)}
-                                            sx={actionBtnSx("error")}
-                                        >
+                                        <IconButton size="small" disabled={isAdmin} onClick={() => blockUser(row.id)} sx={actionBtnSx("error")}>
                                             <BlockRoundedIcon fontSize="small" />
                                         </IconButton>
                                     </span>
@@ -495,12 +547,7 @@ export default function AdminUserList() {
                             {isBlocked && (
                                 <Tooltip title={isAdmin ? "Không thể khôi phục ADMIN" : "Khôi phục"}>
                                     <span>
-                                        <IconButton
-                                            size="small"
-                                            disabled={isAdmin}
-                                            onClick={() => unblockUser(row.id)}
-                                            sx={actionBtnSx("warning")}
-                                        >
+                                        <IconButton size="small" disabled={isAdmin} onClick={() => unblockUser(row.id)} sx={actionBtnSx("warning")}>
                                             <LockOpenRoundedIcon fontSize="small" />
                                         </IconButton>
                                     </span>
@@ -511,7 +558,23 @@ export default function AdminUserList() {
                 },
             },
         ];
-    }, [downMd, paginationModel, roleOptions, classOptions, moduleOptions]);
+    }, [downMd, paginationModel]);
+
+    const statusMenuSx = {
+        [ALL]: undefined,
+        ACTIVE: {
+            "&.Mui-selected, &.Mui-selected:hover": { bgcolor: "success.main", color: "#fff" },
+            "&:hover": { bgcolor: "success.main", color: "#fff" },
+        },
+        WAITING_APPROVAL: {
+            "&.Mui-selected, &.Mui-selected:hover": { bgcolor: "#EC5E32", color: "#fff" },
+            "&:hover": { bgcolor: "#EC5E32", color: "#fff" },
+        },
+        BLOCKED: {
+            "&.Mui-selected, &.Mui-selected:hover": { bgcolor: "error.main", color: "#fff" },
+            "&:hover": { bgcolor: "error.main", color: "#fff" },
+        },
+    };
 
     return (
         <Box
@@ -526,17 +589,7 @@ export default function AdminUserList() {
         >
             <GlobalLoading open={actionLoading} message={actionMessage || "Đang xử lý..."} />
 
-            {/* ===== Header ===== */}
-            <Box
-                sx={{
-                    mb: 1.5,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 2,
-                    flexWrap: "wrap",
-                }}
-            >
+            <Box sx={{ mb: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
                 <Typography sx={{ fontSize: 22, fontWeight: 900, color: "text.primary" }}>
                     Danh sách người dùng
                 </Typography>
@@ -557,110 +610,63 @@ export default function AdminUserList() {
                 </Alert>
             ) : null}
 
-            {/* ===== Filter/Search ===== */}
-            <Paper
-                elevation={0}
-                sx={{
-                    p: 1.5,
-                    mb: 1.5,
-                    borderRadius: 2,
-                    border: "1px solid",
-                    borderColor: "divider",
-                }}
-            >
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ width: "100%" }}>
-                    <TextField
-                        size="small"
-                        placeholder="Tìm kiếm tên / email / lớp / module / vai trò"
-                        value={q}
-                        onChange={(e) => setQ(e.target.value)}
-                        sx={{ flex: 1, minWidth: 0 }}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon fontSize="small" />
-                                </InputAdornment>
-                            ),
-                        }}
-                    />
-
-                    <TextField
-                        size="small"
-                        label="Trạng thái"
-                        select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        sx={{ width: 240 }}
-                        SelectProps={{
-                            MenuProps: {
-                                PaperProps: { sx: { borderRadius: 2, mt: 0.5 } },
+            <Box sx={{ mb: 1.5 }}>
+                <FilterPanel
+                    search={{
+                        value: searchText,
+                        onChange: (v) => {
+                            setSearchText(v);
+                            setPaginationModel((p) => ({ ...p, page: 0 }));
+                        },
+                        placeholder: "Tìm kiếm tên / email / lớp / module / vai trò",
+                    }}
+                    showFilters={showFilters}
+                    onToggleFilters={() => setShowFilters((x) => !x)}
+                    onReset={resetFilters}
+                    resetTooltip="Đặt lại bộ lọc"
+                    fields={{
+                        module: {
+                            enabled: true,
+                            label: "Module",
+                            value: selectedModule,
+                            onChange: (v) => {
+                                setSelectedModule(v);
+                                setPaginationModel((p) => ({ ...p, page: 0 }));
                             },
-                        }}
-                    >
-                        <MenuItem value="ALL">Tất cả</MenuItem>
+                            options: filterModules,
+                        },
+                        class: {
+                            enabled: true,
+                            label: "Lớp học",
+                            value: selectedClass,
+                            onChange: (v) => {
+                                setSelectedClass(v);
+                                setPaginationModel((p) => ({ ...p, page: 0 }));
+                            },
+                            options: filterClasses,
+                        },
+                        status: {
+                            enabled: true,
+                            label: "Trạng thái",
+                            value: selectedStatus,
+                            onChange: (v) => {
+                                setSelectedStatus(v);
+                                setPaginationModel((p) => ({ ...p, page: 0 }));
+                            },
+                            options: [
+                                { value: ALL, label: "Tất cả" },
+                                { value: "ACTIVE", label: "Đang hoạt động" },
+                                { value: "WAITING_APPROVAL", label: "Chờ duyệt" },
+                                { value: "BLOCKED", label: "Bị khóa" },
+                            ],
+                            menuItemSxByValue: statusMenuSx,
+                        },
+                        startDate: { enabled: false },
+                        endDate: { enabled: false },
+                    }}
+                />
+            </Box>
 
-                        <MenuItem
-                            value="ACTIVE"
-                            sx={{
-                                "&.Mui-selected, &.Mui-selected:hover": {
-                                    bgcolor: "success.main",
-                                    color: "#fff",
-                                },
-                                "&:hover": { bgcolor: "success.main", color: "#fff" },
-                            }}
-                        >
-                            Đang hoạt động
-                        </MenuItem>
-
-                        <MenuItem
-                            value="WAITING_APPROVAL"
-                            sx={{
-                                "&.Mui-selected, &.Mui-selected:hover": {
-                                    bgcolor: "#EC5E32",
-                                    color: "#fff",
-                                },
-                                "&:hover": { bgcolor: "#EC5E32", color: "#fff" },
-                            }}
-                        >
-                            Chờ duyệt
-                        </MenuItem>
-
-                        <MenuItem
-                            value="BLOCKED"
-                            sx={{
-                                "&.Mui-selected, &.Mui-selected:hover": {
-                                    bgcolor: "error.main",
-                                    color: "#fff",
-                                },
-                                "&:hover": { bgcolor: "error.main", color: "#fff" },
-                            }}
-                        >
-                            Bị khóa
-                        </MenuItem>
-                    </TextField>
-
-                    <Tooltip title="Làm mới">
-                        <span>
-                            <IconButton
-                                onClick={async () => {
-                                    try {
-                                        setRefreshing(true);
-                                        await fetchUsers();
-                                    } finally {
-                                        setRefreshing(false);
-                                    }
-                                }}
-                                disabled={loading || refreshing}
-                                sx={{ border: "1px solid", borderColor: "divider", borderRadius: "12px" }}
-                            >
-                                <RefreshIcon />
-                            </IconButton>
-                        </span>
-                    </Tooltip>
-                </Stack>
-            </Paper>
-
-            {/* ===== Table + Footer ===== */}
             <Paper
                 elevation={0}
                 sx={{
@@ -752,7 +758,6 @@ export default function AdminUserList() {
                         role: formData?.roleName || created?.roleName || "",
                         __newTs: Date.now(),
                     });
-
                     setRows((prev) => [newRow, ...prev]);
                     setPaginationModel((p) => ({ ...p, page: 0 }));
                 }}
