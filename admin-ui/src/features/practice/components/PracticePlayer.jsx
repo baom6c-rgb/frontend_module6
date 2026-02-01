@@ -1,23 +1,31 @@
 // src/features/practice/components/PracticePlayer.jsx
-import React, {
-    forwardRef,
-    useEffect,
-    useImperativeHandle,
-    useMemo,
-    useRef,
-    useState,
-} from "react";
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Box, Button, Paper, Typography, Divider } from "@mui/material";
 import QuestionCard from "./QuestionCard";
 
-const attemptStorageKey = (attemptId) => `practice_attempt_${attemptId}`;
+/**
+ * V2 NOTE:
+ * - attemptId nên = sessionToken (unique per session)
+ * - answersMap key nên dùng questionId ổn định (ở PracticePage đã set questionId = questionKey)
+ * - timer: startTs lấy từ BE (attemptStartTs) và persist để reload không reset
+ */
+const buildStorageKey = (attemptId, attemptDetail) => {
+    if (attemptId && String(attemptId).trim()) return `practice_v2_attempt_${String(attemptId).trim()}`;
+
+    const token = attemptDetail?.sessionToken || attemptDetail?.token || null;
+    if (token && String(token).trim()) return `practice_v2_attempt_${String(token).trim()}`;
+
+    return "practice_v2_attempt_unknown";
+};
 
 const PracticePlayer = forwardRef(function PracticePlayer(
-    { attemptDetail, attemptId, onSubmit },
+    { attemptDetail, attemptId, attemptStartTs, onSubmit },
     ref
 ) {
     const questions = attemptDetail?.questions || [];
     const total = questions.length;
+
+    const storageKey = useMemo(() => buildStorageKey(attemptId, attemptDetail), [attemptId, attemptDetail]);
 
     const [index, setIndex] = useState(0);
 
@@ -29,12 +37,25 @@ const PracticePlayer = forwardRef(function PracticePlayer(
      */
     const [answersMap, setAnswersMap] = useState({});
 
+    const submittedRef = useRef(false);
+
     const getQid = (q) => q?.questionId ?? q?.id ?? null;
 
     const currentQuestion = questions[index];
     const currentQid = useMemo(() => getQid(currentQuestion), [currentQuestion]);
 
-    const answeredCount = useMemo(() => Object.keys(answersMap).length, [answersMap]);
+    const answeredCount = useMemo(() => {
+        return questions.reduce((acc, q) => {
+            const qid = getQid(q);
+            if (!qid) return acc;
+
+            const type = String(q?.questionType || "").toUpperCase();
+            const a = answersMap[qid];
+
+            if (type === "MCQ") return acc + (a?.selectedAnswer ? 1 : 0);
+            return acc + (a?.textAnswer && a.textAnswer.trim().length > 0 ? 1 : 0);
+        }, 0);
+    }, [answersMap, questions]);
 
     const isAllAnswered = useMemo(() => {
         if (!questions.length) return false;
@@ -42,66 +63,95 @@ const PracticePlayer = forwardRef(function PracticePlayer(
             const qid = getQid(q);
             if (!qid) return false;
 
-            const type = q?.questionType;
+            const type = String(q?.questionType || "").toUpperCase();
             const a = answersMap[qid];
 
             if (type === "MCQ") return !!a?.selectedAnswer;
-            // ESSAY / SHORT_ANSWER
             return !!(a?.textAnswer && a.textAnswer.trim().length > 0);
         });
     }, [questions, answersMap]);
 
-    // ===== Persist startTs + answers + index (reload giữ đáp án + đang ở câu nào) =====
+    /**
+     * ✅ Restore answers/index + startTs on mount OR when storageKey changes
+     * - startTs ưu tiên attemptStartTs (BE) để timer không reset
+     * - nếu local chưa có startTs, set lần đầu
+     */
     useEffect(() => {
-        if (!attemptId) return;
+        submittedRef.current = false;
 
         try {
-            const raw = localStorage.getItem(attemptStorageKey(attemptId));
+            const raw = localStorage.getItem(storageKey);
             const parsed = raw ? JSON.parse(raw) : null;
 
             const savedAnswers = parsed?.answers;
             if (savedAnswers && typeof savedAnswers === "object") {
                 setAnswersMap(savedAnswers);
+            } else {
+                setAnswersMap({});
             }
 
-            // restore index nếu hợp lệ
             const savedIndex = Number(parsed?.index);
             if (!Number.isNaN(savedIndex) && savedIndex >= 0) {
                 setIndex(savedIndex);
+            } else {
+                setIndex(0);
             }
 
-            // Nếu chưa có startTs thì set (KHÔNG overwrite nếu đã có)
-            if (!parsed?.startTs) {
+            // ✅ startTs: ưu tiên BE startTs, fallback local, cuối cùng Date.now
+            const beTs = Number.isFinite(Number(attemptStartTs)) ? Number(attemptStartTs) : null;
+            const localTs = Number.isFinite(Number(parsed?.startTs)) ? Number(parsed.startTs) : null;
+            const finalTs = beTs ?? localTs ?? Date.now();
+
+            localStorage.setItem(
+                storageKey,
+                JSON.stringify({
+                    startTs: finalTs,
+                    answers: savedAnswers || {},
+                    index: !Number.isNaN(savedIndex) && savedIndex >= 0 ? savedIndex : 0,
+                })
+            );
+        } catch {
+            setAnswersMap({});
+            setIndex(0);
+
+            // best-effort write startTs
+            try {
+                const beTs = Number.isFinite(Number(attemptStartTs)) ? Number(attemptStartTs) : null;
                 localStorage.setItem(
-                    attemptStorageKey(attemptId),
+                    storageKey,
                     JSON.stringify({
-                        startTs: Date.now(),
-                        answers: savedAnswers || {},
-                        index: Number.isFinite(savedIndex) ? savedIndex : 0,
+                        startTs: beTs ?? Date.now(),
+                        answers: {},
+                        index: 0,
                     })
                 );
+            } catch {
+                // ignore
             }
-        } catch {
-            // ignore
         }
-    }, [attemptId]);
+    }, [storageKey, attemptStartTs]);
 
-    // clamp index khi questions load xong (tránh index vượt quá total sau reload)
+    // clamp index when questions load
     useEffect(() => {
         if (!total) return;
         setIndex((i) => Math.max(0, Math.min(i, total - 1)));
     }, [total]);
 
+    /**
+     * ✅ Persist answers + index (keep startTs stable)
+     */
     useEffect(() => {
-        if (!attemptId) return;
-
         try {
-            const raw = localStorage.getItem(attemptStorageKey(attemptId));
+            const raw = localStorage.getItem(storageKey);
             const parsed = raw ? JSON.parse(raw) : {};
+
+            const beTs = Number.isFinite(Number(attemptStartTs)) ? Number(attemptStartTs) : null;
+            const localTs = Number.isFinite(Number(parsed?.startTs)) ? Number(parsed.startTs) : null;
+
             localStorage.setItem(
-                attemptStorageKey(attemptId),
+                storageKey,
                 JSON.stringify({
-                    startTs: parsed?.startTs ?? Date.now(),
+                    startTs: beTs ?? localTs ?? Date.now(),
                     answers: answersMap,
                     index,
                 })
@@ -109,11 +159,9 @@ const PracticePlayer = forwardRef(function PracticePlayer(
         } catch {
             // ignore
         }
-    }, [attemptId, answersMap, index]);
+    }, [storageKey, answersMap, index, attemptStartTs]);
 
     // ===== Prevent accidental reload/back (chỉ khi chưa submit) =====
-    const submittedRef = useRef(false);
-
     useEffect(() => {
         const handler = (e) => {
             if (submittedRef.current) return;
@@ -124,42 +172,43 @@ const PracticePlayer = forwardRef(function PracticePlayer(
         return () => window.removeEventListener("beforeunload", handler);
     }, []);
 
-    // ===== Build answers =====
+    // ===== Build answers array =====
     const buildAnswersArray = () => {
         return questions.map((q) => {
             const qid = getQid(q);
-            const type = q?.questionType;
+            const type = String(q?.questionType || "").toUpperCase();
             const a = qid ? answersMap[qid] : null;
 
             if (type === "MCQ") {
-                return { questionId: qid, selectedAnswer: a?.selectedAnswer ?? null };
+                return { questionId: qid, selectedAnswer: a?.selectedAnswer ?? null, textAnswer: "" };
             }
-            // ESSAY / SHORT_ANSWER
-            return { questionId: qid, textAnswer: a?.textAnswer ?? "" };
+            return { questionId: qid, textAnswer: a?.textAnswer ?? "", selectedAnswer: null };
         });
     };
 
     const doSubmit = async (meta = {}) => {
         if (submittedRef.current) return;
-        submittedRef.current = true;
 
+        submittedRef.current = true;
         const answersArray = buildAnswersArray();
-        await onSubmit?.(answersArray, meta);
+
+        try {
+            await onSubmit?.(answersArray, meta);
+        } catch (e) {
+            submittedRef.current = false;
+            throw e;
+        }
     };
 
-    // ===== Expose methods for "timer outside" to call =====
     useImperativeHandle(ref, () => ({
         getAnswersArray: () => buildAnswersArray(),
         submit: (meta) => doSubmit(meta),
     }));
 
-    // ===== Render =====
     if (!questions.length) {
         return (
             <Paper elevation={0} sx={{ p: 2, borderRadius: 3, border: "1px solid #E3E8EF" }}>
-                <Typography sx={{ fontWeight: 800, color: "#6C757D" }}>
-                    Không có câu hỏi để làm.
-                </Typography>
+                <Typography sx={{ fontWeight: 800, color: "#6C757D" }}>Không có câu hỏi để làm.</Typography>
             </Paper>
         );
     }
@@ -176,9 +225,7 @@ const PracticePlayer = forwardRef(function PracticePlayer(
         >
             <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
                 <Box>
-                    <Typography sx={{ fontWeight: 900, color: "#1B2559", fontSize: 18 }}>
-                        3) Làm bài
-                    </Typography>
+                    <Typography sx={{ fontWeight: 900, color: "#1B2559", fontSize: 18 }}>3) Làm bài</Typography>
 
                     <Typography sx={{ mt: 0.5, color: "#6C757D", fontWeight: 700 }}>
                         Tiến độ: {answeredCount}/{total}
@@ -223,11 +270,7 @@ const PracticePlayer = forwardRef(function PracticePlayer(
             />
 
             <Box sx={{ display: "flex", justifyContent: "space-between", mt: 2, gap: 1 }}>
-                <Button
-                    disabled={index <= 0 || submittedRef.current}
-                    variant="outlined"
-                    onClick={() => setIndex((i) => i - 1)}
-                >
+                <Button disabled={index <= 0 || submittedRef.current} variant="outlined" onClick={() => setIndex((i) => i - 1)}>
                     Câu trước
                 </Button>
 

@@ -123,7 +123,7 @@ export default function PracticeResult({
                     Nhận xét AI (giải thích sai + gợi ý đọc lại)
                 </Typography>
 
-                <Typography sx={{ mt: 1, color: "#000000", fontWeight: 650, whiteSpace: "pre-wrap" }}>
+                <Typography sx={{ mt: 1, color: "#474646", fontWeight: 650, whiteSpace: "pre-wrap" }}>
                     {aiFeedback ||
                         "Chưa có AI feedback. (Có thể AI bị quota/timeout). Bấm “Xem lại đáp án” để xem feedback chi tiết từng câu."}
                 </Typography>
