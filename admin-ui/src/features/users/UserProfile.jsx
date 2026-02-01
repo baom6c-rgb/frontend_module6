@@ -713,33 +713,6 @@ const UserProfile = () => {
                                             gap: 1,
                                         }}
                                     >
-                                        <Typography sx={{ color: COLORS.textSecondary, fontWeight: 700, fontSize: 12 }}>
-                                            Tip: Nhấn ‘Chỉnh sửa’ để cập nhật thông tin. Email/Lớp/Module không được chỉnh sửa.
-                                        </Typography>
-
-                                        {isEditing ? (
-                                            <Chip
-                                                size="small"
-                                                label="Đang chỉnh sửa"
-                                                sx={{
-                                                    bgcolor: `${COLORS.accentOrange}12`,
-                                                    color: COLORS.textPrimary,
-                                                    border: `1px solid ${COLORS.border}`,
-                                                    fontWeight: 950,
-                                                }}
-                                            />
-                                        ) : (
-                                            <Chip
-                                                size="small"
-                                                label="Chế độ xem"
-                                                sx={{
-                                                    bgcolor: `${COLORS.primaryBlue}10`,
-                                                    color: COLORS.textPrimary,
-                                                    border: `1px solid ${COLORS.border}`,
-                                                    fontWeight: 950,
-                                                }}
-                                            />
-                                        )}
                                     </Box>
                                 </Box>
                             </CardShell>

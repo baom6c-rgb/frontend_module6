@@ -374,7 +374,6 @@ export default function UserLayout() {
                                 sx={{
                                     height: 32,
                                     width: "auto",
-                                    filter: "brightness(0) invert(1)",
                                     flex: "0 0 auto",
                                 }}
                             />
@@ -468,7 +467,7 @@ export default function UserLayout() {
                                 <ListItemIcon>
                                     <PersonRounded fontSize="small" sx={{ color: COLORS.primaryBlue }} />
                                 </ListItemIcon>
-                                <Typography sx={{ fontWeight: 800 }}>Hồ sơ</Typography>
+                                <Typography sx={{ fontWeight: 800 }}>Hồ sơ cá nhân</Typography>
                             </MenuItem>
 
                             <Divider />

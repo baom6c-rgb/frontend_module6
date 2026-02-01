@@ -390,7 +390,6 @@ const AdminLayout = () => {
                                 sx={{
                                     height: 32,
                                     width: "auto",
-                                    filter: "brightness(0) invert(1)",
                                     flex: "0 0 auto",
                                 }}
                             />
