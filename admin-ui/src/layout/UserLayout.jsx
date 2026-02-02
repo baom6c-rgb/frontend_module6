@@ -36,6 +36,9 @@ import { logout } from "../features/auth/authSlice.js";
 // ✅ thêm API giống UserProfile
 import { getMyProfileApi } from "../api/userApi";
 
+// ✅ AppConfirm
+import AppConfirm from "../components/common/AppConfirm";
+
 const drawerWidth = 280;
 const drawerCollapsedWidth = 84;
 
@@ -88,6 +91,9 @@ export default function UserLayout() {
     // ===== sidebar state =====
     const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
     const [mobileOpen, setMobileOpen] = React.useState(false);
+
+    // ✅ confirm state
+    const [logoutConfirmOpen, setLogoutConfirmOpen] = React.useState(false);
 
     const toggleSidebar = () => {
         if (isMobile) setMobileOpen((v) => !v);
@@ -148,9 +154,6 @@ export default function UserLayout() {
 
     // =========================================================
     // ✅ AUTO HIDE SIDEBAR WHEN ENTER "/users/practice"
-    // - Desktop: collapse sidebar
-    // - Mobile: close drawer
-    // - Still allow user toggle by Menu button
     // =========================================================
     const isPracticeRoute = React.useMemo(() => {
         const p = String(location.pathname || "");
@@ -175,7 +178,8 @@ export default function UserLayout() {
         didAutoHideRef.current = true;
     }, [isPracticeRoute, isMobile]);
 
-    const handleLogout = () => {
+    // ✅ tách logic logout (GIỮ NGUYÊN NỘI DUNG)
+    const doLogout = () => {
         closeMenu();
         dispatch(logout());
         localStorage.removeItem("accessToken");
@@ -185,6 +189,12 @@ export default function UserLayout() {
         localStorage.removeItem("pendingApproval");
         localStorage.removeItem("onboardingCreated");
         navigate("/login", { replace: true });
+    };
+
+    // ✅ đổi handleLogout -> mở confirm (không đổi JSX nút)
+    const handleLogout = () => {
+        closeMenu();
+        setLogoutConfirmOpen(true);
     };
 
     const handleNav = (path) => {
@@ -204,7 +214,6 @@ export default function UserLayout() {
 
     // ✅ Smooth animation (đồng bộ kiểu AdminLayout)
     const drawerPaperTransition = React.useMemo(() => {
-        // nếu muốn chậm hơn nữa, đổi 260/320ms tuỳ gu
         return theme.transitions.create(["width"], {
             easing: theme.transitions.easing.sharp,
             duration: sidebarCollapsed
@@ -474,7 +483,7 @@ export default function UserLayout() {
                         backdropFilter: "blur(10px)",
                         borderRight: "1px solid rgba(0,0,0,0.08)",
                         overflowX: "hidden",
-                        transition: drawerPaperTransition, // ✅ mượt hơn khi collapse/expand
+                        transition: drawerPaperTransition,
                     },
                 }}
             >
@@ -487,12 +496,26 @@ export default function UserLayout() {
                     sx={{
                         px: { xs: 2, md: 3 },
                         py: { xs: 2, md: 3 },
-                        transition: mainTransition, // ✅ đồng bộ cảm giác animation
+                        transition: mainTransition,
                     }}
                 >
                     <Outlet />
                 </Box>
             </Box>
+
+            {/* ✅ AppConfirm: đặt cuối JSX */}
+            <AppConfirm
+                open={logoutConfirmOpen}
+                title="Đăng xuất"
+                message="Bạn có chắc chắn muốn đăng xuất khỏi hệ thống không?"
+                confirmText="Đăng xuất"
+                cancelText="Hủy"
+                onClose={() => setLogoutConfirmOpen(false)}
+                onConfirm={async () => {
+                    setLogoutConfirmOpen(false);
+                    doLogout();
+                }}
+            />
         </Box>
     );
 }

@@ -46,6 +46,9 @@ import { logout } from "../features/auth/authSlice";
 // ✅ thêm API giống UserProfile (sửa path nếu cần)
 import { getMyProfileApi } from "../api/userApi";
 
+// ✅ AppConfirm
+import AppConfirm from "../components/common/AppConfirm";
+
 const drawerWidth = 280;
 const drawerCollapsedWidth = 84;
 
@@ -104,44 +107,47 @@ const NavItem = ({ active, icon, text, onClick, collapsed }) => {
         >
             <Box
                 sx={{
-                    mr: collapsed ? 0 : 2,
+                    minWidth: collapsed ? "auto" : 40,
+                    mr: collapsed ? 0 : 1,
                     display: "flex",
-                    alignItems: "center",
                     justifyContent: "center",
-                    minWidth: 24,
+                    color: "inherit",
                 }}
             >
                 {icon}
             </Box>
 
-            {collapsed ? null : <Typography sx={{ fontWeight: 700, fontSize: 14 }}>{text}</Typography>}
+            {collapsed ? null : (
+                <Typography sx={{ fontWeight: 800, fontSize: 14 }}>
+                    {text}
+                </Typography>
+            )}
         </Box>
     );
 
-    return (
-        <Box sx={{ px: collapsed ? 1 : 2, mb: 1 }}>
-            {collapsed ? (
-                <Tooltip title={text} placement="right" arrow>
-                    <Box>{content}</Box>
-                </Tooltip>
-            ) : (
-                content
-            )}
-        </Box>
+    return collapsed ? (
+        <Tooltip title={text} placement="right" arrow>
+            <Box sx={{ mb: 1 }}>{content}</Box>
+        </Tooltip>
+    ) : (
+        <Box sx={{ mb: 1 }}>{content}</Box>
     );
 };
 
 const AdminLayout = () => {
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
     const navigate = useNavigate();
     const location = useLocation();
     const dispatch = useDispatch();
 
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-
-    // ===== sidebar state =====
+    // ===== drawer state =====
     const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
     const [mobileOpen, setMobileOpen] = React.useState(false);
+
+    // ✅ confirm state
+    const [logoutConfirmOpen, setLogoutConfirmOpen] = React.useState(false);
 
     const toggleSidebar = () => {
         if (isMobile) setMobileOpen((v) => !v);
@@ -149,40 +155,33 @@ const AdminLayout = () => {
     };
     const closeMobileDrawer = () => setMobileOpen(false);
 
-    // ✅ NEW: profile giống UserProfile
+    // ===== user profile =====
+    const userData = safeParse("userData", {});
+    const fullName = userData?.fullName || userData?.email || "Admin";
+
+    // ✅ Profile state
     const [profile, setProfile] = React.useState(null);
 
     React.useEffect(() => {
         let alive = true;
-
         const load = async () => {
             try {
                 const res = await getMyProfileApi();
                 if (!alive) return;
-
-                const p = res.data;
+                const p = res?.data || null;
                 setProfile(p);
-
                 if (p?.avatarUrl) syncUserDataAvatar(p.avatarUrl);
             } catch {
-                // ignore: fail thì fallback localStorage
+                // ignore
             }
         };
-
         load();
         return () => {
             alive = false;
         };
     }, []);
 
-    // ===== user info (avatar image) =====
-    const userData = safeParse("userData", null);
-
-    // ✅ name: ưu tiên profile rồi mới đến localStorage
-    const fullName =
-        profile?.fullName || userData?.fullName || profile?.email || userData?.email || "Admin";
-
-    // ✅ avatar: ưu tiên profile.avatarUrl giống UserProfile
+    // ✅ ưu tiên profile.avatarUrl giống UserProfile
     const avatarUrl =
         profile?.avatarUrl ||
         userData?.avatarUrl ||
@@ -208,6 +207,7 @@ const AdminLayout = () => {
         enabled: isAdmin,
         intervalMs: 30000,
     });
+
     // ===== avatar menu =====
     const [anchorEl, setAnchorEl] = React.useState(null);
     const open = Boolean(anchorEl);
@@ -215,7 +215,8 @@ const AdminLayout = () => {
     const handleClick = (event) => setAnchorEl(event.currentTarget);
     const handleClose = () => setAnchorEl(null);
 
-    const handleLogout = () => {
+    // ✅ tách logic logout (GIỮ NGUYÊN NỘI DUNG)
+    const doLogout = () => {
         handleClose();
 
         dispatch(logout());
@@ -225,6 +226,12 @@ const AdminLayout = () => {
         localStorage.removeItem("refreshToken");
 
         navigate("/login", { replace: true });
+    };
+
+    // ✅ đổi handleLogout -> mở confirm (không đổi JSX nút)
+    const handleLogout = () => {
+        handleClose();
+        setLogoutConfirmOpen(true);
     };
 
     // ✅ chặn bfcache
@@ -640,6 +647,20 @@ const AdminLayout = () => {
                 <Toolbar />
                 <Outlet />
             </Box>
+
+            {/* ✅ AppConfirm: đặt cuối JSX */}
+            <AppConfirm
+                open={logoutConfirmOpen}
+                title="Đăng xuất"
+                message="Bạn có chắc chắn muốn đăng xuất khỏi hệ thống không?"
+                confirmText="Đăng xuất"
+                cancelText="Hủy"
+                onClose={() => setLogoutConfirmOpen(false)}
+                onConfirm={async () => {
+                    setLogoutConfirmOpen(false);
+                    doLogout();
+                }}
+            />
         </Box>
     );
 };
