@@ -19,8 +19,7 @@ import {
     Tooltip,
     useMediaQuery,
     Chip,
-    Stack,
-    Button, // Thêm Button từ MUI
+    Button,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import {
@@ -147,6 +146,35 @@ export default function UserLayout() {
         { text: "Luyện tập (AI Quiz)", icon: <QuizRoundedIcon />, path: "/users/practice" },
     ];
 
+    // =========================================================
+    // ✅ AUTO HIDE SIDEBAR WHEN ENTER "/users/practice"
+    // - Desktop: collapse sidebar
+    // - Mobile: close drawer
+    // - Still allow user toggle by Menu button
+    // =========================================================
+    const isPracticeRoute = React.useMemo(() => {
+        const p = String(location.pathname || "");
+        return p === "/users/practice" || p.startsWith("/users/practice/");
+    }, [location.pathname]);
+
+    const didAutoHideRef = React.useRef(false);
+
+    React.useEffect(() => {
+        if (!isPracticeRoute) {
+            didAutoHideRef.current = false;
+            return;
+        }
+        if (didAutoHideRef.current) return;
+
+        if (isMobile) {
+            setMobileOpen(false);
+        } else {
+            setSidebarCollapsed(true);
+        }
+
+        didAutoHideRef.current = true;
+    }, [isPracticeRoute, isMobile]);
+
     const handleLogout = () => {
         closeMenu();
         dispatch(logout());
@@ -174,8 +202,28 @@ export default function UserLayout() {
             ? drawerCollapsedWidth
             : drawerWidth;
 
+    // ✅ Smooth animation (đồng bộ kiểu AdminLayout)
+    const drawerPaperTransition = React.useMemo(() => {
+        // nếu muốn chậm hơn nữa, đổi 260/320ms tuỳ gu
+        return theme.transitions.create(["width"], {
+            easing: theme.transitions.easing.sharp,
+            duration: sidebarCollapsed
+                ? theme.transitions.duration.leavingScreen
+                : theme.transitions.duration.enteringScreen,
+        });
+    }, [theme, sidebarCollapsed]);
+
+    const mainTransition = React.useMemo(() => {
+        return theme.transitions.create(["padding"], {
+            easing: theme.transitions.easing.sharp,
+            duration: sidebarCollapsed
+                ? theme.transitions.duration.leavingScreen
+                : theme.transitions.duration.enteringScreen,
+        });
+    }, [theme, sidebarCollapsed]);
+
     const drawerContent = (
-        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
             <Toolbar />
 
             <Box sx={{ mt: 2, px: sidebarCollapsed && !isMobile ? 1 : 2 }}>
@@ -220,12 +268,15 @@ export default function UserLayout() {
                                     position: "relative",
                                     borderRadius: "12px",
                                     py: 1.5,
-                                    justifyContent: sidebarCollapsed && !isMobile ? "center" : "flex-start",
+                                    justifyContent:
+                                        sidebarCollapsed && !isMobile ? "center" : "flex-start",
                                     bgcolor: isActive ? COLORS.primaryBlue : "transparent",
                                     color: isActive ? "#fff" : COLORS.textSecondary,
                                     transition: "0.25s",
                                     "&:hover": {
-                                        bgcolor: isActive ? COLORS.primaryBlue : "rgba(46, 45, 132, 0.08)",
+                                        bgcolor: isActive
+                                            ? COLORS.primaryBlue
+                                            : "rgba(46, 45, 132, 0.08)",
                                     },
                                     ...(isActive && {
                                         "&::before": {
@@ -275,7 +326,6 @@ export default function UserLayout() {
                 </List>
             </Box>
 
-            {/* Đẩy nội dung bên dưới xuống đáy giống AdminLayout */}
             <Box sx={{ flexGrow: 1 }} />
 
             <Box sx={{ px: sidebarCollapsed && !isMobile ? 1 : 2, pb: 2 }}>
@@ -310,7 +360,7 @@ export default function UserLayout() {
                             bgcolor: "rgba(238,93,80,0.08)",
                             "&:hover": { bgcolor: "rgba(238,93,80,0.14)" },
                             justifyContent: "center",
-                            px: 2
+                            px: 2,
                         }}
                     >
                         Đăng xuất
@@ -364,7 +414,15 @@ export default function UserLayout() {
                                     <Typography sx={{ fontWeight: 900, color: "#FFFFFF", fontSize: 14 }}>
                                         {profile?.fullName || displayName}
                                     </Typography>
-                                    <Chip size="small" label={statusLabel} sx={{ height: 20, color: "#fff", bgcolor: "rgba(255,255,255,0.2)" }} />
+                                    <Chip
+                                        size="small"
+                                        label={statusLabel}
+                                        sx={{
+                                            height: 20,
+                                            color: "#fff",
+                                            bgcolor: "rgba(255,255,255,0.2)",
+                                        }}
+                                    />
                                 </Box>
                             )}
                         </Box>
@@ -378,13 +436,23 @@ export default function UserLayout() {
                             <Box sx={{ px: 2, py: 1.6, borderBottom: `1px solid ${COLORS.borderLight}` }}>
                                 <Typography sx={{ fontWeight: 950 }}>{profile?.fullName || displayName}</Typography>
                             </Box>
-                            <MenuItem disabled={isWaiting} onClick={() => { closeMenu(); handleNav("/users/profile"); }}>
-                                <ListItemIcon><PersonRounded fontSize="small" /></ListItemIcon>
+                            <MenuItem
+                                disabled={isWaiting}
+                                onClick={() => {
+                                    closeMenu();
+                                    handleNav("/users/profile");
+                                }}
+                            >
+                                <ListItemIcon>
+                                    <PersonRounded fontSize="small" />
+                                </ListItemIcon>
                                 <Typography sx={{ fontWeight: 800 }}>Hồ sơ cá nhân</Typography>
                             </MenuItem>
                             <Divider />
                             <MenuItem onClick={handleLogout} sx={{ color: "error.main" }}>
-                                <ListItemIcon><LogoutRounded fontSize="small" sx={{ color: "error.main" }} /></ListItemIcon>
+                                <ListItemIcon>
+                                    <LogoutRounded fontSize="small" sx={{ color: "error.main" }} />
+                                </ListItemIcon>
                                 <Typography sx={{ fontWeight: 900 }}>Đăng xuất</Typography>
                             </MenuItem>
                         </Menu>
@@ -405,6 +473,8 @@ export default function UserLayout() {
                         bgcolor: "rgba(255, 255, 255, 0.95)",
                         backdropFilter: "blur(10px)",
                         borderRight: "1px solid rgba(0,0,0,0.08)",
+                        overflowX: "hidden",
+                        transition: drawerPaperTransition, // ✅ mượt hơn khi collapse/expand
                     },
                 }}
             >
@@ -413,7 +483,13 @@ export default function UserLayout() {
 
             <Box component="main" sx={{ flexGrow: 1, minWidth: 0, bgcolor: COLORS.bgLight }}>
                 <Toolbar />
-                <Box sx={{ px: { xs: 2, md: 3 }, py: { xs: 2, md: 3 } }}>
+                <Box
+                    sx={{
+                        px: { xs: 2, md: 3 },
+                        py: { xs: 2, md: 3 },
+                        transition: mainTransition, // ✅ đồng bộ cảm giác animation
+                    }}
+                >
                     <Outlet />
                 </Box>
             </Box>
