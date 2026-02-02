@@ -288,7 +288,7 @@ const AdminLayout = () => {
                         collapsed={!isMobile && sidebarCollapsed}
                         active={currentPath === "/admin" || currentPath === "/admin/"}
                         icon={<Dashboard />}
-                        text="Dashboard"
+                        text="Trang chủ"
                         onClick={() => handleNav("/admin")}
                     />
                     <NavItem

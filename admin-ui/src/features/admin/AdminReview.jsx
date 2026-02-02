@@ -3,33 +3,20 @@ import {
     Box,
     Paper,
     Typography,
-    TextField,
     Grid,
     Stack,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    TablePagination,
     CircularProgress,
-    Avatar,
     Chip,
-    InputAdornment,
-    MenuItem,
-    FormControl,
-    Select,
-    InputLabel,
-    Button,
-    Collapse,
     Alert,
 } from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
 import { Search, FilterList, TrendingUpRounded } from "@mui/icons-material";
 
 import axiosClient from "../../api/axiosConfig.js";
 import { getAllModulesApi } from "../../api/moduleApi.js";
 import { getAllClassesApi } from "../../api/classApi.js";
+import FilterPanel from "../../components/common/FilterPanel.jsx";
+import AppPagination from "../../components/common/AppPagination.jsx";
 
 const COLORS = {
     primaryBlue: "#0B5ED7",
@@ -85,8 +72,7 @@ const AdminReview = () => {
     const [classIdToName, setClassIdToName] = useState({});
 
     // Pagination
-    const [page, setPage] = useState(0);
-    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
 
     // ================= Helpers =================
     const normalizeModuleName = (m) => {
@@ -167,6 +153,14 @@ const AdminReview = () => {
     const formatDateTime = (dateStr) => {
         if (!dateStr) return "N/A";
         return new Date(dateStr).toLocaleString("vi-VN");
+    };
+
+    const formatDateTimeSplit = (dateStr) => {
+        if (!dateStr) return { date: "—", time: "—" };
+        const d = new Date(dateStr);
+        const date = d.toLocaleDateString("vi-VN", { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const time = d.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit', hour12: false });
+        return { date, time };
     };
 
     // ✅ Fix PRACTICE: score exists but correctAnswers is 0/absent
@@ -370,15 +364,8 @@ const AdminReview = () => {
     ]);
 
     useEffect(() => {
-        setPage(0);
+        setPaginationModel((p) => ({ ...p, page: 0 }));
     }, [searchText, selectedModule, selectedClass, selectedStatus, startDate, endDate]);
-
-    const handleChangePage = (e, newPage) => setPage(newPage);
-
-    const handleChangeRowsPerPage = (e) => {
-        setRowsPerPage(parseInt(e.target.value, 10));
-        setPage(0);
-    };
 
     const handleResetFilters = () => {
         setSearchText("");
@@ -388,6 +375,117 @@ const AdminReview = () => {
         setStartDate("");
         setEndDate("");
     };
+
+    // ================= DataGrid Columns =================
+    const columns = useMemo(() => {
+        const pageOffset = paginationModel.page * paginationModel.pageSize;
+
+        const centerCell = (children) => (
+            <Box sx={{ width: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                {children}
+            </Box>
+        );
+
+        return [
+            {
+                field: "stt",
+                headerName: "STT",
+                width: 80,
+                sortable: false,
+                filterable: false,
+                headerAlign: "center",
+                align: "center",
+                renderCell: (params) => {
+                    const idx = params.api.getRowIndexRelativeToVisibleRows(params.id);
+                    return centerCell(pageOffset + idx + 1);
+                },
+            },
+            {
+                field: "studentName",
+                headerName: "Tên học viên",
+                flex: 1.0,
+                minWidth: 140,
+                renderCell: (params) => params.row.studentName || "N/A",
+            },
+            {
+                field: "studentEmail",
+                headerName: "Email",
+                flex: 1.2,
+                minWidth: 180,
+            },
+            {
+                field: "examName",
+                headerName: "Tên bài thi",
+                flex: 1.3,
+                minWidth: 170,
+                renderCell: (params) => getExamTitle(params.row),
+            },
+            {
+                field: "class",
+                headerName: "Lớp",
+                flex: 0.65,
+                minWidth: 100,
+                headerAlign: "center",
+                align: "center",
+                renderCell: (params) => getClassLabel(params.row),
+            },
+            {
+                field: "module",
+                headerName: "Module",
+                flex: 0.8,
+                minWidth: 110,
+                headerAlign: "center",
+                align: "center",
+                renderCell: (params) => getModuleLabel(params.row),
+            },
+            {
+                field: "date",
+                headerName: "Thời gian",
+                flex: 0.75,
+                minWidth: 100,
+                headerAlign: "center",
+                align: "center",
+                renderCell: (params) => {
+                    const { date, time } = formatDateTimeSplit(params.row.date);
+                    return (
+                        <Box sx={{ textAlign: "center" }}>
+                            <div>{date}</div>
+                            <div>{time}</div>
+                        </Box>
+                    );
+                },
+            },
+            {
+                field: "score",
+                headerName: "Kết quả",
+                flex: 0.8,
+                minWidth: 100,
+                headerAlign: "center",
+                renderCell: (params) => {
+                    const scorePercent = params.row.totalScore
+                        ? (Number(params.row.score) / Number(params.row.totalScore)) * 100
+                        : 0;
+                    const isPassed = scorePercent >= 50;
+
+                    return (
+                        <Box
+                            component="span"
+                            sx={{
+                                color: isPassed ? COLORS.success : COLORS.danger,
+                                backgroundColor: isPassed ? `${COLORS.success}15` : `${COLORS.danger}15`,
+                                px: 1,
+                                py: 0.3,
+                                borderRadius: 0.5,
+                                display: 'inline-block',
+                            }}
+                        >
+                            {params.row.score}/{params.row.totalScore} ({scorePercent.toFixed(0)}%)
+                        </Box>
+                    );
+                },
+            },
+        ];
+    }, [paginationModel.page, paginationModel.pageSize, getExamTitle, getModuleLabel, getClassLabel, getScoreColor, getCorrectAnswersLabel]);
 
     // ================= UI States =================
     if (loading) {
@@ -432,267 +530,128 @@ const AdminReview = () => {
                 />
             </Stack>
 
-            <Paper sx={{ p: 3, mb: 3, borderRadius: "16px", border: `1px solid ${COLORS.borderLight}` }}>
-                <Stack spacing={2}>
-                    <Stack direction="row" spacing={2}>
-                        <TextField
-                            fullWidth
-                            placeholder="Tìm kiếm theo tên học viên, email, bài thi, lớp, module..."
-                            value={searchText}
-                            onChange={(e) => setSearchText(e.target.value)}
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <Search sx={{ color: COLORS.primaryBlue }} />
-                                    </InputAdornment>
-                                ),
-                            }}
-                            sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
-                        />
-                        <Button
-                            variant={showFilters ? "contained" : "outlined"}
-                            startIcon={<FilterList />}
-                            onClick={() => setShowFilters(!showFilters)}
-                            sx={{
-                                borderRadius: "12px",
-                                textTransform: "none",
-                                fontWeight: 700,
-                                minWidth: 150,
-                            }}
-                        >
-                            Bộ lọc
-                        </Button>
-                    </Stack>
-
-                    <Collapse in={showFilters}>
-                        <Grid container spacing={2}>
-                            <Grid item xs={12} md={2.4}>
-                                <FormControl fullWidth>
-                                    <InputLabel>Module</InputLabel>
-                                    <Select
-                                        value={selectedModule}
-                                        label="Module"
-                                        onChange={(e) => setSelectedModule(e.target.value)}
-                                        sx={{ borderRadius: "12px" }}
-                                    >
-                                        {modules.map((m) => (
-                                            <MenuItem key={m} value={m}>
-                                                {m}
-                                            </MenuItem>
-                                        ))}
-                                    </Select>
-                                </FormControl>
-                            </Grid>
-
-                            <Grid item xs={12} md={2.4}>
-                                <FormControl fullWidth>
-                                    <InputLabel>Lớp học</InputLabel>
-                                    <Select
-                                        value={selectedClass}
-                                        label="Lớp học"
-                                        onChange={(e) => setSelectedClass(e.target.value)}
-                                        sx={{ borderRadius: "12px" }}
-                                    >
-                                        {classes.map((c) => (
-                                            <MenuItem key={c} value={c}>
-                                                {c}
-                                            </MenuItem>
-                                        ))}
-                                    </Select>
-                                </FormControl>
-                            </Grid>
-
-                            <Grid item xs={12} md={2.4}>
-                                <FormControl fullWidth>
-                                    <InputLabel>Trạng thái</InputLabel>
-                                    <Select
-                                        value={selectedStatus}
-                                        label="Trạng thái"
-                                        onChange={(e) => setSelectedStatus(e.target.value)}
-                                        sx={{ borderRadius: "12px" }}
-                                    >
-                                        <MenuItem value={ALL}>{ALL}</MenuItem>
-                                        <MenuItem value="Đạt">Đạt (≥ 50%)</MenuItem>
-                                        <MenuItem value="Chưa đạt">Chưa đạt (&lt; 50%)</MenuItem>
-                                    </Select>
-                                </FormControl>
-                            </Grid>
-
-                            <Grid item xs={12} md={2}>
-                                <TextField
-                                    fullWidth
-                                    type="date"
-                                    label="Từ ngày"
-                                    value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
-                                    InputLabelProps={{ shrink: true }}
-                                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
-                                />
-                            </Grid>
-
-                            <Grid item xs={12} md={2}>
-                                <TextField
-                                    fullWidth
-                                    type="date"
-                                    label="Đến ngày"
-                                    value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                    InputLabelProps={{ shrink: true }}
-                                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
-                                />
-                            </Grid>
-
-                            <Grid item xs={12} md={0.8}>
-                                <Button
-                                    fullWidth
-                                    variant="outlined"
-                                    onClick={handleResetFilters}
-                                    sx={{
-                                        borderRadius: "12px",
-                                        textTransform: "none",
-                                        fontWeight: 700,
-                                        height: "56px",
-                                    }}
-                                >
-                                    Xóa
-                                </Button>
-                            </Grid>
-                        </Grid>
-                    </Collapse>
-                </Stack>
-            </Paper>
+            {/* Filters */}
+            <FilterPanel
+                search={{
+                    placeholder: "Tìm kiếm theo tên bài test, module, lớp...",
+                    value: searchText,
+                    onChange: setSearchText,
+                }}
+                showFilters={showFilters}
+                onToggleFilters={() => setShowFilters(!showFilters)}
+                onReset={handleResetFilters}
+                resetTooltip="Xóa bộ lọc"
+                fields={{
+                    module: {
+                        enabled: true,
+                        label: "Module",
+                        value: selectedModule,
+                        options: modules.map((m) => ({ value: m, label: m })),
+                        onChange: setSelectedModule,
+                        loading: false,
+                    },
+                    class: {
+                        enabled: true,
+                        label: "Lớp học",
+                        value: selectedClass,
+                        options: classes.map((c) => ({ value: c, label: c })),
+                        onChange: setSelectedClass,
+                        loading: false,
+                    },
+                    status: {
+                        enabled: true,
+                        label: "Trạng thái",
+                        value: selectedStatus,
+                        options: [
+                            { value: ALL, label: "Tất cả" },
+                            { value: "Đạt", label: "Đạt (≥ 50%)" },
+                            { value: "Chưa đạt", label: "Chưa đạt (< 50%)" },
+                        ],
+                        onChange: setSelectedStatus,
+                    },
+                    startDate: {
+                        enabled: true,
+                        label: "Từ ngày",
+                        value: startDate,
+                        onChange: setStartDate,
+                    },
+                    endDate: {
+                        enabled: true,
+                        label: "Đến ngày",
+                        value: endDate,
+                        onChange: setEndDate,
+                    },
+                }}
+            />
+            <Box sx={{ my: 3 }} />
 
             <Typography sx={{ mb: 2, color: COLORS.textSecondary, fontWeight: 700 }}>
                 Hiển thị {filteredAttempts.length} kết quả
                 {filteredAttempts.length !== attempts.length && ` (từ ${attempts.length} bài thi)`}
             </Typography>
 
-            <TableContainer
-                component={Paper}
-                sx={{ borderRadius: "16px", border: `1px solid ${COLORS.borderLight}`, overflow: "hidden" }}
+            <Paper
+                elevation={0}
+                sx={{
+                    borderRadius: 2,
+                    overflow: "hidden",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    display: "flex",
+                    flexDirection: "column",
+                    minHeight: 420,
+                }}
             >
-                <Table>
-                    <TableHead sx={{ bgcolor: COLORS.bgLight }}>
-                        <TableRow>
-                            <TableCell sx={{ fontWeight: 900, color: "#707EAE" }}>STT</TableCell>
-                            <TableCell sx={{ fontWeight: 900, color: "#707EAE" }}>HỌC VIÊN</TableCell>
-                            <TableCell sx={{ fontWeight: 900, color: "#707EAE" }}>THÔNG TIN BÀI THI</TableCell>
-                            <TableCell sx={{ fontWeight: 900, color: "#707EAE" }}>THỜI GIAN</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 900, color: "#707EAE" }}>
-                                KẾT QUẢ
-                            </TableCell>
-                        </TableRow>
-                    </TableHead>
+                <Box sx={{ flex: 1, minHeight: 0 }}>
+                    <DataGrid
+                        rows={filteredAttempts}
+                        columns={columns}
+                        loading={loading}
+                        disableRowSelectionOnClick
+                        getRowId={(r) => r.id ?? `${r.studentEmail}-${Math.random()}`}
+                        paginationModel={paginationModel}
+                        onPaginationModelChange={setPaginationModel}
+                        pageSizeOptions={[10, 25, 50]}
+                        disableColumnMenu
+                        hideFooter
+                        sx={{
+                            border: 0,
+                            height: "100%",
+                            "& .MuiDataGrid-columnHeaders": {
+                                bgcolor: "background.paper",
+                                borderBottom: "1px solid",
+                                borderColor: "divider",
+                            },
+                            "& .MuiDataGrid-row:nth-of-type(odd)": { bgcolor: "action.hover" },
+                            "& .MuiDataGrid-cell:focus, & .MuiDataGrid-columnHeader:focus": { outline: "none" },
+                        }}
+                    />
+                </Box>
 
-                    <TableBody>
-                        {filteredAttempts.length > 0 ? (
-                            filteredAttempts
-                                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                                .map((row, index) => (
-                                    <TableRow key={row.id ?? `${row.studentEmail}-${index}`} hover>
-                                        <TableCell>{page * rowsPerPage + index + 1}</TableCell>
-
-                                        <TableCell>
-                                            <Stack direction="row" spacing={2} alignItems="center">
-                                                <Avatar
-                                                    sx={{
-                                                        bgcolor: COLORS.primaryBlue,
-                                                        width: 40,
-                                                        height: 40,
-                                                        fontWeight: 700,
-                                                    }}
-                                                >
-                                                    {row.studentName?.charAt(0) || "?"}
-                                                </Avatar>
-                                                <Box>
-                                                    <Typography sx={{ fontWeight: 700, color: COLORS.textPrimary }}>
-                                                        {row.studentName || "N/A"}
-                                                    </Typography>
-                                                    <Typography variant="caption" sx={{ color: COLORS.textSecondary }}>
-                                                        {row.studentEmail || "N/A"}
-                                                    </Typography>
-                                                </Box>
-                                            </Stack>
-                                        </TableCell>
-
-                                        <TableCell>
-                                            <Typography sx={{ fontWeight: 700, color: COLORS.textPrimary }}>
-                                                {getExamTitle(row)}
-                                            </Typography>
-
-                                            {/* ✅ 2 mục Module + Lớp (không còn N/A) */}
-                                            <Stack direction="row" spacing={1} sx={{ mt: 0.5, flexWrap: "wrap" }}>
-                                                <Chip
-                                                    label={`Module: ${getModuleLabel(row)}`}
-                                                    size="small"
-                                                    sx={{
-                                                        height: 20,
-                                                        fontSize: "0.65rem",
-                                                        bgcolor: COLORS.primaryBlue + "15",
-                                                        color: COLORS.primaryBlue,
-                                                        fontWeight: 700,
-                                                    }}
-                                                />
-                                                <Chip
-                                                    label={`Lớp: ${getClassLabel(row)}`}
-                                                    size="small"
-                                                    sx={{
-                                                        height: 20,
-                                                        fontSize: "0.65rem",
-                                                        bgcolor: COLORS.bgLight,
-                                                        fontWeight: 600,
-                                                    }}
-                                                />
-                                            </Stack>
-                                        </TableCell>
-
-                                        <TableCell sx={{ color: COLORS.textSecondary, fontWeight: 500 }}>
-                                            {formatDateTime(row.date)}
-                                        </TableCell>
-
-                                        <TableCell align="center">
-                                            <Box>
-                                                <Typography
-                                                    variant="body2"
-                                                    sx={{
-                                                        fontWeight: 800,
-                                                        color: getScoreColor(row.score, row.totalScore),
-                                                    }}
-                                                >
-                                                    {row.score} / {row.totalScore}
-                                                </Typography>
-
-                                                <Typography variant="caption" sx={{ color: COLORS.textSecondary }}>
-                                                    {getCorrectAnswersLabel(row)}
-                                                </Typography>
-                                            </Box>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                        ) : (
-                            <TableRow>
-                                <TableCell colSpan={5} align="center" sx={{ py: 8 }}>
-                                    <Typography sx={{ color: COLORS.textSecondary }}>
-                                        Không tìm thấy kết quả phù hợp với bộ lọc
-                                    </Typography>
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-
-                <TablePagination
-                    rowsPerPageOptions={[5, 10, 25, 50]}
-                    component="div"
-                    count={filteredAttempts.length}
-                    rowsPerPage={rowsPerPage}
-                    page={page}
-                    onPageChange={handleChangePage}
-                    onRowsPerPageChange={handleChangeRowsPerPage}
-                    labelRowsPerPage="Hiển thị:"
-                    labelDisplayedRows={({ from, to, count }) => `${from}-${to} / ${count}`}
-                />
-            </TableContainer>
+                <Box
+                    sx={{
+                        px: 1.5,
+                        py: 1,
+                        borderTop: "1px solid",
+                        borderColor: "divider",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "flex-end",
+                        gap: 1,
+                        flexWrap: "wrap",
+                    }}
+                >
+                    <AppPagination
+                        page={paginationModel.page + 1}
+                        pageSize={paginationModel.pageSize}
+                        total={filteredAttempts.length}
+                        onPageChange={(nextPage) => setPaginationModel((p) => ({ ...p, page: nextPage - 1 }))}
+                        onPageSizeChange={(nextSize) => setPaginationModel({ page: 0, pageSize: nextSize })}
+                        pageSizeOptions={[10, 25, 50]}
+                        loading={loading}
+                    />
+                </Box>
+            </Paper>
         </Box>
     );
 };
