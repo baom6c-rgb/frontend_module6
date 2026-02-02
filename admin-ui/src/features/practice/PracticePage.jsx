@@ -10,6 +10,8 @@ import {
     Stack,
     Avatar,
     Tooltip,
+    Chip,
+    Divider,
 } from "@mui/material";
 
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
@@ -22,6 +24,7 @@ import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
 
 import { practiceApi } from "../../api/practiceApi";
 import { materialApi } from "../../api/materialApi";
+import { chatApi } from "../../api/chatApi"; // ✅ US17
 
 import GlobalLoading from "../../components/common/GlobalLoading";
 import { useToast } from "../../components/common/AppToast";
@@ -45,6 +48,11 @@ const MODE = {
     READY: "READY",
     DOING: "DOING",
     RESULT: "RESULT",
+};
+
+const ASSISTANT_MODE = {
+    GENERATE: "GENERATE", // tạo đề (cũ)
+    STUDY: "STUDY", // hỏi khái niệm (US17)
 };
 
 const ACTIVE_SESSION_KEY = "practice_active_session_v2";
@@ -80,6 +88,31 @@ function buildAttemptDetailFromV2(serverRes, sessionToken) {
 // ===== Upload validate =====
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_EXT_REGEX = /\.(pdf|docx|txt|xlsx)$/i;
+
+// ===== US17 keyword validation (FE sync BE) =====
+const US17_MAX_CHARS = 80;
+const US17_MAX_WORDS = 8;
+const normalizeSpaces = (s) => String(s || "").replace(/\s+/g, " ").trim();
+
+function validateKeywords(raw) {
+    const s = normalizeSpaces(raw);
+
+    if (!s) return { ok: false, message: "Nhập 2–5 từ khóa ngắn gọn." };
+    if (s.length > US17_MAX_CHARS) return { ok: false, message: `Từ khóa tối đa ${US17_MAX_CHARS} ký tự.` };
+
+    if (String(raw || "").includes("\n") || String(raw || "").includes("\r") || String(raw || "").includes("\t")) {
+        return { ok: false, message: "Không dán nguyên câu hỏi (không xuống dòng). Chỉ nhập từ khóa." };
+    }
+
+    if (/[?.!:;]/.test(s)) return { ok: false, message: "Chỉ nhập từ khóa, không nhập dạng câu hỏi." };
+
+    if (!/^[\p{L}\p{N}\s,_\-+/]+$/u.test(s)) return { ok: false, message: "Từ khóa có ký tự không hợp lệ." };
+
+    const words = s.split(" ").filter(Boolean);
+    if (words.length > US17_MAX_WORDS) return { ok: false, message: `Tối đa ${US17_MAX_WORDS} từ.` };
+
+    return { ok: true, value: s };
+}
 
 export default function PracticePage() {
     const { showToast } = useToast();
@@ -153,7 +186,10 @@ export default function PracticePage() {
     // player ref (timer outside auto-submit)
     const playerRef = useRef(null);
 
-    // ===== chat =====
+    // ===== assistant mode (NEW) =====
+    const [assistantMode, setAssistantMode] = useState(ASSISTANT_MODE.GENERATE);
+
+    // ===== chat (GENERATE - cũ) =====
     const [messages, setMessages] = useState([
         {
             id: uid("a"),
@@ -162,15 +198,38 @@ export default function PracticePage() {
                 "Gửi học liệu (upload/paste). Sau đó bấm nút Gửi để AI tạo đề. Khi tạo xong sẽ hiện “Bắt đầu làm bài” ở Canvas.",
         },
     ]);
+
+    // ===== chat (STUDY - US17) =====
+    const [studySessionId, setStudySessionId] = useState(null);
+    const [studyMessages, setStudyMessages] = useState([
+        {
+            id: "intro",
+            role: "assistant",
+            text: "Nhập từ khóa liên quan bài học. Mình chỉ gợi ý khái niệm tổng quát, không đưa đáp án.",
+        },
+    ]);
+    const [studyBooting, setStudyBooting] = useState(false);
+
+    // shared input
     const [input, setInput] = useState("");
 
     const messagesEndRef = useRef(null);
+
+    // ✅ Render list = theo mode
+    const messagesToRender = useMemo(() => {
+        return assistantMode === ASSISTANT_MODE.GENERATE ? messages : studyMessages;
+    }, [assistantMode, messages, studyMessages]);
+
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages]);
+    }, [messagesToRender]);
 
     const appendMessage = useCallback((msg) => {
         setMessages((prev) => [...prev, { id: uid(msg.role?.[0] || "m"), ...msg }]);
+    }, []);
+
+    const appendStudyMessage = useCallback((msg) => {
+        setStudyMessages((prev) => [...prev, { id: uid(msg.role?.[0] || "m"), ...msg }]);
     }, []);
 
     const configOk = useMemo(() => {
@@ -193,6 +252,18 @@ export default function PracticePage() {
         } catch {
             // ignore
         }
+    }, []);
+
+    const resetStudyChat = useCallback(() => {
+        setStudySessionId(null);
+        setStudyBooting(false);
+        setStudyMessages([
+            {
+                id: "intro",
+                role: "assistant",
+                text: "Nhập từ khóa liên quan bài học. Mình chỉ gợi ý khái niệm tổng quát, không đưa đáp án.",
+            },
+        ]);
     }, []);
 
     // ===== Reset state =====
@@ -220,6 +291,10 @@ export default function PracticePage() {
             setInput("");
             setIsCanvasOpen(true);
 
+            // reset assistant
+            setAssistantMode(ASSISTANT_MODE.GENERATE);
+            resetStudyChat();
+
             if (opts?.keepMessages) {
                 appendMessage({
                     role: "assistant",
@@ -229,7 +304,7 @@ export default function PracticePage() {
                 setMessages([{ id: uid("a"), role: "assistant", text: "Ok! Gửi học liệu mới để bắt đầu." }]);
             }
         },
-        [appendMessage, clearActiveSession]
+        [appendMessage, clearActiveSession, resetStudyChat]
     );
 
     // ===== poll extracted text =====
@@ -258,7 +333,7 @@ export default function PracticePage() {
         async (file) => {
             if (!file) return;
 
-            // ✅ validate (format/size) ngay tại đây để tránh gọi API vô ích
+            // ✅ validate (format/size) ngay tại đây để handle UX
             if (file.size > MAX_SIZE_BYTES) {
                 showToast("File quá dung lượng (tối đa 10MB).", "error");
                 appendMessage({ role: "assistant", text: "File quá dung lượng (tối đa 10MB). Hãy chọn file nhỏ hơn." });
@@ -273,6 +348,7 @@ export default function PracticePage() {
                 return;
             }
 
+            // Note: luôn log lên GENERATE chat để user hiểu flow tạo đề
             appendMessage({ role: "user", text: `📄 Upload: ${file.name}` });
             setLoading(true);
             setLoadingMessage("Đang upload & trích xuất…");
@@ -299,6 +375,9 @@ export default function PracticePage() {
                 setDurationMinutes(0);
                 clearActiveSession();
 
+                // reset study chat to bind new material
+                resetStudyChat();
+
                 const extracted = await waitForExtractedTextOrReady(id);
 
                 appendMessage({
@@ -324,7 +403,7 @@ export default function PracticePage() {
                 setLoading(false);
             }
         },
-        [appendMessage, clearActiveSession, showToast]
+        [appendMessage, clearActiveSession, resetStudyChat, showToast]
     );
 
     // =========================
@@ -334,6 +413,7 @@ export default function PracticePage() {
         const rawText = input.trim();
         if (!rawText) return;
 
+        // log vào GENERATE chat
         appendMessage({
             role: "user",
             text: rawText.length > 500 ? rawText.slice(0, 500) + "…" : rawText,
@@ -365,6 +445,9 @@ export default function PracticePage() {
             setDurationMinutes(0);
             clearActiveSession();
 
+            // reset study chat to bind new material
+            resetStudyChat();
+
             const extracted = await waitForExtractedTextOrReady(id);
 
             appendMessage({
@@ -389,7 +472,52 @@ export default function PracticePage() {
         } finally {
             setLoading(false);
         }
-    }, [appendMessage, clearActiveSession, input, showToast]);
+    }, [appendMessage, clearActiveSession, input, resetStudyChat, showToast]);
+
+    // =========================
+    // US17: boot chat session when switch to STUDY
+    // =========================
+    useEffect(() => {
+        const boot = async () => {
+            if (assistantMode !== ASSISTANT_MODE.STUDY) return;
+
+            const matId = materialIdRef.current ?? materialId;
+            if (!matId) return; // chưa có học liệu
+
+            if (studySessionId) return;
+
+            setStudyBooting(true);
+            try {
+                const s = await chatApi.startSession(matId);
+                const sid = s?.sessionId;
+                if (!sid) throw new Error("Missing sessionId");
+
+                setStudySessionId(sid);
+
+                const history = await chatApi.getMessages(sid);
+                if (Array.isArray(history) && history.length) {
+                    const mapped = history.map((m) => ({
+                        id: String(m.id),
+                        role: String(m.sender || "").toUpperCase() === "USER" ? "user" : "assistant",
+                        text: m.content || "",
+                    }));
+                    setStudyMessages((prev) => {
+                        const intro = prev?.[0] ? [prev[0]] : [];
+                        return [...intro, ...mapped];
+                    });
+                }
+            } catch (e) {
+                console.error(e);
+                const msg = e?.response?.data?.message || e?.message || "Start chat failed";
+                showToast(`Không mở được chat: ${String(msg)}`, "error");
+            } finally {
+                setStudyBooting(false);
+            }
+        };
+
+        boot();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [assistantMode, materialId, studySessionId]);
 
     // =========================
     // V2 Step 1: Generate session
@@ -793,21 +921,84 @@ export default function PracticePage() {
     const canClickSend = useMemo(() => {
         const hasMaterial = !!(materialIdRef.current ?? materialId);
         const hasText = !!input.trim();
+
         if (loading) return false;
+
+        if (assistantMode === ASSISTANT_MODE.STUDY) {
+            // US17: cần material + keyword hợp lệ
+            if (!hasMaterial) return false;
+            return validateKeywords(input).ok;
+        }
+
+        // GENERATE: input có text => gửi text, không thì cần material để tạo đề
         if (hasText) return true;
         return hasMaterial;
-    }, [input, loading, materialId]);
+    }, [assistantMode, input, loading, materialId]);
+
+    const handleAskStudy = useCallback(async () => {
+        if (loading) return;
+
+        const matId = materialIdRef.current ?? materialId;
+        if (!matId) {
+            showToast("Chưa có học liệu. Hãy upload/paste trước.", "warning");
+            return;
+        }
+
+        const v = validateKeywords(input);
+        if (!v.ok) {
+            showToast(v.message, "warning");
+            return;
+        }
+
+        const keywords = v.value;
+
+        // Optimistic append user message
+        appendStudyMessage({ role: "user", text: keywords });
+        setInput("");
+
+        try {
+            // ensure session
+            let sid = studySessionId;
+            if (!sid) {
+                setStudyBooting(true);
+                const s = await chatApi.startSession(matId);
+                sid = s?.sessionId;
+                setStudySessionId(sid);
+                setStudyBooting(false);
+            }
+
+            const res = await chatApi.ask(sid, keywords);
+            const ans = res?.answer || "Mình chưa đủ ngữ cảnh. Thử nhập từ khóa cụ thể hơn.";
+            appendStudyMessage({ role: "assistant", text: ans });
+        } catch (e) {
+            console.error(e);
+            const msg = e?.response?.data?.message || e?.message || "Ask failed";
+            showToast(`Không gửi được: ${String(msg)}`, "error");
+            appendStudyMessage({
+                role: "assistant",
+                text: "Mình không trả lời được. Hãy thử từ khóa khác xuất hiện trong bài học.",
+            });
+        } finally {
+            setStudyBooting(false);
+        }
+    }, [appendStudyMessage, input, loading, materialId, showToast, studySessionId]);
 
     const handleBottomSend = useCallback(async () => {
         if (loading) return;
 
+        if (assistantMode === ASSISTANT_MODE.STUDY) {
+            await handleAskStudy();
+            return;
+        }
+
+        // GENERATE mode (cũ)
         if (input.trim()) {
             await handleSendText();
             return;
         }
 
         await generateSessionV2();
-    }, [generateSessionV2, handleSendText, input, loading]);
+    }, [assistantMode, generateSessionV2, handleAskStudy, handleSendText, input, loading]);
 
     const doingAttemptId = useMemo(() => {
         const t = sessionTokenRef.current || sessionToken;
@@ -832,6 +1023,62 @@ export default function PracticePage() {
                             playerRef.current?.submit?.({ timedOut: true });
                         }}
                     />
+
+                    {/* ✅ Assistant Mode Switch (integrated in the same UI) */}
+                    <Box sx={{ mt: 1.5, px: 0.5 }}>
+                        <Paper
+                            elevation={0}
+                            sx={{
+                                p: 1.25,
+                                borderRadius: 3,
+                                bgcolor: "#fff",
+                                border: `1px solid ${COLORS.border}`,
+                            }}
+                        >
+                            <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                                <Stack>
+                                    <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary, lineHeight: 1.2 }}>
+                                        AI Practice Assistant
+                                    </Typography>
+                                    <Typography sx={{ fontSize: 12, color: COLORS.textSecondary }}>
+                                        {assistantMode === ASSISTANT_MODE.GENERATE
+                                            ? "Upload/Paste để tạo đề"
+                                            : "Keyword-only • Không đáp án"}
+                                    </Typography>
+                                </Stack>
+
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                    <Chip
+                                        label="Tạo đề"
+                                        clickable
+                                        color={assistantMode === ASSISTANT_MODE.GENERATE ? "primary" : "default"}
+                                        onClick={() => setAssistantMode(ASSISTANT_MODE.GENERATE)}
+                                    />
+                                    <Chip
+                                        label="Hỏi khái niệm"
+                                        clickable
+                                        color={assistantMode === ASSISTANT_MODE.STUDY ? "primary" : "default"}
+                                        onClick={() => setAssistantMode(ASSISTANT_MODE.STUDY)}
+                                    />
+                                </Stack>
+                            </Stack>
+
+                            {assistantMode === ASSISTANT_MODE.STUDY && !(materialIdRef.current ?? materialId) && (
+                                <>
+                                    <Divider sx={{ my: 1.2 }} />
+                                    <Typography sx={{ fontSize: 12, color: COLORS.textSecondary }}>
+                                        * Bạn cần upload/paste học liệu trước để chat theo đúng bài.
+                                    </Typography>
+                                </>
+                            )}
+
+                            {assistantMode === ASSISTANT_MODE.STUDY && studyBooting && (
+                                <Typography sx={{ mt: 1, fontSize: 12, color: COLORS.textSecondary }}>
+                                    Đang mở session chat…
+                                </Typography>
+                            )}
+                        </Paper>
+                    </Box>
                 </Box>
 
                 <Box
@@ -846,7 +1093,7 @@ export default function PracticePage() {
                     }}
                 >
                     <Box sx={{ width: "100%", maxWidth: 860 }}>
-                        {messages.map((m) => (
+                        {messagesToRender.map((m) => (
                             <ChatBubble key={m.id} role={m.role} text={m.text} />
                         ))}
                         <div ref={messagesEndRef} />
@@ -887,15 +1134,29 @@ export default function PracticePage() {
                             fullWidth
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder="Paste nội dung học liệu… (Enter để gửi text). Nếu đã upload rồi, để trống và bấm Gửi để tạo đề."
+                            placeholder={
+                                assistantMode === ASSISTANT_MODE.GENERATE
+                                    ? "Paste nội dung học liệu… (Enter để gửi text). Nếu đã upload rồi, để trống và bấm Gửi để tạo đề."
+                                    : "Nhập từ khóa… Ví dụ: jwt filter, cors, useEffect (Enter để gửi)"
+                            }
+                            onPaste={(e) => {
+                                if (assistantMode !== ASSISTANT_MODE.STUDY) return;
+                                const pasted = e.clipboardData?.getData("text") ?? "";
+                                if (!pasted) return;
+                                const flat = pasted.replace(/\s+/g, " ").trim();
+                                if (pasted.includes("\n") || flat.length > US17_MAX_CHARS) {
+                                    e.preventDefault();
+                                    showToast("Chỉ nhập từ khóa (không dán nguyên câu hỏi).", "warning");
+                                }
+                            }}
                             onKeyDown={(e) => {
                                 if (e.key === "Enter" && !e.shiftKey) {
                                     e.preventDefault();
                                     handleBottomSend();
                                 }
                             }}
-                            multiline
-                            maxRows={4}
+                            multiline={assistantMode === ASSISTANT_MODE.GENERATE}
+                            maxRows={assistantMode === ASSISTANT_MODE.GENERATE ? 4 : 1}
                             sx={{ "& .MuiOutlinedInput-root": { borderRadius: 3, bgcolor: "#fff" } }}
                         />
 
@@ -915,7 +1176,9 @@ export default function PracticePage() {
                     </Box>
 
                     <Typography sx={{ mt: 1, textAlign: "center", fontSize: 12, color: COLORS.textSecondary }}>
-                        AI có thể sai. Hãy kiểm chứng lại nội dung quan trọng.
+                        {assistantMode === ASSISTANT_MODE.GENERATE
+                            ? "AI có thể sai. Hãy kiểm chứng lại nội dung quan trọng."
+                            : "Chỉ hỏi bằng từ khóa liên quan bài. AI sẽ gợi ý khái niệm, không đưa đáp án."}
                     </Typography>
                 </Box>
             </Box>
