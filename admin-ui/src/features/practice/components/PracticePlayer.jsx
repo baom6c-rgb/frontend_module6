@@ -2,6 +2,7 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Box, Button, Paper, Typography, Divider } from "@mui/material";
 import QuestionCard from "./QuestionCard";
+import QuizProgressBar from "./QuizProgressBar";
 
 /**
  * V2 NOTE:
@@ -43,6 +44,9 @@ const PracticePlayer = forwardRef(function PracticePlayer(
 
     const currentQuestion = questions[index];
     const currentQid = useMemo(() => getQid(currentQuestion), [currentQuestion]);
+
+    // ✅ Danh sách ID để ProgressBar map trạng thái answered/pending
+    const questionIds = useMemo(() => questions.map((q) => getQid(q)), [questions]);
 
     const answeredCount = useMemo(() => {
         return questions.reduce((acc, q) => {
@@ -213,6 +217,12 @@ const PracticePlayer = forwardRef(function PracticePlayer(
         );
     }
 
+    const handleNavigate = (newIndex) => {
+        if (submittedRef.current) return;
+        const safeIndex = Math.max(0, Math.min(Number(newIndex) || 0, total - 1));
+        setIndex(safeIndex);
+    };
+
     return (
         <Paper
             elevation={0}
@@ -223,13 +233,24 @@ const PracticePlayer = forwardRef(function PracticePlayer(
                 bgcolor: "#fff",
             }}
         >
+            {/* ✅ PROGRESS BAR (Navigation) */}
+            <QuizProgressBar
+                total={total}
+                currentIndex={index}
+                answersMap={answersMap}
+                questionIds={questionIds}
+                onNavigate={handleNavigate}
+                disabled={submittedRef.current}
+            />
+
             <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
                 <Box>
                     <Typography sx={{ fontWeight: 900, color: "#1B2559", fontSize: 18 }}>3) Làm bài</Typography>
 
-                    <Typography sx={{ mt: 0.5, color: "#6C757D", fontWeight: 700 }}>
+                    {/* ❌ BỎ text tiến độ theo yêu cầu (không show “Tiến độ” ở header) */}
+                    {/* <Typography sx={{ mt: 0.5, color: "#6C757D", fontWeight: 700 }}>
                         Tiến độ: {answeredCount}/{total}
-                    </Typography>
+                    </Typography> */}
 
                     {!currentQid && (
                         <Typography sx={{ mt: 0.5, color: "#dc3545", fontWeight: 800 }}>
@@ -270,7 +291,11 @@ const PracticePlayer = forwardRef(function PracticePlayer(
             />
 
             <Box sx={{ display: "flex", justifyContent: "space-between", mt: 2, gap: 1 }}>
-                <Button disabled={index <= 0 || submittedRef.current} variant="outlined" onClick={() => setIndex((i) => i - 1)}>
+                <Button
+                    disabled={index <= 0 || submittedRef.current}
+                    variant="outlined"
+                    onClick={() => setIndex((i) => i - 1)}
+                >
                     Câu trước
                 </Button>
 

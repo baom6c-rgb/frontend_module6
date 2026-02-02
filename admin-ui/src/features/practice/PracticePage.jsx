@@ -4,7 +4,6 @@ import {
     Box,
     Paper,
     Typography,
-    TextField,
     IconButton,
     Button,
     Stack,
@@ -14,13 +13,11 @@ import {
     Divider,
 } from "@mui/material";
 
-import SendRoundedIcon from "@mui/icons-material/SendRounded";
-import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
-import QuizRoundedIcon from "@mui/icons-material/QuizRounded";
 import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
+import AccessTimeFilledRoundedIcon from "@mui/icons-material/AccessTimeFilledRounded";
 
 import { practiceApi } from "../../api/practiceApi";
 import { materialApi } from "../../api/materialApi";
@@ -28,8 +25,11 @@ import { chatApi } from "../../api/chatApi"; // ✅ US17
 
 import GlobalLoading from "../../components/common/GlobalLoading";
 import { useToast } from "../../components/common/AppToast";
+import CountdownTimer from "../../components/common/CountdownTimer";
 
 import PracticeHeaderConfig from "./components/chatbot/PracticeHeaderConfig";
+import ChatComposer from "./components/chatbot/ChatComposer";
+
 import PracticePlayer from "./components/PracticePlayer";
 import PracticeResult from "./components/PracticeResult";
 import PracticeReviewDialog from "./components/PracticeReviewDialog";
@@ -51,8 +51,8 @@ const MODE = {
 };
 
 const ASSISTANT_MODE = {
-    GENERATE: "GENERATE", // tạo đề (cũ)
-    STUDY: "STUDY", // hỏi khái niệm (US17)
+    GENERATE: "GENERATE", // upload/paste + tạo đề
+    STUDY: "STUDY", // US17 keyword-only
 };
 
 const ACTIVE_SESSION_KEY = "practice_active_session_v2";
@@ -69,7 +69,7 @@ function buildAttemptDetailFromV2(serverRes, sessionToken) {
 
     const questions = qs
         .map((q) => ({
-            questionId: q?.questionKey, // ✅ stable id
+            questionId: q?.questionKey,
             questionType: q?.questionType,
             content: q?.content,
             options: q?.options || null,
@@ -117,37 +117,37 @@ function validateKeywords(raw) {
 export default function PracticePage() {
     const { showToast } = useToast();
 
-    // ===== Optional: basic anti-devtools (UX only, NOT security) =====
+    // ===== Focus mode: auto-hide sidebar (integration point) =====
     useEffect(() => {
-        const onContextMenu = (e) => {
-            e.preventDefault();
+        // 1) add body class for CSS-based hiding
+        document.body.classList.add("practice-focus-mode");
+
+        // 2) dispatch events for layout/context listeners
+        const fire = (open) => {
+            try {
+                window.dispatchEvent(
+                    new CustomEvent("app:sidebar:set", {
+                        detail: { open, source: "PracticePage" },
+                    })
+                );
+            } catch {
+                // ignore
+            }
+            // Optional hooks (không phá nếu app không có)
+            try {
+                if (typeof window?.setSidebarOpen === "function") window.setSidebarOpen(open);
+                if (typeof window?.__APP_SET_SIDEBAR_OPEN__ === "function") window.__APP_SET_SIDEBAR_OPEN__(open);
+                if (window?.appSidebar && typeof window.appSidebar.setOpen === "function") window.appSidebar.setOpen(open);
+            } catch {
+                // ignore
+            }
         };
 
-        const onKeyDown = (e) => {
-            const key = String(e.key || "").toLowerCase();
-            const ctrl = e.ctrlKey || e.metaKey;
-
-            if (e.key === "F12") {
-                e.preventDefault();
-                return;
-            }
-
-            if (ctrl && e.shiftKey && ["i", "j", "c"].includes(key)) {
-                e.preventDefault();
-                return;
-            }
-
-            if (ctrl && key === "u") {
-                e.preventDefault();
-            }
-        };
-
-        document.addEventListener("contextmenu", onContextMenu);
-        window.addEventListener("keydown", onKeyDown);
+        fire(false);
 
         return () => {
-            document.removeEventListener("contextmenu", onContextMenu);
-            window.removeEventListener("keydown", onKeyDown);
+            document.body.classList.remove("practice-focus-mode");
+            fire(true);
         };
     }, []);
 
@@ -186,10 +186,10 @@ export default function PracticePage() {
     // player ref (timer outside auto-submit)
     const playerRef = useRef(null);
 
-    // ===== assistant mode (NEW) =====
+    // ===== assistant mode =====
     const [assistantMode, setAssistantMode] = useState(ASSISTANT_MODE.GENERATE);
 
-    // ===== chat (GENERATE - cũ) =====
+    // ===== chat (GENERATE) =====
     const [messages, setMessages] = useState([
         {
             id: uid("a"),
@@ -210,12 +210,8 @@ export default function PracticePage() {
     ]);
     const [studyBooting, setStudyBooting] = useState(false);
 
-    // shared input
-    const [input, setInput] = useState("");
-
     const messagesEndRef = useRef(null);
 
-    // ✅ Render list = theo mode
     const messagesToRender = useMemo(() => {
         return assistantMode === ASSISTANT_MODE.GENERATE ? messages : studyMessages;
     }, [assistantMode, messages, studyMessages]);
@@ -288,10 +284,8 @@ export default function PracticePage() {
 
             setMode(MODE.IDLE);
             setDurationMinutes(0);
-            setInput("");
             setIsCanvasOpen(true);
 
-            // reset assistant
             setAssistantMode(ASSISTANT_MODE.GENERATE);
             resetStudyChat();
 
@@ -327,13 +321,12 @@ export default function PracticePage() {
     }
 
     // =========================
-    // Upload file -> chỉ tạo materialId
+    // Upload file -> chỉ tạo materialId (KHÔNG tự tạo đề)
     // =========================
     const handleUploadFile = useCallback(
         async (file) => {
             if (!file) return;
 
-            // ✅ validate (format/size) ngay tại đây để handle UX
             if (file.size > MAX_SIZE_BYTES) {
                 showToast("File quá dung lượng (tối đa 10MB).", "error");
                 appendMessage({ role: "assistant", text: "File quá dung lượng (tối đa 10MB). Hãy chọn file nhỏ hơn." });
@@ -348,7 +341,6 @@ export default function PracticePage() {
                 return;
             }
 
-            // Note: luôn log lên GENERATE chat để user hiểu flow tạo đề
             appendMessage({ role: "user", text: `📄 Upload: ${file.name}` });
             setLoading(true);
             setLoadingMessage("Đang upload & trích xuất…");
@@ -362,7 +354,6 @@ export default function PracticePage() {
                 setMaterialId(id);
                 materialIdRef.current = id;
 
-                // reset session state
                 setSessionToken("");
                 sessionTokenRef.current = "";
                 setStartedAtIso(null);
@@ -375,7 +366,6 @@ export default function PracticePage() {
                 setDurationMinutes(0);
                 clearActiveSession();
 
-                // reset study chat to bind new material
                 resetStudyChat();
 
                 const extracted = await waitForExtractedTextOrReady(id);
@@ -392,11 +382,7 @@ export default function PracticePage() {
                 console.error(e);
                 const status = e?.response?.status;
                 const serverMsg =
-                    e?.response?.data?.message ||
-                    e?.response?.data?.error ||
-                    e?.response?.data ||
-                    e?.message ||
-                    "Upload failed";
+                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Upload failed";
                 showToast(`Upload học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
                 appendMessage({ role: "assistant", text: "Không upload/đọc được file. Kiểm tra định dạng/size nhé." });
             } finally {
@@ -407,72 +393,68 @@ export default function PracticePage() {
     );
 
     // =========================
-    // Paste text -> tạo materialId
+    // Paste text -> tạo materialId (KHÔNG tự tạo đề)
     // =========================
-    const handleSendText = useCallback(async () => {
-        const rawText = input.trim();
-        if (!rawText) return;
+    const handleSendText = useCallback(
+        async (rawText) => {
+            const t = String(rawText || "").trim();
+            if (!t) return;
 
-        // log vào GENERATE chat
-        appendMessage({
-            role: "user",
-            text: rawText.length > 500 ? rawText.slice(0, 500) + "…" : rawText,
-        });
-        setInput("");
+            appendMessage({ role: "user", text: t.length > 500 ? t.slice(0, 500) + "…" : t });
 
-        setLoading(true);
-        setLoadingMessage("Đang tạo học liệu…");
+            setLoading(true);
+            setLoadingMessage("Đang tạo học liệu…");
 
-        try {
-            const res = await materialApi.createFromText({ title: "Pasted material", rawText });
-            const data = unwrap(res);
-            const id = data?.id || data?.materialId;
-            if (!id) throw new Error("Missing materialId from createFromText response");
+            try {
+                const res = await materialApi.createFromText({ title: "Pasted material", rawText: t });
+                const data = unwrap(res);
+                const id = data?.id || data?.materialId;
+                if (!id) throw new Error("Missing materialId from createFromText response");
 
-            setMaterialId(id);
-            materialIdRef.current = id;
+                setMaterialId(id);
+                materialIdRef.current = id;
 
-            // reset session state
-            setSessionToken("");
-            sessionTokenRef.current = "";
-            setStartedAtIso(null);
-            setDeadlineIso(null);
-            setAttemptDetail(null);
-            setResult(null);
-            setReviewOpen(false);
-            setReviewData(null);
-            setMode(MODE.IDLE);
-            setDurationMinutes(0);
-            clearActiveSession();
+                setSessionToken("");
+                sessionTokenRef.current = "";
+                setStartedAtIso(null);
+                setDeadlineIso(null);
+                setAttemptDetail(null);
+                setResult(null);
+                setReviewOpen(false);
+                setReviewData(null);
+                setMode(MODE.IDLE);
+                setDurationMinutes(0);
+                clearActiveSession();
 
-            // reset study chat to bind new material
-            resetStudyChat();
+                resetStudyChat();
 
-            const extracted = await waitForExtractedTextOrReady(id);
+                const extracted = await waitForExtractedTextOrReady(id);
 
-            appendMessage({
-                role: "assistant",
-                text: extracted
-                    ? "Đã nhận & trích xuất. Bây giờ để trống ô nhập và bấm Gửi để AI tạo đề nhé."
-                    : "Đã nhận học liệu. Bây giờ để trống ô nhập và bấm Gửi để AI tạo đề nhé.",
-            });
+                appendMessage({
+                    role: "assistant",
+                    text: extracted
+                        ? "Đã nhận & trích xuất. Bây giờ để trống ô nhập và bấm Gửi để AI tạo đề nhé."
+                        : "Đã nhận học liệu. Bây giờ để trống ô nhập và bấm Gửi để AI tạo đề nhé.",
+                });
 
-            showToast("Đã nhận học liệu. Bấm Gửi để tạo đề.", "success");
-        } catch (e) {
-            console.error(e);
-            const status = e?.response?.status;
-            const serverMsg =
-                e?.response?.data?.message ||
-                e?.response?.data?.error ||
-                e?.response?.data ||
-                e?.message ||
-                "Create material failed";
-            showToast(`Gửi học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
-            appendMessage({ role: "assistant", text: "Không tạo được học liệu từ text này. Thử lại nhé." });
-        } finally {
-            setLoading(false);
-        }
-    }, [appendMessage, clearActiveSession, input, resetStudyChat, showToast]);
+                showToast("Đã nhận học liệu. Bấm Gửi để tạo đề.", "success");
+            } catch (e) {
+                console.error(e);
+                const status = e?.response?.status;
+                const serverMsg =
+                    e?.response?.data?.message ||
+                    e?.response?.data?.error ||
+                    e?.response?.data ||
+                    e?.message ||
+                    "Create material failed";
+                showToast(`Gửi học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
+                appendMessage({ role: "assistant", text: "Không tạo được học liệu từ text này. Thử lại nhé." });
+            } finally {
+                setLoading(false);
+            }
+        },
+        [appendMessage, clearActiveSession, resetStudyChat, showToast]
+    );
 
     // =========================
     // US17: boot chat session when switch to STUDY
@@ -482,7 +464,7 @@ export default function PracticePage() {
             if (assistantMode !== ASSISTANT_MODE.STUDY) return;
 
             const matId = materialIdRef.current ?? materialId;
-            if (!matId) return; // chưa có học liệu
+            if (!matId) return;
 
             if (studySessionId) return;
 
@@ -519,8 +501,55 @@ export default function PracticePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [assistantMode, materialId, studySessionId]);
 
+    const handleAskStudy = useCallback(
+        async (rawKeywords) => {
+            if (loading) return;
+
+            const matId = materialIdRef.current ?? materialId;
+            if (!matId) {
+                showToast("Chưa có học liệu. Hãy upload/paste trước.", "warning");
+                return;
+            }
+
+            const v = validateKeywords(rawKeywords);
+            if (!v.ok) {
+                showToast(v.message, "warning");
+                return;
+            }
+
+            const keywords = v.value;
+            appendStudyMessage({ role: "user", text: keywords });
+
+            try {
+                let sid = studySessionId;
+                if (!sid) {
+                    setStudyBooting(true);
+                    const s = await chatApi.startSession(matId);
+                    sid = s?.sessionId;
+                    setStudySessionId(sid);
+                    setStudyBooting(false);
+                }
+
+                const res = await chatApi.ask(sid, keywords);
+                const ans = res?.answer || "Mình chưa đủ ngữ cảnh. Thử nhập từ khóa cụ thể hơn.";
+                appendStudyMessage({ role: "assistant", text: ans });
+            } catch (e) {
+                console.error(e);
+                const msg = e?.response?.data?.message || e?.message || "Ask failed";
+                showToast(`Không gửi được: ${String(msg)}`, "error");
+                appendStudyMessage({
+                    role: "assistant",
+                    text: "Mình không trả lời được. Hãy thử từ khóa khác xuất hiện trong bài học.",
+                });
+            } finally {
+                setStudyBooting(false);
+            }
+        },
+        [appendStudyMessage, loading, materialId, showToast, studySessionId]
+    );
+
     // =========================
-    // V2 Step 1: Generate session
+    // V2 Step 1: Generate session (duration lấy từ BE)
     // =========================
     const generateSessionV2 = useCallback(
         async () => {
@@ -537,7 +566,7 @@ export default function PracticePage() {
 
             setLoading(true);
             setLoadingMessage("AI đang tạo đề…");
-            appendMessage({ role: "assistant", text: "AI đang tạo đề… (tự tính thời gian theo số câu)" });
+            appendMessage({ role: "assistant", text: "AI đang tạo đề… (thời gian lấy từ BE)" });
 
             try {
                 const data = await practiceApi.generateSessionV2({
@@ -650,11 +679,7 @@ export default function PracticePage() {
                 console.error(e);
                 const status = e?.response?.status;
                 const msg =
-                    e?.response?.data?.message ||
-                    e?.response?.data?.error ||
-                    e?.response?.data ||
-                    e?.message ||
-                    "Start session failed";
+                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Start failed";
                 showToast(`Không bắt đầu được${status ? ` (${status})` : ""}: ${String(msg)}`, "error");
                 appendMessage({
                     role: "assistant",
@@ -711,11 +736,7 @@ export default function PracticePage() {
                 console.error(e);
                 const status = e?.response?.status;
                 const serverMsg =
-                    e?.response?.data?.message ||
-                    e?.response?.data?.error ||
-                    e?.response?.data ||
-                    e?.message ||
-                    "Submit failed";
+                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Submit failed";
                 showToast(`Nộp bài thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
                 appendMessage({ role: "assistant", text: "Không nộp bài được. Thử lại nhé." });
             } finally {
@@ -742,11 +763,7 @@ export default function PracticePage() {
             console.error(e);
             const status = e?.response?.status;
             const serverMsg =
-                e?.response?.data?.message ||
-                e?.response?.data?.error ||
-                e?.response?.data ||
-                e?.message ||
-                "Review failed";
+                e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Review failed";
             showToast(`Không tải được review${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
         }
     }, [result?.attemptId, showToast]);
@@ -908,6 +925,8 @@ export default function PracticePage() {
                             bgcolor: isUser ? "primary.light" : "grey.100",
                             color: isUser ? "primary.contrastText" : "text.primary",
                             whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                            overflowWrap: "anywhere",
                             border: isUser ? "none" : `1px solid ${COLORS.border}`,
                         }}
                     >
@@ -918,423 +937,379 @@ export default function PracticePage() {
         );
     };
 
-    const canClickSend = useMemo(() => {
-        const hasMaterial = !!(materialIdRef.current ?? materialId);
-        const hasText = !!input.trim();
-
-        if (loading) return false;
-
-        if (assistantMode === ASSISTANT_MODE.STUDY) {
-            // US17: cần material + keyword hợp lệ
-            if (!hasMaterial) return false;
-            return validateKeywords(input).ok;
-        }
-
-        // GENERATE: input có text => gửi text, không thì cần material để tạo đề
-        if (hasText) return true;
-        return hasMaterial;
-    }, [assistantMode, input, loading, materialId]);
-
-    const handleAskStudy = useCallback(async () => {
-        if (loading) return;
-
-        const matId = materialIdRef.current ?? materialId;
-        if (!matId) {
-            showToast("Chưa có học liệu. Hãy upload/paste trước.", "warning");
-            return;
-        }
-
-        const v = validateKeywords(input);
-        if (!v.ok) {
-            showToast(v.message, "warning");
-            return;
-        }
-
-        const keywords = v.value;
-
-        // Optimistic append user message
-        appendStudyMessage({ role: "user", text: keywords });
-        setInput("");
-
-        try {
-            // ensure session
-            let sid = studySessionId;
-            if (!sid) {
-                setStudyBooting(true);
-                const s = await chatApi.startSession(matId);
-                sid = s?.sessionId;
-                setStudySessionId(sid);
-                setStudyBooting(false);
-            }
-
-            const res = await chatApi.ask(sid, keywords);
-            const ans = res?.answer || "Mình chưa đủ ngữ cảnh. Thử nhập từ khóa cụ thể hơn.";
-            appendStudyMessage({ role: "assistant", text: ans });
-        } catch (e) {
-            console.error(e);
-            const msg = e?.response?.data?.message || e?.message || "Ask failed";
-            showToast(`Không gửi được: ${String(msg)}`, "error");
-            appendStudyMessage({
-                role: "assistant",
-                text: "Mình không trả lời được. Hãy thử từ khóa khác xuất hiện trong bài học.",
-            });
-        } finally {
-            setStudyBooting(false);
-        }
-    }, [appendStudyMessage, input, loading, materialId, showToast, studySessionId]);
-
-    const handleBottomSend = useCallback(async () => {
-        if (loading) return;
-
-        if (assistantMode === ASSISTANT_MODE.STUDY) {
-            await handleAskStudy();
-            return;
-        }
-
-        // GENERATE mode (cũ)
-        if (input.trim()) {
-            await handleSendText();
-            return;
-        }
-
-        await generateSessionV2();
-    }, [assistantMode, generateSessionV2, handleAskStudy, handleSendText, input, loading]);
-
     const doingAttemptId = useMemo(() => {
         const t = sessionTokenRef.current || sessionToken;
         return t || null;
     }, [sessionToken]);
 
+    // ===== UI: auto time from BE + lock duration input =====
+    const durationLabel = useMemo(() => {
+        if (Number(durationMinutes) > 0) return durationMinutes;
+        if (mode === MODE.IDLE) return 0;
+        return durationMinutes;
+    }, [durationMinutes, mode]);
+
+    // ===== Layout: 70% Canvas - 30% AI panel (flexbox) =====
+    const leftWidth = isCanvasOpen && isSplit ? "30%" : "100%";
+    const rightWidth = isCanvasOpen && isSplit ? "70%" : "0%";
+
+    // upload chỉ mở ở GENERATE và không phải lúc DOING
+    const allowUpload = assistantMode === ASSISTANT_MODE.GENERATE && mode !== MODE.DOING;
+
+    // ===== Floating timer: luôn visible dù Canvas đóng/mở (khi đã DOING) =====
+    const showFloatingTimer = mode === MODE.DOING && Boolean(attemptStartTs) && Number(durationMinutes) > 0;
+
     return (
-        <Box sx={{ display: "flex", height: "100vh", width: "100%", bgcolor: COLORS.bg, overflow: "hidden" }}>
-            {/* LEFT: Chat */}
-            <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", position: "relative" }}>
-                <Box sx={{ p: 2, pb: 0 }}>
-                    <PracticeHeaderConfig
-                        questionCount={questionCount}
-                        durationMinutes={durationMinutes}
-                        onChangeQuestionCount={(v) => setQuestionCount(Number(v))}
-                        onChangeDurationMinutes={() => {
-                            showToast("Thời gian được hệ thống tính tự động theo số câu hỏi.", "info");
-                        }}
-                        attemptId={mode === MODE.DOING ? doingAttemptId : null}
-                        attemptStartTs={mode === MODE.DOING ? attemptStartTs : null}
-                        onTimeExpired={() => {
-                            playerRef.current?.submit?.({ timedOut: true });
-                        }}
-                    />
-
-                    {/* ✅ Assistant Mode Switch (integrated in the same UI) */}
-                    <Box sx={{ mt: 1.5, px: 0.5 }}>
-                        <Paper
-                            elevation={0}
-                            sx={{
-                                p: 1.25,
-                                borderRadius: 3,
-                                bgcolor: "#fff",
-                                border: `1px solid ${COLORS.border}`,
-                            }}
-                        >
-                            <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
-                                <Stack>
-                                    <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary, lineHeight: 1.2 }}>
-                                        AI Practice Assistant
-                                    </Typography>
-                                    <Typography sx={{ fontSize: 12, color: COLORS.textSecondary }}>
-                                        {assistantMode === ASSISTANT_MODE.GENERATE
-                                            ? "Upload/Paste để tạo đề"
-                                            : "Keyword-only • Không đáp án"}
-                                    </Typography>
-                                </Stack>
-
-                                <Stack direction="row" spacing={1} alignItems="center">
-                                    <Chip
-                                        label="Tạo đề"
-                                        clickable
-                                        color={assistantMode === ASSISTANT_MODE.GENERATE ? "primary" : "default"}
-                                        onClick={() => setAssistantMode(ASSISTANT_MODE.GENERATE)}
-                                    />
-                                    <Chip
-                                        label="Hỏi khái niệm"
-                                        clickable
-                                        color={assistantMode === ASSISTANT_MODE.STUDY ? "primary" : "default"}
-                                        onClick={() => setAssistantMode(ASSISTANT_MODE.STUDY)}
-                                    />
-                                </Stack>
-                            </Stack>
-
-                            {assistantMode === ASSISTANT_MODE.STUDY && !(materialIdRef.current ?? materialId) && (
-                                <>
-                                    <Divider sx={{ my: 1.2 }} />
-                                    <Typography sx={{ fontSize: 12, color: COLORS.textSecondary }}>
-                                        * Bạn cần upload/paste học liệu trước để chat theo đúng bài.
-                                    </Typography>
-                                </>
-                            )}
-
-                            {assistantMode === ASSISTANT_MODE.STUDY && studyBooting && (
-                                <Typography sx={{ mt: 1, fontSize: 12, color: COLORS.textSecondary }}>
-                                    Đang mở session chat…
-                                </Typography>
-                            )}
-                        </Paper>
-                    </Box>
-                </Box>
-
-                <Box
+        <Box
+            sx={{
+                height: "calc(100vh - var(--app-header-height, 72px))",
+                width: "100%",
+                bgcolor: COLORS.bg,
+                p: 2,
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+                position: "relative",
+            }}
+        >
+            {/* Floating countdown (độc lập canvas, giống nút '>') */}
+            {showFloatingTimer && (
+                <Paper
+                    elevation={0}
                     sx={{
-                        flex: 1,
-                        overflowY: "auto",
-                        px: 2,
-                        pb: 14,
-                        pt: 2,
-                        display: "flex",
-                        justifyContent: "center",
-                    }}
-                >
-                    <Box sx={{ width: "100%", maxWidth: 860 }}>
-                        {messagesToRender.map((m) => (
-                            <ChatBubble key={m.id} role={m.role} text={m.text} />
-                        ))}
-                        <div ref={messagesEndRef} />
-                    </Box>
-                </Box>
-
-                {/* Input bottom */}
-                <Box
-                    sx={{
-                        position: "absolute",
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        p: 2,
-                        bgcolor: "rgba(248,250,252,0.9)",
-                        backdropFilter: "blur(10px)",
-                        borderTop: `1px solid ${COLORS.border}`,
-                    }}
-                >
-                    <Box sx={{ maxWidth: 860, mx: "auto", display: "flex", gap: 1 }}>
-                        <Tooltip title="Upload file (PDF/DOCX/TXT/XLSX)">
-                            <IconButton component="label" sx={{ border: `1px solid ${COLORS.border}`, borderRadius: 2 }}>
-                                <UploadFileRoundedIcon />
-                                <input
-                                    hidden
-                                    type="file"
-                                    accept=".pdf,.docx,.txt,.xlsx"
-                                    onChange={(e) => {
-                                        const f = e.target.files?.[0];
-                                        if (f) handleUploadFile(f);
-                                        e.target.value = "";
-                                    }}
-                                />
-                            </IconButton>
-                        </Tooltip>
-
-                        <TextField
-                            fullWidth
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            placeholder={
-                                assistantMode === ASSISTANT_MODE.GENERATE
-                                    ? "Paste nội dung học liệu… (Enter để gửi text). Nếu đã upload rồi, để trống và bấm Gửi để tạo đề."
-                                    : "Nhập từ khóa… Ví dụ: jwt filter, cors, useEffect (Enter để gửi)"
-                            }
-                            onPaste={(e) => {
-                                if (assistantMode !== ASSISTANT_MODE.STUDY) return;
-                                const pasted = e.clipboardData?.getData("text") ?? "";
-                                if (!pasted) return;
-                                const flat = pasted.replace(/\s+/g, " ").trim();
-                                if (pasted.includes("\n") || flat.length > US17_MAX_CHARS) {
-                                    e.preventDefault();
-                                    showToast("Chỉ nhập từ khóa (không dán nguyên câu hỏi).", "warning");
-                                }
-                            }}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter" && !e.shiftKey) {
-                                    e.preventDefault();
-                                    handleBottomSend();
-                                }
-                            }}
-                            multiline={assistantMode === ASSISTANT_MODE.GENERATE}
-                            maxRows={assistantMode === ASSISTANT_MODE.GENERATE ? 4 : 1}
-                            sx={{ "& .MuiOutlinedInput-root": { borderRadius: 3, bgcolor: "#fff" } }}
-                        />
-
-                        <IconButton
-                            onClick={handleBottomSend}
-                            disabled={!canClickSend}
-                            sx={{
-                                borderRadius: 2,
-                                bgcolor: canClickSend ? COLORS.orange : "transparent",
-                                color: canClickSend ? "#fff" : "action.disabled",
-                                "&:hover": { bgcolor: canClickSend ? COLORS.orangeHover : "transparent" },
-                                border: canClickSend ? "none" : `1px solid ${COLORS.border}`,
-                            }}
-                        >
-                            <SendRoundedIcon />
-                        </IconButton>
-                    </Box>
-
-                    <Typography sx={{ mt: 1, textAlign: "center", fontSize: 12, color: COLORS.textSecondary }}>
-                        {assistantMode === ASSISTANT_MODE.GENERATE
-                            ? "AI có thể sai. Hãy kiểm chứng lại nội dung quan trọng."
-                            : "Chỉ hỏi bằng từ khóa liên quan bài. AI sẽ gợi ý khái niệm, không đưa đáp án."}
-                    </Typography>
-                </Box>
-            </Box>
-
-            {/* RIGHT: Canvas */}
-            <Box
-                sx={{
-                    width: isCanvasOpen && isSplit ? { xs: 0, md: "45%" } : 0,
-                    minWidth: isCanvasOpen && isSplit ? { xs: 0, md: 380 } : 0,
-                    height: "100%",
-                    borderLeft: `1px solid ${COLORS.border}`,
-                    bgcolor: "#F8F9FA",
-                    transition: "width 0.25s ease, min-width 0.25s ease",
-                    overflow: "hidden",
-                    display: { xs: "none", md: "flex" },
-                    flexDirection: "column",
-                }}
-            >
-                <Box
-                    sx={{
-                        p: 1.5,
+                        position: "fixed",
+                        top: "calc(var(--app-header-height, 72px) + 14px)",
+                        right: 18,
+                        zIndex: 120,
+                        borderRadius: 3,
+                        px: 1.5,
+                        py: 1,
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "space-between",
+                        gap: 1,
                         bgcolor: "#fff",
-                        borderBottom: `1px solid ${COLORS.border}`,
+                        border: "1px solid #ffcdd2",
+                        boxShadow: "0 10px 30px rgba(211, 47, 47, 0.12)",
+                        userSelect: "none",
                     }}
                 >
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                        <QuizRoundedIcon sx={{ color: "primary.main" }} />
-                        <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary }}>Learning Canvas</Typography>
-                    </Stack>
+                    <AccessTimeFilledRoundedIcon sx={{ color: "#d32f2f" }} fontSize="small" />
+                    <Typography
+                        sx={{
+                            fontWeight: 900,
+                            fontSize: 15,
+                            color: "#d32f2f",
+                            fontVariantNumeric: "tabular-nums",
+                            lineHeight: 1,
+                        }}
+                    >
+                        <CountdownTimer
+                            startTimestamp={attemptStartTs}
+                            durationSeconds={Number(durationMinutes) * 60}
+                            onExpire={() => playerRef.current?.submit?.({ timedOut: true })}
+                        />
+                    </Typography>
+                </Paper>
+            )}
 
-                    <Stack direction="row" spacing={1}>
-                        <Tooltip title="Đổi học liệu">
-                            <IconButton onClick={() => resetPracticeState({ keepMessages: true })} size="small">
-                                <RestartAltRoundedIcon />
-                            </IconButton>
-                        </Tooltip>
-                    </Stack>
-                </Box>
+            <Box sx={{ display: "flex", flex: 1, gap: 2, minHeight: 0, overflow: "hidden" }}>
+                {/* LEFT: AI Panel (30%) */}
+                <Box
+                    sx={{
+                        width: leftWidth,
+                        minWidth: isCanvasOpen && isSplit ? 320 : 360,
+                        height: "100%",
+                        display: "flex",
+                        flexDirection: "column",
+                        minHeight: 0,
+                        transition: "width 0.25s ease",
+                    }}
+                >
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            flex: 1,
+                            minHeight: 0,
+                            display: "flex",
+                            flexDirection: "column",
+                            borderRadius: 3,
+                            border: `1px solid ${COLORS.border}`,
+                            overflow: "hidden",
+                            bgcolor: "#fff",
+                        }}
+                    >
+                        {/* Header config */}
+                        <Box sx={{ p: 2, pb: 0 }}>
+                            <PracticeHeaderConfig
+                                questionCount={questionCount}
+                                durationMinutes={durationLabel}
+                                onChangeQuestionCount={(v) => setQuestionCount(Number(v))}
+                                attemptId={mode === MODE.DOING ? doingAttemptId : null}
+                                // ✅ timer đã chuyển ra ngoài (floating), không render trong header nữa
+                                attemptStartTs={null}
+                                onTimeExpired={null}
+                            />
 
-                <Box sx={{ flex: 1, overflowY: "auto", p: 2.5 }}>
-                    {mode === MODE.IDLE && (
-                        <Box>
-                            <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary, mb: 0.5, fontSize: 18 }}>
-                                Sẵn sàng tạo đề
-                            </Typography>
-                            <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 2 }}>
-                                Upload/paste học liệu xong, bấm <b>Gửi</b> để AI tạo đề. Thời gian làm bài sẽ{" "}
-                                <b>tự tính theo số câu</b>.
-                            </Typography>
-
-                            <Button
-                                fullWidth
-                                variant="contained"
-                                onClick={generateSessionV2}
-                                disabled={loading || !(materialIdRef.current ?? materialId)}
-                                sx={{
-                                    borderRadius: 3,
-                                    fontWeight: 900,
-                                    bgcolor: COLORS.orange,
-                                    "&:hover": { bgcolor: COLORS.orangeHover },
-                                }}
-                            >
-                                Tạo đề ngay
-                            </Button>
-
-                            {!materialId && (
-                                <Typography sx={{ mt: 2, fontSize: 12, color: COLORS.textSecondary }}>
-                                    * Bạn cần upload/paste trước khi tạo đề.
-                                </Typography>
-                            )}
-                        </Box>
-                    )}
-
-                    {mode === MODE.READY && (
-                        <Box>
-                            <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary, mb: 0.5, fontSize: 18 }}>
-                                Đã tạo đề xong
-                            </Typography>
-                            <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 1.5 }}>
-                                Số câu: <b>{Number(questionCount)}</b> • Thời gian:{" "}
-                                <b>{Number(durationMinutes) || "—"} phút</b>
-                            </Typography>
-                            <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 2 }}>
-                                Bấm “Bắt đầu làm bài” để vào làm. Nếu muốn đổi học liệu thì bấm “Gửi lại tài liệu”.
-                            </Typography>
-
-                            <Stack spacing={1.5}>
-                                <Button
-                                    fullWidth
-                                    variant="contained"
-                                    onClick={startSessionV2}
-                                    disabled={loading}
+                            {/* Assistant mode switch */}
+                            <Box sx={{ mt: 1.5, px: 0.5 }}>
+                                <Paper
+                                    elevation={0}
                                     sx={{
+                                        p: 1.25,
                                         borderRadius: 3,
-                                        fontWeight: 900,
-                                        bgcolor: COLORS.orange,
-                                        "&:hover": { bgcolor: COLORS.orangeHover },
+                                        bgcolor: "#fff",
+                                        border: `1px solid ${COLORS.border}`,
                                     }}
                                 >
-                                    Bắt đầu làm bài
-                                </Button>
+                                    <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                                        <Stack sx={{ minWidth: 0 }}>
+                                            <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary, lineHeight: 1.2 }}>
+                                                AI Practice Assistant
+                                            </Typography>
+                                            <Typography sx={{ fontSize: 12, color: COLORS.textSecondary }}>
+                                                {assistantMode === ASSISTANT_MODE.GENERATE
+                                                    ? "Upload/Paste để tạo đề"
+                                                    : "Keyword-only • Không đáp án"}
+                                            </Typography>
+                                        </Stack>
 
+                                        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+                                            <Chip
+                                                label="Tạo đề"
+                                                clickable
+                                                color={assistantMode === ASSISTANT_MODE.GENERATE ? "primary" : "default"}
+                                                onClick={() => setAssistantMode(ASSISTANT_MODE.GENERATE)}
+                                            />
+                                            <Chip
+                                                label="Hỏi khái niệm"
+                                                clickable
+                                                color={assistantMode === ASSISTANT_MODE.STUDY ? "primary" : "default"}
+                                                onClick={() => setAssistantMode(ASSISTANT_MODE.STUDY)}
+                                            />
+                                        </Stack>
+                                    </Stack>
+
+                                    {assistantMode === ASSISTANT_MODE.STUDY && !(materialIdRef.current ?? materialId) && (
+                                        <>
+                                            <Divider sx={{ my: 1.2 }} />
+                                            <Typography sx={{ fontSize: 12, color: COLORS.textSecondary }}>
+                                                * Bạn cần upload/paste học liệu trước để chat theo đúng bài.
+                                            </Typography>
+                                        </>
+                                    )}
+
+                                    {assistantMode === ASSISTANT_MODE.STUDY && studyBooting && (
+                                        <Typography sx={{ mt: 1, fontSize: 12, color: COLORS.textSecondary }}>
+                                            Đang mở session chat…
+                                        </Typography>
+                                    )}
+                                </Paper>
+                            </Box>
+                        </Box>
+
+                        {/* Chat Stream (scroll inside) */}
+                        <Box
+                            sx={{
+                                flex: 1,
+                                minHeight: 0,
+                                overflowY: "auto",
+                                px: 2,
+                                pt: 2,
+                                pb: 2,
+                            }}
+                        >
+                            <Box sx={{ width: "100%" }}>
+                                {messagesToRender.map((m) => (
+                                    <ChatBubble key={m.id} role={m.role} text={m.text} />
+                                ))}
+                                <div ref={messagesEndRef} />
+                            </Box>
+                        </Box>
+
+                        {/* Composer */}
+                        <Box sx={{ p: 2, pt: 0 }}>
+                            <ChatComposer
+                                allowUpload={allowUpload}
+                                onUploadFile={handleUploadFile}
+                                onSendText={assistantMode === ASSISTANT_MODE.GENERATE ? handleSendText : handleAskStudy}
+                                disabled={loading || (assistantMode === ASSISTANT_MODE.STUDY && !(materialIdRef.current ?? materialId))}
+                                helperText={
+                                    assistantMode === ASSISTANT_MODE.GENERATE
+                                        ? "Upload xong không tự tạo đề. Bạn bấm Gửi để AI tạo đề."
+                                        : "Chỉ nhập từ khóa (2–8 từ), không paste câu hỏi dài."
+                                }
+                            />
+                        </Box>
+                    </Paper>
+                </Box>
+
+                {/* RIGHT: Canvas (70%) */}
+                {isSplit && (
+                    <Box
+                        sx={{
+                            width: rightWidth,
+                            minWidth: isCanvasOpen ? 420 : 0,
+                            height: "100%",
+                            display: isCanvasOpen ? "flex" : "none",
+                            flexDirection: "column",
+                            borderRadius: 3,
+                            overflow: "hidden",
+                            border: `1px solid ${COLORS.border}`,
+                            bgcolor: "#F8F9FA",
+                            transition: "width 0.25s ease, min-width 0.25s ease",
+                            minHeight: 0,
+                        }}
+                    >
+                        {/* Header Canvas: nút đổi học liệu chuyển sang góc bên trái */}
+                        <Box
+                            sx={{
+                                p: 1.5,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "flex-start",
+                                bgcolor: "#fff",
+                                borderBottom: `1px solid ${COLORS.border}`,
+                                flexShrink: 0,
+                                gap: 1,
+                            }}
+                        >
+                            <Tooltip title="Đổi học liệu">
                                 <Button
-                                    fullWidth
-                                    variant="outlined"
                                     onClick={() => resetPracticeState({ keepMessages: true })}
-                                    disabled={loading}
+                                    variant="outlined"
+                                    size="small"
+                                    startIcon={<RestartAltRoundedIcon />}
                                     sx={{ borderRadius: 3, fontWeight: 900 }}
                                 >
-                                    Gửi lại tài liệu
+                                    Đổi học liệu
                                 </Button>
-                            </Stack>
+                            </Tooltip>
                         </Box>
-                    )}
 
-                    {mode === MODE.DOING && (
-                        <PracticePlayer
-                            ref={playerRef}
-                            attemptDetail={attemptDetail}
-                            attemptId={doingAttemptId}
-                            attemptStartTs={attemptStartTs}
-                            onSubmit={(answersArray, meta) => submitSessionV2(answersArray, meta)}
-                        />
-                    )}
+                        <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 2.5 }}>
+                            {mode === MODE.IDLE && (
+                                <Box>
+                                    <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary, mb: 0.5, fontSize: 18 }}>
+                                        Sẵn sàng tạo đề
+                                    </Typography>
+                                    <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 2 }}>
+                                        Upload/paste học liệu xong, bấm <b>Gửi</b> để AI tạo đề. Thời gian làm bài sẽ <b>lấy từ BE</b>.
+                                    </Typography>
 
-                    {mode === MODE.RESULT && (
-                        <PracticeResult
-                            result={result}
-                            numberOfQuestions={Number(questionCount)}
-                            onRetry={() => {
-                                setResult(null);
-                                setAttemptDetail(null);
-                                setStartedAtIso(null);
-                                setDeadlineIso(null);
-                                setMode(MODE.IDLE);
+                                    <Button
+                                        fullWidth
+                                        variant="contained"
+                                        onClick={generateSessionV2}
+                                        disabled={loading || !(materialIdRef.current ?? materialId)}
+                                        sx={{
+                                            borderRadius: 3,
+                                            fontWeight: 900,
+                                            bgcolor: COLORS.orange,
+                                            "&:hover": { bgcolor: COLORS.orangeHover },
+                                        }}
+                                    >
+                                        Tạo đề ngay
+                                    </Button>
 
-                                setSessionToken("");
-                                sessionTokenRef.current = "";
+                                    {!materialId && (
+                                        <Typography sx={{ mt: 2, fontSize: 12, color: COLORS.textSecondary }}>
+                                            * Bạn cần upload/paste trước khi tạo đề.
+                                        </Typography>
+                                    )}
+                                </Box>
+                            )}
 
-                                setDurationMinutes(0);
+                            {mode === MODE.READY && (
+                                <Box>
+                                    <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary, mb: 0.5, fontSize: 18 }}>
+                                        Đã tạo đề xong
+                                    </Typography>
+                                    <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 1.5 }}>
+                                        Số câu: <b>{Number(questionCount)}</b> • Thời gian: <b>{Number(durationMinutes) || "—"} phút</b>
+                                    </Typography>
+                                    <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 2 }}>
+                                        Bấm “Bắt đầu làm bài” để vào làm. Nếu muốn đổi học liệu thì bấm “Đổi học liệu”.
+                                    </Typography>
 
-                                clearActiveSession();
-                                appendMessage({ role: "assistant", text: "Ok! Bạn có thể bấm “Tạo đề ngay” để làm lại." });
-                            }}
-                            onNewMaterial={() => resetPracticeState({ keepMessages: true })}
-                            onViewReview={openReview}
-                        />
-                    )}
-                </Box>
+                                    <Stack spacing={1.5}>
+                                        <Button
+                                            fullWidth
+                                            variant="contained"
+                                            onClick={startSessionV2}
+                                            disabled={loading}
+                                            sx={{
+                                                borderRadius: 3,
+                                                fontWeight: 900,
+                                                bgcolor: COLORS.orange,
+                                                "&:hover": { bgcolor: COLORS.orangeHover },
+                                            }}
+                                        >
+                                            Bắt đầu làm bài
+                                        </Button>
+
+                                        <Button
+                                            fullWidth
+                                            variant="outlined"
+                                            onClick={() => resetPracticeState({ keepMessages: true })}
+                                            disabled={loading}
+                                            sx={{ borderRadius: 3, fontWeight: 900 }}
+                                        >
+                                            Đổi học liệu
+                                        </Button>
+                                    </Stack>
+                                </Box>
+                            )}
+
+                            {mode === MODE.DOING && (
+                                <PracticePlayer
+                                    ref={playerRef}
+                                    attemptDetail={attemptDetail}
+                                    attemptId={doingAttemptId}
+                                    attemptStartTs={attemptStartTs}
+                                    onSubmit={(answersArray, meta) => submitSessionV2(answersArray, meta)}
+                                />
+                            )}
+
+                            {mode === MODE.RESULT && (
+                                <PracticeResult
+                                    result={result}
+                                    numberOfQuestions={Number(questionCount)}
+                                    onRetry={() => {
+                                        setResult(null);
+                                        setAttemptDetail(null);
+                                        setStartedAtIso(null);
+                                        setDeadlineIso(null);
+                                        setMode(MODE.IDLE);
+
+                                        setSessionToken("");
+                                        sessionTokenRef.current = "";
+
+                                        setDurationMinutes(0);
+
+                                        clearActiveSession();
+                                        appendMessage({ role: "assistant", text: "Ok! Bạn có thể bấm “Tạo đề ngay” để làm lại." });
+                                    }}
+                                    onNewMaterial={() => resetPracticeState({ keepMessages: true })}
+                                    onViewReview={openReview}
+                                />
+                            )}
+                        </Box>
+                    </Box>
+                )}
             </Box>
 
+            {/* Toggle Canvas: đẩy lên giữa cạnh phải như ảnh */}
             {isSplit && (
-                <Box sx={{ position: "fixed", right: 16, bottom: 110, display: { xs: "none", md: "block" } }}>
+                <Box
+                    sx={{
+                        position: "fixed",
+                        right: 18,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        zIndex: 99,
+                        display: { xs: "none", md: "block" },
+                    }}
+                >
                     <Tooltip title={isCanvasOpen ? "Đóng Canvas" : "Mở Canvas"}>
                         <IconButton
                             onClick={() => setIsCanvasOpen((v) => !v)}
@@ -1349,11 +1324,6 @@ export default function PracticePage() {
                                     bgcolor: "#d94f28",
                                     borderColor: "#d94f28",
                                     boxShadow: "0 12px 34px rgba(236,94,50,0.45)",
-                                },
-                                "&:active": {
-                                    bgcolor: "#c74724",
-                                    borderColor: "#c74724",
-                                    boxShadow: "0 6px 18px rgba(236,94,50,0.35)",
                                 },
                             }}
                         >

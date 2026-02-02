@@ -1,21 +1,25 @@
 // src/features/practice/components/chatbot/PracticeHeaderConfig.jsx
-import React from "react";
+import React, { useMemo } from "react";
 import { Box, Paper, Typography, TextField, Stack } from "@mui/material";
-import AccessTimeRoundedIcon from "@mui/icons-material/AccessTimeRounded";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
-import CountdownTimer from "../../../../components/common/CountdownTimer.jsx";
 
 export default function PracticeHeaderConfig({
                                                  questionCount,
                                                  durationMinutes,
                                                  onChangeQuestionCount,
-                                                 onChangeDurationMinutes,
                                                  attemptId,
-                                                 attemptStartTs,
-                                                 onTimeExpired,
                                              }) {
-    const safeQuestionCount = Number.isFinite(Number(questionCount)) ? Number(questionCount) : 10;
-    const safeDurationMinutes = Number.isFinite(Number(durationMinutes)) ? Number(durationMinutes) : 15;
+    const safeQuestionCount = useMemo(() => {
+        const n = Number(questionCount);
+        return Number.isFinite(n) && n > 0 ? n : 10;
+    }, [questionCount]);
+
+    const safeDurationMinutes = useMemo(() => {
+        const n = Number(durationMinutes);
+        return Number.isFinite(n) && n >= 0 ? n : 0;
+    }, [durationMinutes]);
+
+    const isDoing = Boolean(attemptId);
 
     return (
         <Paper
@@ -42,7 +46,6 @@ export default function PracticeHeaderConfig({
                     flexWrap: "nowrap",
                 }}
             >
-                {/* Left: Title only */}
                 <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
                     <AutoAwesomeRoundedIcon sx={{ color: "primary.main" }} />
                     <Typography
@@ -59,7 +62,6 @@ export default function PracticeHeaderConfig({
                     </Typography>
                 </Stack>
 
-                {/* Right: Inputs + optional timer */}
                 <Stack direction="row" spacing={1.25} alignItems="center" sx={{ flexShrink: 0 }}>
                     <TextField
                         label="Số câu"
@@ -67,6 +69,7 @@ export default function PracticeHeaderConfig({
                         type="number"
                         value={safeQuestionCount}
                         onChange={(e) => onChangeQuestionCount?.(e.target.value)}
+                        disabled={isDoing} // ✅ đang làm bài thì khóa
                         sx={{ width: 120, "& .MuiOutlinedInput-root": { borderRadius: 2, bgcolor: "#fff" } }}
                         inputProps={{ min: 1, max: 100 }}
                     />
@@ -74,25 +77,19 @@ export default function PracticeHeaderConfig({
                     <TextField
                         label="Thời gian (phút)"
                         size="small"
-                        type="number"
                         value={safeDurationMinutes}
-                        onChange={(e) => onChangeDurationMinutes?.(e.target.value)}
-                        sx={{ width: 170, "& .MuiOutlinedInput-root": { borderRadius: 2, bgcolor: "#fff" } }}
-                        inputProps={{ min: 1, max: 180 }}
+                        disabled // ✅ luôn khoá: thời gian lấy từ BE
+                        sx={{
+                            width: 170,
+                            "& .MuiOutlinedInput-root": { borderRadius: 2, bgcolor: "#fff" },
+                            "& .MuiInputBase-input.Mui-disabled": {
+                                WebkitTextFillColor: "#1B2559",
+                                fontWeight: 800,
+                            },
+                        }}
                     />
 
-                    {attemptId && attemptStartTs ? (
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, pl: 1 }}>
-                            <AccessTimeRoundedIcon sx={{ color: "#6C757D" }} />
-                            <CountdownTimer
-                                // ✅ CountdownTimer.jsx của m dùng:
-                                // startTimestamp (ms), durationSeconds (seconds), onExpire
-                                startTimestamp={attemptStartTs}
-                                durationSeconds={safeDurationMinutes * 60}
-                                onExpire={onTimeExpired}
-                            />
-                        </Box>
-                    ) : null}
+                    {/* ✅ CountdownTimer đã chuyển sang Learning Canvas */}
                 </Stack>
             </Box>
         </Paper>
