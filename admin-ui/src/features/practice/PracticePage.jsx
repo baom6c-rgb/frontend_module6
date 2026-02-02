@@ -978,7 +978,7 @@ export default function PracticePage() {
                     elevation={0}
                     sx={{
                         position: "fixed",
-                        top: "calc(var(--app-header-height, 72px) + 14px)",
+                        top: "calc(var(--app-header-height, 72px) + 8px)",
                         right: 18,
                         zIndex: 120,
                         borderRadius: 3,
