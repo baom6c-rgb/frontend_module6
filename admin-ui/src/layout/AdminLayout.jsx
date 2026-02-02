@@ -305,6 +305,13 @@ const AdminLayout = () => {
                         text="Đánh giá học tập"
                         onClick={() => handleNav("/admin/review")}
                     />
+                    <NavItem
+                        collapsed={!isMobile && sidebarCollapsed}
+                        active={currentPath.includes("/admin/settings")}
+                        icon={<SettingsRounded />}
+                        text="Cài đặt hệ thống"
+                        onClick={() => handleNav("/admin/settings")}
+                    />
                 </Box>
             </Box>
 

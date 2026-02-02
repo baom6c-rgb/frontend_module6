@@ -12,6 +12,7 @@ import ProtectedRoute from "./ProtectedRoute.jsx";
 import AdminDashboard from "../features/admin/AdminDashboard.jsx";
 import AdminUserList from "../features/admin/AdminUserList.jsx";
 import AdminReview from "../features/admin/AdminReview.jsx";
+import AdminSettings from "../features/admin/AdminSettings.jsx"; // ✅ NEW
 
 // --- PAGES USER ---
 import UserDashboard from "../features/users/UserDashboard.jsx";
@@ -82,8 +83,8 @@ const router = createBrowserRouter([
     },
 
     // =========================
-// 3) ADMIN ROUTES
-// =========================
+    // 3) ADMIN ROUTES
+    // =========================
     {
         path: "/admin",
         element: <ProtectedRoute allowedRoles={["ADMIN"]} />,
@@ -93,8 +94,11 @@ const router = createBrowserRouter([
                 children: [
                     { index: true, element: <AdminDashboard /> },
 
-                    // trang đánh giá học tập
-                    { path: "/admin/review", element: <AdminReview /> },
+                    // ✅ CHÚ Ý: trong children của "/admin" thì path chỉ cần "review" (không cần "/admin/review")
+                    { path: "review", element: <AdminReview /> },
+
+                    // ✅ NEW: Admin Settings
+                    { path: "settings", element: <AdminSettings /> },
 
                     // redirect các route cũ về /admin/users
                     { path: "students", element: <Navigate to="/admin/users" replace /> },
@@ -103,7 +107,6 @@ const router = createBrowserRouter([
 
                     // trang quản lý user tổng
                     { path: "users", element: <AdminUserList /> },
-
                 ],
             },
         ],
