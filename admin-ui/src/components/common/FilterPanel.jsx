@@ -317,7 +317,17 @@ export default function FilterPanel({
                                             startDateField.onChange?.(e.target.value)
                                         }
                                         InputLabelProps={{ shrink: true }}
-                                        sx={commonInputSx}
+                                        inputProps={{
+                                            placeholder: "dd/mm/yyyy"
+                                        }}
+                                        sx={{
+                                            ...commonInputSx,
+                                            "& .MuiInputLabel-root": {
+                                                transform: "translate(14px, -9px) scale(0.75)",
+                                                backgroundColor: "#fff",
+                                                padding: "0 4px",
+                                            },
+                                        }}
                                     />
                                 </Grid>
                             ) : null}
@@ -333,7 +343,17 @@ export default function FilterPanel({
                                             endDateField.onChange?.(e.target.value)
                                         }
                                         InputLabelProps={{ shrink: true }}
-                                        sx={commonInputSx}
+                                        inputProps={{
+                                            placeholder: "dd/mm/yyyy"
+                                        }}
+                                        sx={{
+                                            ...commonInputSx,
+                                            "& .MuiInputLabel-root": {
+                                                transform: "translate(14px, -9px) scale(0.75)",
+                                                backgroundColor: "#fff",
+                                                padding: "0 4px",
+                                            },
+                                        }}
                                     />
                                 </Grid>
                             ) : null}

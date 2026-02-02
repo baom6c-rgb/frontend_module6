@@ -19,18 +19,11 @@ import {
     Stack,
     Divider,
     InputAdornment,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    TablePagination,
-    Collapse,
     Alert,
     CircularProgress,
     Container,
 } from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
 import {
     Search,
     FilterList,
@@ -48,6 +41,8 @@ import {
 
 import { getMyExamAttemptsApi } from "../../api/examApi";
 import { getDashboardStatsApi } from "../../api/dashboardApi";
+import FilterPanel from "../../components/common/FilterPanel.jsx";
+import AppPagination from "../../components/common/AppPagination.jsx";
 
 const COLORS = {
     primaryBlue: "#0B5ED7",
@@ -71,6 +66,14 @@ const safeNum = (v, fallback = 0) => {
 
 const formatDateTime = (d) => (d ? new Date(d).toLocaleString("vi-VN") : "—");
 const formatDate = (d) => (d ? new Date(d).toLocaleDateString("vi-VN") : "—");
+
+const formatDateTimeSplit = (dateStr) => {
+    if (!dateStr) return { date: "—", time: "—" };
+    const d = new Date(dateStr);
+    const date = d.toLocaleDateString("vi-VN", { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const time = d.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit', hour12: false });
+    return { date, time };
+};
 
 function normalizeAttempt(raw) {
     const id = raw?.id ?? raw?.attemptId ?? raw?.examAttemptId ?? null;
@@ -209,9 +212,7 @@ export default function UserReview() {
     const [testsRaw, setTestsRaw] = useState([]);
     const tests = useMemo(() => testsRaw.map(normalizeAttempt), [testsRaw]);
 
-    const [page, setPage] = useState(0);
-    const [rowsPerPage, setRowsPerPage] = useState(10);
-    const [expandedRow, setExpandedRow] = useState(null);
+    const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
     const [selectedTest, setSelectedTest] = useState(null);
     const [detailDialogOpen, setDetailDialogOpen] = useState(false);
 
@@ -337,14 +338,8 @@ export default function UserReview() {
         return filtered;
     }, [tests, searchText, selectedModule, selectedClass, startDate, endDate]);
 
-    useEffect(() => setPage(0), [searchText, selectedModule, selectedClass, startDate, endDate]);
+    useEffect(() => setPaginationModel(prev => ({ ...prev, page: 0 })), [searchText, selectedModule, selectedClass, startDate, endDate]);
 
-    const handleChangePage = (e, newPage) => setPage(newPage);
-    const handleChangeRowsPerPage = (e) => {
-        setRowsPerPage(parseInt(e.target.value, 10));
-        setPage(0);
-    };
-    const handleExpandRow = (id) => setExpandedRow(expandedRow === id ? null : id);
     const handleViewDetail = (test) => {
         setSelectedTest(test);
         setDetailDialogOpen(true);
@@ -366,6 +361,127 @@ export default function UserReview() {
 
     const getScoreLabel = (scorePct) =>
         scorePct >= 80 ? "Xuất sắc" : scorePct >= 50 ? "Đạt" : "Chưa đạt";
+
+    const columns = useMemo(() => {
+        const pageOffset = paginationModel.page * paginationModel.pageSize;
+
+        const centerCell = (children) => (
+            <Box sx={{ width: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                {children}
+            </Box>
+        );
+
+        return [
+            {
+                field: "stt",
+                headerName: "STT",
+                width: 80,
+                sortable: false,
+                filterable: false,
+                headerAlign: "center",
+                align: "center",
+                renderCell: (params) => {
+                    const idx = params.api.getRowIndexRelativeToVisibleRows(params.id);
+                    return centerCell(pageOffset + idx + 1);
+                },
+            },
+            {
+                field: "name",
+                headerName: "Tên bài test",
+                flex: 1.5,
+                minWidth: 200,
+                renderCell: (params) => params.value,
+            },
+            {
+                field: "module",
+                headerName: "Module",
+                flex: 1,
+                minWidth: 150,
+                headerAlign: "center",
+                align: "center",
+                renderCell: (params) => params.value,
+            },
+            {
+                field: "className",
+                headerName: "Lớp học",
+                flex: 1,
+                minWidth: 150,
+                headerAlign: "center",
+                align: "center",
+                renderCell: (params) => params.value,
+            },
+            {
+                field: "submitTime",
+                headerName: "Ngày làm",
+                flex: 0.9,
+                minWidth: 120,
+                headerAlign: "center",
+                align: "center",
+                renderCell: (params) => {
+                    const { date, time } = formatDateTimeSplit(params.value || params.row.startTime);
+                    return (
+                        <Box sx={{ textAlign: "center" }}>
+                            <div>{date}</div>
+                            <div>{time}</div>
+                        </Box>
+                    );
+                },
+            },
+            {
+                field: "scorePct",
+                headerName: "Điểm",
+                flex: 0.7,
+                minWidth: 100,
+                headerAlign: "center",
+                align: "center",
+                renderCell: (params) => (
+                    <span style={{ color: getScoreColor(params.value) }}>
+                        {params.value}/{params.row.totalScore}
+                    </span>
+                ),
+            },
+            {
+                field: "result",
+                headerName: "Kết quả",
+                flex: 1,
+                minWidth: 130,
+                headerAlign: "center",
+                align: "center",
+                renderCell: (params) => {
+                    const scorePercent = params.row.totalScore
+                        ? (Number(params.row.scorePct) / Number(params.row.totalScore)) * 100
+                        : 0;
+                    const isPassed = scorePercent >= 50;
+
+                    return (
+                        <span style={{ color: isPassed ? COLORS.success : COLORS.danger }}>
+                            {isPassed ? "Đạt" : "Không đạt"}
+                        </span>
+                    );
+                },
+            },
+            {
+                field: "actions",
+                headerName: "Chi tiết",
+                width: 100,
+                sortable: false,
+                headerAlign: "center",
+                align: "center",
+                renderCell: (params) => (
+                    <IconButton
+                        size="small"
+                        onClick={() => handleViewDetail(params.row)}
+                        sx={{
+                            bgcolor: COLORS.primaryBlue + "10",
+                            "&:hover": { bgcolor: COLORS.primaryBlue + "20" }
+                        }}
+                    >
+                        <Visibility sx={{ color: COLORS.primaryBlue }} />
+                    </IconButton>
+                ),
+            },
+        ];
+    }, [paginationModel.page, paginationModel.pageSize]);
 
     if (loading) {
         return (
@@ -427,25 +543,25 @@ export default function UserReview() {
                             title="THỜI GIAN"
                             value={`${stats.onlineTime}h`}
                             subtitle="Tổng thời lượng học"
-                            color={COLORS.secondaryOrange}
-                        />
-                    </Grid>
-
-                    <Grid item xs={12} md={3}>
-                        <StatCard
-                            icon={<TrendingIcon />}
-                            title="ĐIỂM TB"
-                            value={stats.averageScore}
-                            subtitle="Trung bình các bài thi"
                             color={COLORS.success}
                         />
                     </Grid>
 
                     <Grid item xs={12} md={3}>
                         <StatCard
-                            icon={<SchoolIcon />}
-                            title="XẾP HẠNG"
-                            value={`#${stats.rank}`}
+                            icon={<TrendingIcon />}
+                            title="ĐIỂM TRUNG BÌNH"
+                            value={`${stats.averageScore}%`}
+                            subtitle="Tỉ lệ hoàn thành"
+                            color={COLORS.warning}
+                        />
+                    </Grid>
+
+                    <Grid item xs={12} md={3}>
+                        <StatCard
+                            icon={<CheckCircle />}
+                            title="THỨ HẠNG"
+                            value={`${stats.rank}/${stats.totalStudents}`}
                             subtitle={`Trong tổng ${stats.totalStudents} học viên`}
                             color={COLORS.secondaryOrange}
                         />
@@ -453,183 +569,115 @@ export default function UserReview() {
                 </Grid>
 
                 {/* Filters */}
-                <Paper sx={{ p: 3, mb: 3, borderRadius: "16px", border: `1px solid ${COLORS.borderLight}` }}>
-                    <Stack spacing={2}>
-                        <Stack direction="row" spacing={2}>
-                            <TextField
-                                fullWidth
-                                placeholder="Tìm kiếm theo tên bài test, module, lớp..."
-                                value={searchText}
-                                onChange={(e) => setSearchText(e.target.value)}
-                                InputProps={{ startAdornment: <InputAdornment position="start"><Search /></InputAdornment> }}
-                                sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
-                            />
-                            <Button
-                                variant={showFilters ? "contained" : "outlined"}
-                                startIcon={<FilterList />}
-                                onClick={() => setShowFilters(!showFilters)}
-                                sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700, minWidth: 150 }}
-                            >
-                                Bộ lọc
-                            </Button>
-                        </Stack>
-
-                        <Collapse in={showFilters}>
-                            <Grid container spacing={2}>
-                                <Grid item xs={12} md={3}>
-                                    <FormControl fullWidth>
-                                        <InputLabel>Module</InputLabel>
-                                        <Select value={selectedModule} label="Module" onChange={(e) => setSelectedModule(e.target.value)} sx={{ borderRadius: "12px" }}>
-                                            {modules.map((m) => (
-                                                <MenuItem key={m} value={m}>{m}</MenuItem>
-                                            ))}
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-
-                                <Grid item xs={12} md={3}>
-                                    <FormControl fullWidth>
-                                        <InputLabel>Lớp học</InputLabel>
-                                        <Select value={selectedClass} label="Lớp học" onChange={(e) => setSelectedClass(e.target.value)} sx={{ borderRadius: "12px" }}>
-                                            {classes.map((c) => (
-                                                <MenuItem key={c} value={c}>{c}</MenuItem>
-                                            ))}
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-
-                                <Grid item xs={12} md={2}>
-                                    <TextField
-                                        fullWidth
-                                        type="date"
-                                        label="Từ ngày"
-                                        value={startDate}
-                                        onChange={(e) => setStartDate(e.target.value)}
-                                        InputLabelProps={{ shrink: true }}
-                                        sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
-                                    />
-                                </Grid>
-
-                                <Grid item xs={12} md={2}>
-                                    <TextField
-                                        fullWidth
-                                        type="date"
-                                        label="Đến ngày"
-                                        value={endDate}
-                                        onChange={(e) => setEndDate(e.target.value)}
-                                        InputLabelProps={{ shrink: true }}
-                                        sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
-                                    />
-                                </Grid>
-
-                                <Grid item xs={12} md={2}>
-                                    <Button
-                                        fullWidth
-                                        variant="outlined"
-                                        onClick={handleResetFilters}
-                                        sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700, height: "56px" }}
-                                    >
-                                        Xóa bộ lọc
-                                    </Button>
-                                </Grid>
-                            </Grid>
-                        </Collapse>
-                    </Stack>
-                </Paper>
+                <FilterPanel
+                    search={{
+                        placeholder: "Tìm kiếm theo tên bài test, module, lớp...",
+                        value: searchText,
+                        onChange: setSearchText,
+                    }}
+                    showFilters={showFilters}
+                    onToggleFilters={() => setShowFilters(!showFilters)}
+                    onReset={handleResetFilters}
+                    resetTooltip="Xóa bộ lọc"
+                    fields={{
+                        module: {
+                            enabled: true,
+                            label: "Module",
+                            value: selectedModule,
+                            options: modules.map((m) => ({ value: m, label: m })),
+                            onChange: setSelectedModule,
+                            loading: false,
+                        },
+                        class: {
+                            enabled: true,
+                            label: "Lớp học",
+                            value: selectedClass,
+                            options: classes.map((c) => ({ value: c, label: c })),
+                            onChange: setSelectedClass,
+                            loading: false,
+                        },
+                        startDate: {
+                            enabled: true,
+                            label: "Từ ngày",
+                            value: startDate,
+                            onChange: setStartDate,
+                        },
+                        endDate: {
+                            enabled: true,
+                            label: "Đến ngày",
+                            value: endDate,
+                            onChange: setEndDate,
+                        },
+                    }}
+                />
+                <Box sx={{ my: 3 }} />
 
                 <Typography sx={{ mb: 2, color: COLORS.textSecondary, fontWeight: 700 }}>
                     Hiển thị {filteredTests.length} kết quả{filteredTests.length !== tests.length && ` (từ ${tests.length} bài test)`}
                 </Typography>
 
-                {/* Table */}
-                <Paper sx={{ borderRadius: "16px", overflow: "hidden", border: `1px solid ${COLORS.borderLight}` }}>
-                    <TableContainer>
-                        <Table>
-                            <TableHead>
-                                <TableRow sx={{ bgcolor: COLORS.bgLight }}>
-                                    {["Tên bài test", "Module", "Lớp học", "Ngày làm", "Điểm", "Kết quả", "Chi tiết", ""].map((h) => (
-                                        <TableCell key={h} sx={{ fontWeight: 900, color: COLORS.textPrimary }}>
-                                            {h}
-                                        </TableCell>
-                                    ))}
-                                </TableRow>
-                            </TableHead>
+                {/* DataGrid - PHẦN DUY NHẤT ĐƯỢC SỬA */}
+                <Paper
+                    elevation={0}
+                    sx={{
+                        borderRadius: 2,
+                        overflow: "hidden",
+                        border: "1px solid",
+                        borderColor: "divider",
+                        display: "flex",
+                        flexDirection: "column",
+                        minHeight: 420,
+                    }}
+                >
+                    <Box sx={{ flex: 1, minHeight: 0 }}>
+                        <DataGrid
+                            rows={filteredTests}
+                            columns={columns}
+                            loading={loading}
+                            disableRowSelectionOnClick
+                            getRowId={(r) => r.id ?? `${Math.random()}`}
+                            paginationModel={paginationModel}
+                            onPaginationModelChange={setPaginationModel}
+                            pageSizeOptions={[10, 25, 50]}
+                            disableColumnMenu
+                            hideFooter
+                            sx={{
+                                border: 0,
+                                height: "100%",
+                                "& .MuiDataGrid-columnHeaders": {
+                                    bgcolor: "background.paper",
+                                    borderBottom: "1px solid",
+                                    borderColor: "divider",
+                                },
+                                "& .MuiDataGrid-row:nth-of-type(odd)": { bgcolor: "action.hover" },
+                                "& .MuiDataGrid-cell:focus, & .MuiDataGrid-columnHeader:focus": { outline: "none" },
+                            }}
+                        />
+                    </Box>
 
-                            <TableBody>
-                                {filteredTests.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
-                                            <Typography sx={{ color: COLORS.textSecondary, fontWeight: 700 }}>Không có dữ liệu</Typography>
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    filteredTests.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((test) => {
-                                        const id = test.id;
-                                        return (
-                                            <React.Fragment key={id}>
-                                                <TableRow hover>
-                                                    <TableCell sx={{ fontWeight: 700 }}>{test.name}</TableCell>
-
-                                                    <TableCell>
-                                                        <Chip label={test.module} size="small" sx={{ fontWeight: 700 }} />
-                                                    </TableCell>
-
-                                                    <TableCell sx={{ fontWeight: 700 }}>{test.className}</TableCell>
-
-                                                    <TableCell>
-                                                        <Stack direction="row" alignItems="center" spacing={1}>
-                                                            <CalendarToday sx={{ fontSize: 16, color: COLORS.textSecondary }} />
-                                                            <Typography sx={{ fontSize: 14, fontWeight: 700 }}>
-                                                                {formatDate(test.submitTime || test.startTime)}
-                                                            </Typography>
-                                                        </Stack>
-                                                    </TableCell>
-
-                                                    <TableCell>
-                                                        <Typography sx={{ fontWeight: 900, color: getScoreColor(test.scorePct) }}>
-                                                            {test.scorePct}/{test.totalScore}
-                                                        </Typography>
-                                                    </TableCell>
-
-                                                    <TableCell>
-                                                        <Chip
-                                                            label={getScoreLabel(test.scorePct)}
-                                                            sx={{
-                                                                bgcolor: getScoreColor(test.scorePct) + "20",
-                                                                color: getScoreColor(test.scorePct),
-                                                                fontWeight: 700,
-                                                            }}
-                                                        />
-                                                    </TableCell>
-
-                                                    <TableCell>
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={() => handleViewDetail(test)}
-                                                            sx={{ bgcolor: COLORS.primaryBlue + "10", "&:hover": { bgcolor: COLORS.primaryBlue + "20" } }}
-                                                        >
-                                                            <Visibility sx={{ color: COLORS.primaryBlue }} />
-                                                        </IconButton>
-                                                    </TableCell>
-                                                </TableRow>
-                                            </React.Fragment>
-                                        );
-                                    })
-                                )}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-
-                    <TablePagination
-                        component="div"
-                        count={filteredTests.length}
-                        page={page}
-                        onPageChange={handleChangePage}
-                        rowsPerPage={rowsPerPage}
-                        onRowsPerPageChange={handleChangeRowsPerPage}
-                        labelRowsPerPage="Số hàng:"
-                        labelDisplayedRows={({ from, to, count }) => `${from}-${to} / ${count}`}
-                    />
+                    <Box
+                        sx={{
+                            px: 1.5,
+                            py: 1,
+                            borderTop: "1px solid",
+                            borderColor: "divider",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "flex-end",
+                            gap: 1,
+                            flexWrap: "wrap",
+                        }}
+                    >
+                        <AppPagination
+                            page={paginationModel.page + 1}
+                            pageSize={paginationModel.pageSize}
+                            total={filteredTests.length}
+                            onPageChange={(nextPage) => setPaginationModel((p) => ({ ...p, page: nextPage - 1 }))}
+                            onPageSizeChange={(nextSize) => setPaginationModel({ page: 0, pageSize: nextSize })}
+                            pageSizeOptions={[10, 25, 50]}
+                            loading={loading}
+                        />
+                    </Box>
                 </Paper>
 
                 {/* Detail Dialog */}

@@ -20,6 +20,7 @@ import {
     useMediaQuery,
     Chip,
     Stack,
+    Button, // Thêm Button từ MUI
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import {
@@ -27,7 +28,6 @@ import {
     PersonRounded,
     LogoutRounded,
     SchoolRounded,
-    MenuBookRounded,
     MenuRounded,
 } from "@mui/icons-material";
 import QuizRoundedIcon from "@mui/icons-material/QuizRounded";
@@ -96,7 +96,7 @@ export default function UserLayout() {
     };
     const closeMobileDrawer = () => setMobileOpen(false);
 
-    // ✅ Profile state (ACTIVE mới load)
+    // ✅ Profile state
     const [profile, setProfile] = React.useState(null);
 
     const syncUserDataAvatar = React.useCallback((avatarUrl) => {
@@ -111,40 +111,29 @@ export default function UserLayout() {
         );
     }, []);
 
-    /**
-     * ✅ CÁCH A: WAITING_APPROVAL thì KHÔNG gọi API private /users/me/profile
-     * Chỉ ACTIVE mới gọi getMyProfileApi().
-     */
     React.useEffect(() => {
         let alive = true;
-
         const load = async () => {
             try {
-                // ✅ WAITING => skip hoàn toàn (tránh spam 403)
                 if (isWaiting) {
-                    if (alive) setProfile(null); // optional: clear profile để UI dùng local
+                    if (alive) setProfile(null);
                     return;
                 }
-
                 const res = await getMyProfileApi();
                 if (!alive) return;
-
                 const p = res?.data || null;
                 setProfile(p);
-
                 if (p?.avatarUrl) syncUserDataAvatar(p.avatarUrl);
             } catch {
-                // ignore: fallback localStorage
+                // ignore
             }
         };
-
         load();
         return () => {
             alive = false;
         };
     }, [isWaiting, syncUserDataAvatar]);
 
-    // ✅ avatar giống UserProfile:
     const avatarUrl =
         profile?.avatarUrl ||
         userData?.avatarUrl ||
@@ -153,7 +142,7 @@ export default function UserLayout() {
         "";
 
     const menuItems = [
-        { text: "Dashboard", icon: <DashboardRounded />, path: "/users/dashboard" },
+        { text: "Trang chủ", icon: <DashboardRounded />, path: "/users/dashboard" },
         { text: "Đánh giá học tập", icon: <SchoolRounded />, path: "/users/review" },
         { text: "Luyện tập (AI Quiz)", icon: <QuizRoundedIcon />, path: "/users/practice" },
     ];
@@ -161,14 +150,12 @@ export default function UserLayout() {
     const handleLogout = () => {
         closeMenu();
         dispatch(logout());
-
         localStorage.removeItem("accessToken");
         localStorage.removeItem("userRoles");
         localStorage.removeItem("userData");
         localStorage.removeItem("register_email");
         localStorage.removeItem("pendingApproval");
         localStorage.removeItem("onboardingCreated");
-
         navigate("/login", { replace: true });
     };
 
@@ -188,8 +175,9 @@ export default function UserLayout() {
             : drawerWidth;
 
     const drawerContent = (
-        <>
+        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <Toolbar />
+
             <Box sx={{ mt: 2, px: sidebarCollapsed && !isMobile ? 1 : 2 }}>
                 {!isMobile && (
                     <Box
@@ -217,13 +205,11 @@ export default function UserLayout() {
                     </Box>
                 )}
 
-
                 <List>
                     {menuItems.map((item) => {
                         const isActive =
                             location.pathname === item.path ||
                             location.pathname.startsWith(item.path + "/");
-
                         const disabled = isWaiting;
 
                         const button = (
@@ -237,7 +223,6 @@ export default function UserLayout() {
                                     justifyContent: sidebarCollapsed && !isMobile ? "center" : "flex-start",
                                     bgcolor: isActive ? COLORS.primaryBlue : "transparent",
                                     color: isActive ? "#fff" : COLORS.textSecondary,
-                                    overflow: "hidden",
                                     transition: "0.25s",
                                     "&:hover": {
                                         bgcolor: isActive ? COLORS.primaryBlue : "rgba(46, 45, 132, 0.08)",
@@ -254,10 +239,6 @@ export default function UserLayout() {
                                             borderRadius: 4,
                                         },
                                     }),
-                                    ...(disabled && {
-                                        opacity: 0.55,
-                                        cursor: "not-allowed",
-                                    }),
                                 }}
                             >
                                 <ListItemIcon
@@ -270,7 +251,6 @@ export default function UserLayout() {
                                 >
                                     {item.icon}
                                 </ListItemIcon>
-
                                 {sidebarCollapsed && !isMobile ? null : (
                                     <ListItemText
                                         primary={item.text}
@@ -293,8 +273,13 @@ export default function UserLayout() {
                         );
                     })}
                 </List>
+            </Box>
 
-                <Divider sx={{ my: 2, borderColor: "rgba(0,0,0,0.1)" }} />
+            {/* Đẩy nội dung bên dưới xuống đáy giống AdminLayout */}
+            <Box sx={{ flexGrow: 1 }} />
+
+            <Box sx={{ px: sidebarCollapsed && !isMobile ? 1 : 2, pb: 2 }}>
+                <Divider sx={{ borderColor: "rgba(0,0,0,0.1)", mb: 1.5 }} />
 
                 {sidebarCollapsed && !isMobile ? (
                     <Tooltip title="Đăng xuất" placement="right" arrow>
@@ -312,31 +297,33 @@ export default function UserLayout() {
                         </IconButton>
                     </Tooltip>
                 ) : (
-                    <ListItemButton
+                    <Button
+                        fullWidth
                         onClick={handleLogout}
+                        startIcon={<LogoutRounded />}
                         sx={{
                             borderRadius: "12px",
                             py: 1.2,
+                            fontWeight: 900,
+                            textTransform: "none",
                             color: COLORS.danger,
                             bgcolor: "rgba(238,93,80,0.08)",
                             "&:hover": { bgcolor: "rgba(238,93,80,0.14)" },
+                            justifyContent: "center",
+                            px: 2
                         }}
                     >
-                        <ListItemIcon sx={{ color: "inherit" }}>
-                            <LogoutRounded />
-                        </ListItemIcon>
-                        <ListItemText primary="Đăng xuất" primaryTypographyProps={{ fontWeight: 900 }} />
-                    </ListItemButton>
+                        Đăng xuất
+                    </Button>
                 )}
             </Box>
-        </>
+        </Box>
     );
 
     const statusLabel = isWaiting ? "WAITING" : "ACTIVE";
 
     return (
         <Box sx={{ display: "flex", bgcolor: COLORS.bgLight, minHeight: "100vh" }}>
-            {/* Header */}
             <AppBar
                 position="fixed"
                 sx={{
@@ -344,44 +331,16 @@ export default function UserLayout() {
                     bgcolor: COLORS.primaryBlue,
                     color: "#FFFFFF",
                     boxShadow: "0px 2px 8px rgba(0,0,0,0.1)",
-                    borderBottom: "none",
                 }}
             >
-                <Toolbar sx={{ justifyContent: "space-between", gap: 1 }}>
-                    {/* LEFT */}
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
-                        <IconButton
-                            onClick={toggleSidebar}
-                            sx={{
-                                p: 0.9,
-                                border: "1px solid rgba(255,255,255,0.2)",
-                                borderRadius: "12px",
-                                color: "#FFFFFF",
-                                "&:hover": {
-                                    bgcolor: "rgba(255,255,255,0.1)",
-                                }
-                            }}
-                            aria-label="toggle sidebar"
-                        >
+                <Toolbar sx={{ justifyContent: "space-between" }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <IconButton onClick={toggleSidebar} sx={{ color: "#FFFFFF" }}>
                             <MenuRounded />
                         </IconButton>
-
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
-                            <Box
-                                component="img"
-                                src="/images/logo_codegym_ai.png"
-                                alt="CodeGym Logo"
-                                sx={{
-                                    height: 32,
-                                    width: "auto",
-                                    flex: "0 0 auto",
-                                }}
-                            />
-
-                        </Box>
+                        <Box component="img" src="/images/logo_codegym_ai.png" sx={{ height: 32 }} />
                     </Box>
 
-                    {/* RIGHT */}
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                         <Box
                             onClick={openMenu}
@@ -395,39 +354,17 @@ export default function UserLayout() {
                                 border: "1px solid rgba(255,255,255,0.2)",
                                 bgcolor: "rgba(255,255,255,0.1)",
                                 cursor: "pointer",
-                                "&:hover": { bgcolor: "rgba(255,255,255,0.15)" },
                             }}
                         >
-                            <Avatar
-                                src={avatarUrl || undefined}
-                                imgProps={{ referrerPolicy: "no-referrer" }}
-                                sx={{
-                                    width: 36,
-                                    height: 36,
-                                    fontWeight: 900,
-                                }}
-                            >
+                            <Avatar src={avatarUrl || undefined} sx={{ width: 36, height: 36 }}>
                                 {avatarChar}
                             </Avatar>
-
                             {!isMobile && (
                                 <Box sx={{ lineHeight: 1.1 }}>
                                     <Typography sx={{ fontWeight: 900, color: "#FFFFFF", fontSize: 14 }}>
                                         {profile?.fullName || displayName}
                                     </Typography>
-
-                                    <Stack direction="row" spacing={0.8} alignItems="center">
-                                        <Chip
-                                            size="small"
-                                            label={statusLabel}
-                                            sx={{
-                                                height: 20,
-                                                fontWeight: 900,
-                                                bgcolor: isWaiting ? "rgba(255,140,0,0.25)" : "rgba(255,255,255,0.2)",
-                                                color: "#FFFFFF",
-                                            }}
-                                        />
-                                    </Stack>
+                                    <Chip size="small" label={statusLabel} sx={{ height: 20, color: "#fff", bgcolor: "rgba(255,255,255,0.2)" }} />
                                 </Box>
                             )}
                         </Box>
@@ -436,46 +373,18 @@ export default function UserLayout() {
                             anchorEl={anchorEl}
                             open={menuOpen}
                             onClose={closeMenu}
-                            PaperProps={{
-                                sx: {
-                                    mt: 1.2,
-                                    borderRadius: "14px",
-                                    border: `1px solid ${COLORS.borderLight}`,
-                                    overflow: "hidden",
-                                    minWidth: 220,
-                                    boxShadow: "0px 14px 40px rgba(0,0,0,0.12)",
-                                },
-                            }}
+                            PaperProps={{ sx: { mt: 1.2, borderRadius: "14px", minWidth: 220 } }}
                         >
                             <Box sx={{ px: 2, py: 1.6, borderBottom: `1px solid ${COLORS.borderLight}` }}>
-                                <Typography sx={{ fontWeight: 950, color: COLORS.textPrimary }}>
-                                    {profile?.fullName || displayName}
-                                </Typography>
-                                <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#707EAE" }}>
-                                    {isWaiting ? "Chờ phê duyệt" : "Tài khoản đang hoạt động"}
-                                </Typography>
+                                <Typography sx={{ fontWeight: 950 }}>{profile?.fullName || displayName}</Typography>
                             </Box>
-
-                            <MenuItem
-                                disabled={isWaiting}
-                                onClick={() => {
-                                    closeMenu();
-                                    handleNav("/users/profile");
-                                }}
-                                sx={{ py: 1.4 }}
-                            >
-                                <ListItemIcon>
-                                    <PersonRounded fontSize="small" sx={{ color: COLORS.primaryBlue }} />
-                                </ListItemIcon>
+                            <MenuItem disabled={isWaiting} onClick={() => { closeMenu(); handleNav("/users/profile"); }}>
+                                <ListItemIcon><PersonRounded fontSize="small" /></ListItemIcon>
                                 <Typography sx={{ fontWeight: 800 }}>Hồ sơ cá nhân</Typography>
                             </MenuItem>
-
                             <Divider />
-
-                            <MenuItem onClick={handleLogout} sx={{ py: 1.4, color: "error.main" }}>
-                                <ListItemIcon sx={{ color: "error.main" }}>
-                                    <LogoutRounded fontSize="small" />
-                                </ListItemIcon>
+                            <MenuItem onClick={handleLogout} sx={{ color: "error.main" }}>
+                                <ListItemIcon><LogoutRounded fontSize="small" sx={{ color: "error.main" }} /></ListItemIcon>
                                 <Typography sx={{ fontWeight: 900 }}>Đăng xuất</Typography>
                             </MenuItem>
                         </Menu>
@@ -483,12 +392,10 @@ export default function UserLayout() {
                 </Toolbar>
             </AppBar>
 
-            {/* Sidebar */}
             <Drawer
                 variant={isMobile ? "temporary" : "permanent"}
                 open={isMobile ? mobileOpen : true}
                 onClose={isMobile ? closeMobileDrawer : undefined}
-                ModalProps={isMobile ? { keepMounted: true } : undefined}
                 sx={{
                     width: effectiveDrawerWidth,
                     flexShrink: 0,
@@ -497,31 +404,16 @@ export default function UserLayout() {
                         boxSizing: "border-box",
                         bgcolor: "rgba(255, 255, 255, 0.95)",
                         backdropFilter: "blur(10px)",
-                        color: COLORS.textSecondary,
                         borderRight: "1px solid rgba(0,0,0,0.08)",
-                        overflowX: "hidden",
-                        transition: theme.transitions.create("width", {
-                            easing: theme.transitions.easing.sharp,
-                            duration: theme.transitions.duration.shortest,
-                        }),
                     },
                 }}
             >
                 {drawerContent}
             </Drawer>
 
-            {/* Main */}
             <Box component="main" sx={{ flexGrow: 1, minWidth: 0, bgcolor: COLORS.bgLight }}>
                 <Toolbar />
-                <Box
-                    sx={{
-                        width: "100%",
-                        maxWidth: "none",
-                        mx: "auto",
-                        px: { xs: 2, md: 3 },
-                        py: { xs: 2, md: 3 },
-                    }}
-                >
+                <Box sx={{ px: { xs: 2, md: 3 }, py: { xs: 2, md: 3 } }}>
                     <Outlet />
                 </Box>
             </Box>
