@@ -1,203 +1,252 @@
 // src/features/practice/components/chatbot/ChatComposer.jsx
 import React, { useMemo, useRef, useState } from "react";
-import { Box, TextField, IconButton, Button, Stack, Typography, Tooltip } from "@mui/material";
+import {
+    Box,
+    Paper,
+    TextField,
+    IconButton,
+    Tooltip,
+    Typography,
+    Divider,
+    Stack,
+} from "@mui/material";
+
+import SendRoundedIcon from "@mui/icons-material/SendRounded";
 import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
-import SendRoundedIcon from "@mui/icons-material/SendRounded";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 
 const COLORS = {
     border: "#E3E8EF",
-    orange: "#FF8C00",
-    orangeHover: "#e67e00",
+    textPrimary: "#1B2559",
+    textSecondary: "#6C757D",
+    bg: "#FFFFFF",
+    hoverBg: "rgba(46, 45, 132, 0.06)",
 };
 
-/**
- * ChatComposer
- * - Fix textarea không giãn ngang: fullWidth + minWidth:0 + overflowWrap/wordBreak
- * - Upload file KHÔNG auto send: chọn file chỉ lưu state, bấm Gửi mới gọi onSendFile
- * - Hỗ trợ "send empty" (Generate đề) khi canSendEmpty=true
- */
 export default function ChatComposer({
-                                         disabled,
                                          allowUpload = true,
-                                         accept = ".pdf,.docx,.txt,.xlsx",
-                                         placeholder = "Nhập nội dung…",
-                                         multiline = true,
-                                         maxRows = 4,
-                                         onPaste,
-                                         canSendEmpty = false,
-                                         onSendEmpty,
+                                         onUploadFile,
                                          onSendText,
-                                         onSendFile,
+                                         disabled = false,
+                                         helperText = "",
                                      }) {
     const fileRef = useRef(null);
+
     const [text, setText] = useState("");
     const [file, setFile] = useState(null);
 
+    const canSend = useMemo(() => {
+        if (disabled) return false;
+        if (file) return true; // ✅ có file thì send được
+        return String(text || "").trim().length > 0;
+    }, [disabled, file, text]);
+
+    const openFilePicker = () => {
+        if (!allowUpload) return;
+        fileRef.current?.click?.();
+    };
+
+    // ✅ CHỈ LƯU FILE, KHÔNG AUTO UPLOAD
     const handleFileChange = (e) => {
-        const selected = e.target.files?.[0];
-        if (selected) {
-            setFile(selected);
-        }
-        // reset để có thể chọn lại cùng tên
+        const f = e.target.files?.[0];
+        if (!f) return;
+
+        setFile(f);
+        // reset để chọn lại cùng file vẫn trigger
         e.target.value = "";
     };
 
-    const handleSendClick = () => {
-        if (disabled) return;
+    const clearFile = () => setFile(null);
 
-        // Ưu tiên gửi file nếu có
+    const handleSend = () => {
+        if (!canSend) return;
+
+        // ✅ Ưu tiên gửi file nếu có (đúng yêu cầu: chỉ gửi khi bấm Gửi)
         if (file) {
-            onSendFile?.(file);
+            onUploadFile?.(file);
             setFile(null);
             setText("");
             return;
         }
 
-        const t = String(text || "").trim();
-        if (t) {
-            onSendText?.(t);
-            setText("");
-            return;
-        }
+        const value = String(text || "").trim();
+        if (!value) return;
 
-        // send empty (Generate đề)
-        if (canSendEmpty) {
-            onSendEmpty?.();
-        }
+        onSendText?.(value);
+        setText("");
     };
 
     const handleKeyDown = (e) => {
+        // Enter để gửi; Shift+Enter để xuống dòng (nếu muốn multiline)
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            handleSendClick();
+            handleSend();
         }
     };
 
-    const canSend = useMemo(() => {
-        if (disabled) return false;
-        if (file) return true;
-        if (String(text || "").trim().length > 0) return true;
-        return Boolean(canSendEmpty);
-    }, [canSendEmpty, disabled, file, text]);
-
     return (
-        <Box sx={{ p: 2, bgcolor: "#fff" }}>
-            {/* File đang chờ gửi */}
-            {file && (
-                <Box
-                    sx={{
-                        mb: 1,
-                        p: 1,
-                        bgcolor: "#F7F9FC",
-                        borderRadius: 2,
-                        border: "1px dashed #0B5ED7",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 1,
-                    }}
-                >
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
-                        <AttachFileIcon sx={{ color: "#0B5ED7", fontSize: 20, flexShrink: 0 }} />
-                        <Typography
-                            sx={{
-                                fontSize: 13,
-                                fontWeight: 700,
-                                color: "#1B2559",
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                maxWidth: 220,
-                            }}
-                            title={file.name}
-                        >
-                            {file.name}
-                        </Typography>
-                        <Typography sx={{ fontSize: 12, color: "#6C757D", flexShrink: 0 }}>
-                            ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                        </Typography>
-                    </Stack>
-
-                    <IconButton size="small" onClick={() => setFile(null)}>
-                        <DeleteOutlineRoundedIcon fontSize="small" color="error" />
-                    </IconButton>
-                </Box>
-            )}
-
-            <Stack direction="row" alignItems="flex-end" spacing={1.5} sx={{ minWidth: 0 }}>
-                {/* Upload */}
-                <Tooltip title={allowUpload ? "Tải tài liệu (PDF, DOCX, TXT, XLSX)" : "Upload đang bị khoá"}>
-          <span>
-            <IconButton
-                onClick={() => fileRef.current?.click()}
-                disabled={disabled || !allowUpload || Boolean(file)}
-                sx={{
-                    bgcolor: "#F4F7FE",
-                    color: "#1B2559",
-                    borderRadius: 2,
-                    p: 1.5,
-                    flexShrink: 0,
-                    border: `1px solid ${COLORS.border}`,
-                    "&:hover": { bgcolor: "#E6EAFA" },
-                }}
-            >
-              <UploadFileRoundedIcon />
-              <input hidden type="file" ref={fileRef} onChange={handleFileChange} accept={accept} />
-            </IconButton>
-          </span>
-                </Tooltip>
-
-                {/* Textarea - Fix giãn ngang */}
-                <TextField
-                    fullWidth
-                    multiline={multiline}
-                    maxRows={maxRows}
-                    placeholder={file ? "Bấm Gửi để upload file…" : placeholder}
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    onPaste={onPaste}
-                    disabled={disabled}
-                    sx={{
-                        minWidth: 0,
-                        "& .MuiOutlinedInput-root": {
-                            borderRadius: 2,
-                            bgcolor: "#F4F7FE",
-                            "& fieldset": { borderColor: "transparent" },
-                            "&:hover fieldset": { borderColor: "#E3E8EF" },
-                            "&.Mui-focused fieldset": { borderColor: "#0B5ED7" },
-                        },
-                        "& .MuiInputBase-input": {
-                            fontSize: 14,
-                            lineHeight: 1.5,
-                            whiteSpace: "pre-wrap",
-                            wordBreak: "break-word",
-                            overflowWrap: "anywhere",
-                        },
-                    }}
+        <Paper
+            elevation={0}
+            sx={{
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: 3,
+                bgcolor: COLORS.bg,
+                overflow: "hidden",
+            }}
+        >
+            <Box sx={{ p: 1.25 }}>
+                {/* Hidden file input */}
+                <input
+                    ref={fileRef}
+                    type="file"
+                    hidden
+                    onChange={handleFileChange}
+                    disabled={!allowUpload}
+                    accept=".pdf,.docx,.txt,.xlsx"
                 />
 
-                {/* Send */}
-                <Button
-                    variant="contained"
-                    onClick={handleSendClick}
-                    disabled={!canSend}
-                    sx={{
-                        minWidth: 48,
-                        width: 48,
-                        height: 48,
-                        borderRadius: 2,
-                        bgcolor: COLORS.orange,
-                        "&:hover": { bgcolor: COLORS.orangeHover },
-                        boxShadow: "none",
-                        flexShrink: 0,
-                    }}
-                >
-                    <SendRoundedIcon sx={{ fontSize: 20 }} />
-                </Button>
-            </Stack>
-        </Box>
+                {/* ✅ Preview file (chờ gửi) */}
+                {file && (
+                    <Box
+                        sx={{
+                            mb: 1,
+                            p: 1,
+                            borderRadius: 2,
+                            border: "1px dashed rgba(46,45,132,0.45)",
+                            bgcolor: "rgba(46,45,132,0.04)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 1,
+                        }}
+                    >
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+                            <AttachFileIcon sx={{ fontSize: 18, color: "rgba(46,45,132,0.9)", flexShrink: 0 }} />
+                            <Typography
+                                sx={{
+                                    fontSize: 13,
+                                    fontWeight: 800,
+                                    color: COLORS.textPrimary,
+                                    whiteSpace: "nowrap",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    maxWidth: 260,
+                                }}
+                                title={file.name}
+                            >
+                                {file.name}
+                            </Typography>
+                            <Typography sx={{ fontSize: 12, color: COLORS.textSecondary, flexShrink: 0 }}>
+                                ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                            </Typography>
+                        </Stack>
+
+                        <Tooltip title="Bỏ file" arrow>
+                            <IconButton
+                                size="small"
+                                onClick={clearFile}
+                                sx={{
+                                    borderRadius: 2,
+                                    border: `1px solid ${COLORS.border}`,
+                                    bgcolor: "#fff",
+                                    "&:hover": { bgcolor: COLORS.hoverBg },
+                                }}
+                            >
+                                <DeleteOutlineRoundedIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
+                )}
+
+                {/* Row: upload + input + send */}
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    {/* Upload button */}
+                    <Tooltip
+                        title={
+                            allowUpload
+                                ? file
+                                    ? "Đã chọn file (bấm Gửi để upload)"
+                                    : "Chọn file"
+                                : "Upload bị tắt trong chế độ này"
+                        }
+                        arrow
+                        placement="top"
+                    >
+                        <span>
+                            <IconButton
+                                onClick={openFilePicker}
+                                disabled={!allowUpload || Boolean(file)} // ✅ đang có file thì không cho chọn thêm
+                                sx={{
+                                    borderRadius: 2,
+                                    border: `1px solid ${COLORS.border}`,
+                                    bgcolor: "transparent",
+                                    "&:hover": { bgcolor: COLORS.hoverBg },
+                                }}
+                            >
+                                <UploadFileRoundedIcon />
+                            </IconButton>
+                        </span>
+                    </Tooltip>
+
+                    {/* Input */}
+                    <TextField
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        disabled={disabled}
+                        placeholder={
+                            file
+                                ? "Đã chọn file — bấm Gửi để upload…"
+                                : allowUpload
+                                    ? "Nhập nội dung (hoặc chọn file rồi bấm Gửi)"
+                                    : "Nhập từ khóa ngắn gọn…"
+                        }
+                        fullWidth
+                        size="small"
+                        multiline
+                        maxRows={3}
+                        sx={{
+                            "& .MuiOutlinedInput-root": {
+                                borderRadius: 2,
+                                bgcolor: "#fff",
+                            },
+                        }}
+                    />
+
+                    {/* Send button */}
+                    <Tooltip title={canSend ? "Gửi" : disabled ? "Đang bị khóa" : "Nhập nội dung hoặc chọn file"} arrow>
+                        <span>
+                            <IconButton
+                                onClick={handleSend}
+                                disabled={!canSend}
+                                sx={{
+                                    borderRadius: 2,
+                                    border: `1px solid ${COLORS.border}`,
+                                    bgcolor: canSend ? "rgba(255, 140, 0, 0.10)" : "transparent",
+                                    "&:hover": {
+                                        bgcolor: canSend ? "rgba(255, 140, 0, 0.16)" : COLORS.hoverBg,
+                                    },
+                                }}
+                            >
+                                <SendRoundedIcon />
+                            </IconButton>
+                        </span>
+                    </Tooltip>
+                </Box>
+            </Box>
+
+            {/* Helper text */}
+            {helperText ? (
+                <>
+                    <Divider />
+                    <Box sx={{ px: 1.5, py: 1 }}>
+                        <Typography sx={{ fontSize: 12, color: COLORS.textSecondary, lineHeight: 1.35 }}>
+                            {helperText}
+                        </Typography>
+                    </Box>
+                </>
+            ) : null}
+        </Paper>
     );
 }
