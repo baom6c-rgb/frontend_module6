@@ -43,6 +43,7 @@ export default function PracticeHeaderConfig({
                     justifyContent: "space-between",
                     gap: 1.5,
                     flexWrap: "wrap",
+                    position: "relative",
                 }}
             >
                 {/* LEFT: icon + title (GIỮ NGUYÊN) */}
@@ -63,13 +64,13 @@ export default function PracticeHeaderConfig({
                             whiteSpace: "nowrap",
                         }}
                     >
-                        Codegym Learning AI
+                        Bumblefly AI
                     </Typography>
                 </Box>
 
                 {/* RIGHT: compact config */}
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexShrink: 0 }}>
-                    <Typography sx={{ fontSize: 13, fontWeight: 800, color: "#6C757D" }}>
+                    <Typography sx={{ fontSize: 13, fontWeight: 800, color: "#2e2d84" }}>
                         Số câu
                     </Typography>
 
@@ -81,7 +82,7 @@ export default function PracticeHeaderConfig({
                         disabled={isDoing}
                         inputProps={{ min: 1, max: 100 }}
                         sx={{
-                            width: 92,
+                            width: 65,
                             "& .MuiOutlinedInput-root": {
                                 borderRadius: 2,
                                 height: 38,
@@ -92,7 +93,7 @@ export default function PracticeHeaderConfig({
                             "& .MuiInputBase-input": {
                                 textAlign: "center",
                                 fontWeight: 900,
-                                color: "#1B2559",
+                                color: "#070707",
                                 fontSize: 14,
                                 py: 0,
                             },
@@ -101,11 +102,15 @@ export default function PracticeHeaderConfig({
 
                     <EastRoundedIcon sx={{ color: "#A0AEC0", fontSize: 18 }} />
 
+                    <Typography sx={{ fontSize: 13, fontWeight: 800, color: "#2e2d84" }}>
+                        Thời gian
+                    </Typography>
+
                     <Box
                         sx={{
                             height: 38,
                             px: 1,
-                            minWidth: 84,
+                            minWidth: 66,
                             borderRadius: 2,
                             border: "1px solid #E3E8EF",
                             bgcolor: "#F7F9FC",
@@ -114,7 +119,7 @@ export default function PracticeHeaderConfig({
                             justifyContent: "center",
                         }}
                     >
-                        <Typography sx={{ fontSize: 13, fontWeight: 900, color: "#2E2D84" }}>
+                        <Typography sx={{ fontSize: 13, fontWeight: 900, color: "#020202" }}>
                             {displayMinutes} phút
                         </Typography>
                     </Box>

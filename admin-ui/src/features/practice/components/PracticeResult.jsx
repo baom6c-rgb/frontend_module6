@@ -231,7 +231,7 @@ export default function PracticeResult({
 
                 <Divider sx={{ my: 2 }} />
 
-                <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>Nhận xét hệ thống</Typography>
+                <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>Đánh giá tổng quan</Typography>
                 <Typography sx={{ mt: 1, color: "#252525", fontWeight: 600, whiteSpace: "pre-wrap" }}>
                     {feedback || "Chưa có nhận xét."}
                 </Typography>
@@ -239,7 +239,7 @@ export default function PracticeResult({
                 <Divider sx={{ my: 2 }} />
 
                 <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
-                    CG AI nhận xét (giải thích sai + gợi ý đọc lại)
+                    Fly AI nhận xét (giải thích lỗi sai + gợi ý đọc lại)
                 </Typography>
 
                 <Typography sx={{ mt: 1, color: "#474646", fontWeight: 650, whiteSpace: "pre-wrap" }}>
