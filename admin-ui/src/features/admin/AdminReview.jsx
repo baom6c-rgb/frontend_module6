@@ -472,7 +472,7 @@ const AdminReview = () => {
                             component="span"
                             sx={{
                                 color: isPassed ? COLORS.success : COLORS.danger,
-                                backgroundColor: isPassed ? `${COLORS.success}15` : `${COLORS.danger}15`,
+                                backgroundColor: isPassed ? `${COLORS.success}13` : `${COLORS.danger}13`,
                                 px: 1,
                                 py: 0.3,
                                 borderRadius: 0.5,

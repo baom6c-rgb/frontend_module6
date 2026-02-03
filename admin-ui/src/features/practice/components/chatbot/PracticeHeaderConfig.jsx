@@ -1,6 +1,6 @@
 // src/features/practice/components/chatbot/PracticeHeaderConfig.jsx
 import React, { useMemo } from "react";
-import { Box, Paper, Typography, TextField } from "@mui/material";
+import { Avatar, Box, Paper, Typography, TextField } from "@mui/material";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import EastRoundedIcon from "@mui/icons-material/EastRounded";
 
@@ -47,7 +47,14 @@ export default function PracticeHeaderConfig({
             >
                 {/* LEFT: icon + title (GIỮ NGUYÊN) */}
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
-                    <AutoAwesomeRoundedIcon sx={{ color: "primary.main" }} />
+                    <Avatar
+                        src="/images/AI_logo.png"
+                        sx={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: "50%" // Đảm bảo ảnh bo tròn nếu cần
+                        }}
+                    />
                     <Typography
                         sx={{
                             fontWeight: 900,
@@ -56,7 +63,7 @@ export default function PracticeHeaderConfig({
                             whiteSpace: "nowrap",
                         }}
                     >
-                        AI Practice Assistant
+                        Codegym Learning AI
                     </Typography>
                 </Box>
 

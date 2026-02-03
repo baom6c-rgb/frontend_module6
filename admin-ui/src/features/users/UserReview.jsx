@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+    Table,
+    TableHead,
+    TableBody,
+    TableRow,
+    TableCell,
     Box,
     Paper,
     Typography,
@@ -451,7 +456,7 @@ export default function UserReview() {
                     const scorePercent = params.row.totalScore
                         ? (Number(params.row.scorePct) / Number(params.row.totalScore)) * 100
                         : 0;
-                    const isPassed = scorePercent >= 50;
+                    const isPassed = scorePercent >= 80;
 
                     return (
                         <span style={{ color: isPassed ? COLORS.success : COLORS.danger }}>
@@ -688,39 +693,71 @@ export default function UserReview() {
                     <DialogContent>
                         {selectedTest && (
                             <Box>
-                                <Typography sx={{ fontWeight: 700, fontSize: 20, mb: 2 }}>{selectedTest.name}</Typography>
-                                <Divider sx={{ mb: 2 }} />
-                                <Grid container spacing={2}>
-                                    <Grid item xs={6}>
-                                        <Typography sx={{ color: "#707EAE", fontWeight: 700, mb: 0.5 }}>Module</Typography>
-                                        <Chip label={selectedTest.module} />
-                                    </Grid>
-                                    <Grid item xs={6}>
-                                        <Typography sx={{ color: "#707EAE", fontWeight: 700, mb: 0.5 }}>Lớp học</Typography>
-                                        <Typography sx={{ fontWeight: 700 }}>{selectedTest.className}</Typography>
-                                    </Grid>
-                                    <Grid item xs={6}>
-                                        <Typography sx={{ color: "#707EAE", fontWeight: 700, mb: 0.5 }}>Ngày làm bài</Typography>
-                                        <Typography sx={{ fontWeight: 700 }}>{formatDateTime(selectedTest.submitTime || selectedTest.startTime)}</Typography>
-                                    </Grid>
-                                    <Grid item xs={6}>
-                                        <Typography sx={{ color: "#707EAE", fontWeight: 700, mb: 0.5 }}>Thời gian</Typography>
-                                        <Typography sx={{ fontWeight: 700 }}>{selectedTest.durationMinutes} phút</Typography>
-                                    </Grid>
-                                    <Grid item xs={6}>
-                                        <Typography sx={{ color: "#707EAE", fontWeight: 700, mb: 0.5 }}>Điểm số</Typography>
-                                        <Typography sx={{ fontWeight: 900, fontSize: 24, color: getScoreColor(selectedTest.scorePct) }}>
-                                            {selectedTest.scorePct}/{selectedTest.totalScore}
-                                        </Typography>
-                                    </Grid>
-                                    <Grid item xs={6}>
-                                        <Typography sx={{ color: "#707EAE", fontWeight: 700, mb: 0.5 }}>Kết quả</Typography>
-                                        <Chip
-                                            label={getScoreLabel(selectedTest.scorePct)}
-                                            sx={{ bgcolor: getScoreColor(selectedTest.scorePct) + "20", color: getScoreColor(selectedTest.scorePct), fontWeight: 700 }}
-                                        />
-                                    </Grid>
-                                </Grid>
+                                <Typography sx={{ fontWeight: 700, fontSize: 20, mb: 2, textAlign: "center" }}>{selectedTest.name}</Typography>
+                                <Table sx={{ width: "100%", borderCollapse: "collapse", mt: 1 }}>
+                                    <TableHead>
+                                        <TableRow sx={{ backgroundColor: "#f4f6fc" }}>
+                                            {["Module", "Lớp học", "Ngày làm bài", "Thời gian", "Điểm số", "Kết quả"].map((label) => (
+                                                <TableCell
+                                                    key={label}
+                                                    sx={{
+                                                        textAlign: "center",
+                                                        color: "#2E2D84",
+                                                        fontWeight: 700,
+                                                        fontSize: 15,
+                                                        borderBottom: "2px solid #e8eaf6",
+                                                        py: 1,
+                                                        whiteSpace: "nowrap",
+                                                    }}
+                                                >
+                                                    {label}
+                                                </TableCell>
+                                            ))}
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        <TableRow>
+                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>
+                                                {selectedTest.module}
+                                            </TableCell>
+                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>
+                                                {selectedTest.className}
+                                            </TableCell>
+                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none", whiteSpace: "nowrap" }}>
+                                                <Typography sx={{ fontSize: 14 }}>
+                                                    {formatDateTime(selectedTest.submitTime || selectedTest.startTime).split(" ")[1]}
+                                                </Typography>
+                                                <Typography sx={{ color: "text.secondary", fontSize: 13 }}>
+                                                    {formatDateTime(selectedTest.submitTime || selectedTest.startTime).split(" ")[0]}
+                                                </Typography>
+                                            </TableCell>
+                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>
+                                                {selectedTest.durationMinutes} phút
+                                            </TableCell>
+                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>
+                                                <Typography sx={{ fontWeight: 900, color: getScoreColor(selectedTest.scorePct) }}>
+                                                    {selectedTest.scorePct}/{selectedTest.totalScore}
+                                                </Typography>
+                                            </TableCell>
+                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>
+                                                <Box
+                                                    component="span"
+                                                    sx={{
+                                                        color: selectedTest.scorePct >= 80 ? "#4caf50" : "#f44336",
+                                                        backgroundColor: selectedTest.scorePct >= 80 ? "#4caf5013" : "#f4433613",
+                                                        px: 1.5,
+                                                        py: 0.4,
+                                                        borderRadius: 1,
+                                                        fontWeight: 700,
+                                                        fontSize: 14,
+                                                    }}
+                                                >
+                                                    {selectedTest.scorePct >= 80 ? "Đạt" : "Không đạt"}
+                                                </Box>
+                                            </TableCell>
+                                        </TableRow>
+                                    </TableBody>
+                                </Table>
                             </Box>
                         )}
                     </DialogContent>

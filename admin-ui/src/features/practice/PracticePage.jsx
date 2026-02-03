@@ -1009,6 +1009,7 @@ export default function PracticePage() {
         return (
             <Box sx={{ display: "flex", gap: 1.5, mb: 2.5, flexDirection: isUser ? "row-reverse" : "row" }}>
                 <Avatar
+                    src={isUser ? undefined : "/images/AI_logo.png"}
                     sx={{
                         width: 32,
                         height: 32,
@@ -1029,7 +1030,7 @@ export default function PracticePage() {
                             textAlign: isUser ? "right" : "left",
                         }}
                     >
-                        {isUser ? "You" : "AI"}
+                        {isUser ? "You" : "CG AI"}
                     </Typography>
                     <Paper
                         elevation={0}
@@ -1220,7 +1221,7 @@ export default function PracticePage() {
                                     <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
                                         <Stack sx={{ minWidth: 0 }}>
                                             <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary, lineHeight: 1.2 }}>
-                                                AI Practice Assistant
+                                                Codegym Learning AI
                                             </Typography>
                                             <Typography sx={{ fontSize: 12, color: COLORS.textSecondary }}>
                                                 {assistantMode === ASSISTANT_MODE.GENERATE ? "Upload/Paste để tạo đề" : "Keyword-only • Không đáp án"}
@@ -1288,7 +1289,7 @@ export default function PracticePage() {
                                 disabled={loading || (assistantMode === ASSISTANT_MODE.STUDY && !(materialIdRef.current ?? materialId))}
                                 helperText={
                                     assistantMode === ASSISTANT_MODE.GENERATE
-                                        ? "Upload xong không tự tạo đề. Bạn bấm Gửi để AI tạo đề."
+                                        ? "Upload xong không tự tạo đề. Bạn bấm Gửi để CG AI tạo đề."
                                         : "Chỉ nhập từ khóa (2–8 từ), không paste câu hỏi dài."
                                 }
                             />
@@ -1345,7 +1346,7 @@ export default function PracticePage() {
                                         Sẵn sàng tạo đề
                                     </Typography>
                                     <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 2 }}>
-                                        Upload/paste học liệu xong, bấm <b>Gửi</b> để AI tạo đề. Thời gian làm bài sẽ <b>lấy từ BE</b>.
+                                        Upload/paste học liệu xong, bấm <b>Gửi</b> để CG AI tạo đề.
                                     </Typography>
 
                                     <Button
