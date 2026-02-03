@@ -752,10 +752,29 @@ export default function AdminUserList() {
                 roleOptions={roleOptions}
                 classOptions={classOptions}
                 moduleOptions={moduleOptions}
+                // Code MỚI - đã fix
                 onCreated={(created, formData) => {
                     const newRow = normalizeUserRow({
                         ...(created || {}),
-                        role: formData?.roleName || created?.roleName || "",
+                        // ✅ Kiểm tra nhiều field có thể
+                        role: created?.role ||
+                            created?.roleName ||
+                            formData?.roleName ||
+                            formData?.role ||
+                            (created?.roles && created.roles[0]) ||
+                            "",
+                        // ✅ Thêm className
+                        className: created?.className ||
+                            formData?.className ||
+                            created?.class?.name ||
+                            created?.class?.className ||
+                            "",
+                        // ✅ Thêm moduleName
+                        moduleName: created?.moduleName ||
+                            formData?.moduleName ||
+                            created?.module?.name ||
+                            created?.module?.moduleName ||
+                            "",
                         __newTs: Date.now(),
                     });
                     setRows((prev) => [newRow, ...prev]);

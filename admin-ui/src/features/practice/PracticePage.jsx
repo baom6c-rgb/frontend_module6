@@ -204,7 +204,7 @@ export default function PracticePage() {
             id: uid("a"),
             role: "assistant",
             text:
-                "Gửi học liệu (upload/paste). Sau đó bấm nút Gửi để AI tạo đề. Khi tạo xong sẽ hiện “Bắt đầu làm bài” ở Canvas.",
+                "Gửi học liệu (upload/paste). Sau đó bấm nút Gửi để Fly AI tạo đề. Khi tạo xong bạn có thể “Bắt đầu làm bài”.",
         },
     ]);
 
@@ -387,8 +387,8 @@ export default function PracticePage() {
                 appendMessage({
                     role: "assistant",
                     text: extracted
-                        ? "Upload xong & đã trích xuất. Bây giờ để trống ô nhập và bấm Gửi để AI tạo đề nhé."
-                        : "Upload xong. Bây giờ để trống ô nhập và bấm Gửi để AI tạo đề nhé.",
+                        ? "Upload xong & đã trích xuất. Bây giờ để trống ô nhập và bấm Gửi để Fly AI tạo đề nhé."
+                        : "Upload xong. Bây giờ để trống ô nhập và bấm Gửi để Fly AI tạo đề nhé.",
                 });
 
                 showToast("Đã nhận học liệu. Bấm Gửi để tạo đề.", "success");
@@ -452,8 +452,8 @@ export default function PracticePage() {
                 appendMessage({
                     role: "assistant",
                     text: extracted
-                        ? "Đã nhận & trích xuất. Bây giờ để trống ô nhập và bấm Gửi để AI tạo đề nhé."
-                        : "Đã nhận học liệu. Bây giờ để trống ô nhập và bấm Gửi để AI tạo đề nhé.",
+                        ? "Đã nhận & trích xuất. Bây giờ để trống ô nhập và bấm Gửi để Fly AI tạo đề nhé."
+                        : "Đã nhận học liệu. Bây giờ để trống ô nhập và bấm Gửi để Fly AI tạo đề nhé.",
                 });
 
                 showToast("Đã nhận học liệu. Bấm Gửi để tạo đề.", "success");
@@ -579,8 +579,8 @@ export default function PracticePage() {
         clearPersistedResult();
 
         setLoading(true);
-        setLoadingMessage("AI đang tạo đề…");
-        appendMessage({ role: "assistant", text: "AI đang tạo đề… (thời gian lấy từ BE)" });
+        setLoadingMessage("Fly AI đang tạo đề…");
+        appendMessage({ role: "assistant", text: "Fly AI đang tạo đề…" });
 
         try {
             const data = await practiceApi.generateSessionV2({
@@ -619,7 +619,7 @@ export default function PracticePage() {
 
             appendMessage({
                 role: "assistant",
-                text: `Đã tạo đề xong. Thời gian làm bài: ${Number(dur)} phút. Bấm “Bắt đầu làm bài” ở Canvas.`,
+                text: `Đã tạo đề xong. Thời gian làm bài: ${Number(dur)} phút. Bắt đầu làm bài ngay!`,
             });
 
             return { ok: true, token, durationMinutes: Number(dur) };
@@ -683,7 +683,7 @@ export default function PracticePage() {
                 deadlineIso: deadline,
             });
 
-            appendMessage({ role: "assistant", text: "Bắt đầu rồi! Làm bài ở Canvas bên phải nhé." });
+            appendMessage({ role: "assistant", text: "Bắt đầu làm bài!" });
         } catch (e) {
             console.error(e);
             const status = e?.response?.status;
@@ -1030,7 +1030,7 @@ export default function PracticePage() {
                             textAlign: isUser ? "right" : "left",
                         }}
                     >
-                        {isUser ? "You" : "CG AI"}
+                        {isUser ? "You" : "FLY AI"}
                     </Typography>
                     <Paper
                         elevation={0}
@@ -1052,10 +1052,12 @@ export default function PracticePage() {
         );
     };
 
-    const ChatTypingBubble = () => {
+    const ChatTypingBubble = ({ role }) => {
+        const isUser = role === "user";
         return (
             <Box sx={{ display: "flex", gap: 1.5, mb: 2.5, flexDirection: "row" }}>
                 <Avatar
+                    src={isUser ? undefined : "/images/AI_logo.png"}
                     sx={{
                         width: 32,
                         height: 32,
@@ -1076,7 +1078,7 @@ export default function PracticePage() {
                             textAlign: "left",
                         }}
                     >
-                        AI
+                        FLY AI
                     </Typography>
                     <Paper
                         elevation={0}
@@ -1221,7 +1223,7 @@ export default function PracticePage() {
                                     <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
                                         <Stack sx={{ minWidth: 0 }}>
                                             <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary, lineHeight: 1.2 }}>
-                                                Codegym Learning AI
+                                                Bumblefly AI
                                             </Typography>
                                             <Typography sx={{ fontSize: 12, color: COLORS.textSecondary }}>
                                                 {assistantMode === ASSISTANT_MODE.GENERATE ? "Upload/Paste để tạo đề" : "Keyword-only • Không đáp án"}
@@ -1289,8 +1291,8 @@ export default function PracticePage() {
                                 disabled={loading || (assistantMode === ASSISTANT_MODE.STUDY && !(materialIdRef.current ?? materialId))}
                                 helperText={
                                     assistantMode === ASSISTANT_MODE.GENERATE
-                                        ? "Upload xong không tự tạo đề. Bạn bấm Gửi để CG AI tạo đề."
-                                        : "Chỉ nhập từ khóa (2–8 từ), không paste câu hỏi dài."
+                                        ? "Upload file xong bấm Gửi để Fly AI tạo đề."
+                                        : "Chỉ nhập từ khóa (2–8 từ), không nhập câu hỏi dài."
                                 }
                             />
                         </Box>
@@ -1346,7 +1348,7 @@ export default function PracticePage() {
                                         Sẵn sàng tạo đề
                                     </Typography>
                                     <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 2 }}>
-                                        Upload/paste học liệu xong, bấm <b>Gửi</b> để CG AI tạo đề.
+                                        Upload/paste học liệu xong, bấm <b>Gửi</b> để Fly AI tạo đề.
                                     </Typography>
 
                                     <Button
@@ -1378,10 +1380,10 @@ export default function PracticePage() {
                                         Đã tạo đề xong
                                     </Typography>
                                     <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 1.5 }}>
-                                        Số câu: <b>{Number(questionCount)}</b> • Thời gian: <b>{Number(durationMinutes) || "—"} phút</b>
+                                        Số câu: <b>{Number(questionCount)}</b> • Thời gian:  <b>{Number(durationMinutes) || "—"} phút</b>
                                     </Typography>
                                     <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 2 }}>
-                                        Bấm “Bắt đầu làm bài” để vào làm. Nếu muốn đổi học liệu thì bấm “Đổi học liệu”.
+                                        Bấm “Bắt đầu làm bài” để làm bài ngay. Nếu muốn đổi học liệu thì bấm “Đổi học liệu”.
                                     </Typography>
 
                                     <Stack spacing={1.5}>
@@ -1473,7 +1475,7 @@ export default function PracticePage() {
                         display: { xs: "none", md: "block" },
                     }}
                 >
-                    <Tooltip title={isCanvasOpen ? "Đóng Canvas" : "Mở Canvas"}>
+                    <Tooltip title={isCanvasOpen ? "Đóng" : "Mở"}>
                         <IconButton
                             onClick={() => setIsCanvasOpen((v) => !v)}
                             sx={{
