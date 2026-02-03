@@ -578,22 +578,6 @@ const AdminLayout = () => {
                                 </Typography>
                             </Box>
 
-                            <MenuItem onClick={handleClose} sx={{ py: 1.4 }}>
-                                <ListItemIcon>
-                                    <Person fontSize="small" />
-                                </ListItemIcon>
-                                <Typography sx={{ fontWeight: 800 }}>Hồ sơ Admin</Typography>
-                            </MenuItem>
-
-                            <MenuItem onClick={handleClose} sx={{ py: 1.4 }}>
-                                <ListItemIcon>
-                                    <SettingsRounded fontSize="small" />
-                                </ListItemIcon>
-                                <Typography sx={{ fontWeight: 800 }}>Cài đặt</Typography>
-                            </MenuItem>
-
-                            <Divider />
-
                             <MenuItem onClick={handleLogout} sx={{ py: 1.4, color: "error.main" }}>
                                 <ListItemIcon sx={{ color: "error.main" }}>
                                     <LogoutIcon fontSize="small" />

@@ -465,14 +465,14 @@ const AdminReview = () => {
                     const scorePercent = params.row.totalScore
                         ? (Number(params.row.score) / Number(params.row.totalScore)) * 100
                         : 0;
-                    const isPassed = scorePercent >= 50;
+                    const isPassed = scorePercent >= 80;
 
                     return (
                         <Box
                             component="span"
                             sx={{
                                 color: isPassed ? COLORS.success : COLORS.danger,
-                                backgroundColor: isPassed ? `${COLORS.success}15` : `${COLORS.danger}15`,
+                                backgroundColor: isPassed ? `${COLORS.success}13` : `${COLORS.danger}13`,
                                 px: 1,
                                 py: 0.3,
                                 borderRadius: 0.5,
