@@ -1,3 +1,4 @@
+// src/features/users/UserReview.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
     Table,
@@ -8,14 +9,7 @@ import {
     Box,
     Paper,
     Typography,
-    TextField,
-    Button,
-    Select,
-    MenuItem,
-    FormControl,
-    InputLabel,
     Grid,
-    Chip,
     IconButton,
     Dialog,
     DialogTitle,
@@ -23,31 +17,27 @@ import {
     DialogActions,
     Stack,
     Divider,
-    InputAdornment,
     Alert,
     CircularProgress,
     Container,
+    Button,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import {
-    Search,
-    FilterList,
-    CalendarToday,
     Timer,
     Visibility,
-    ExpandMore,
-    ExpandLess,
     CheckCircle,
     Assignment as AssignmentIcon,
     TrendingUp as TrendingIcon,
-    School as SchoolIcon,
-    Check as CheckIcon,
 } from "@mui/icons-material";
 
 import { getMyExamAttemptsApi } from "../../api/examApi";
 import { getDashboardStatsApi } from "../../api/dashboardApi";
+import { practiceApi } from "../../api/practiceApi";
+
 import FilterPanel from "../../components/common/FilterPanel.jsx";
 import AppPagination from "../../components/common/AppPagination.jsx";
+import PracticeReviewDialog from "../practice/components/PracticeReviewDialog.jsx";
 
 const COLORS = {
     primaryBlue: "#0B5ED7",
@@ -70,13 +60,12 @@ const safeNum = (v, fallback = 0) => {
 };
 
 const formatDateTime = (d) => (d ? new Date(d).toLocaleString("vi-VN") : "—");
-const formatDate = (d) => (d ? new Date(d).toLocaleDateString("vi-VN") : "—");
 
 const formatDateTimeSplit = (dateStr) => {
     if (!dateStr) return { date: "—", time: "—" };
     const d = new Date(dateStr);
-    const date = d.toLocaleDateString("vi-VN", { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const time = d.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit', hour12: false });
+    const date = d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const time = d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false });
     return { date, time };
 };
 
@@ -86,12 +75,14 @@ function normalizeAttempt(raw) {
     const submitTime = raw?.submitTime ?? raw?.date ?? raw?.submittedAt ?? raw?.endTime ?? null;
     const startTime = raw?.startTime ?? raw?.startedAt ?? null;
 
+    const type = String(raw?.type || raw?.examType || "").toUpperCase();
+
     const name =
         raw?.name ??
         raw?.examName ??
         raw?.examTitle ??
         raw?.title ??
-        (String(raw?.type || "").toUpperCase().includes("PRACTICE") ? "Bài thi PRACTICE" : "Bài test");
+        (type.includes("PRACTICE") ? "Bài thi PRACTICE" : "Bài test");
 
     const module =
         raw?.module ??
@@ -112,17 +103,11 @@ function normalizeAttempt(raw) {
         null;
 
     const totalQuestions = safeNum(
-        raw?.totalQuestions ??
-        raw?.questions ??
-        raw?.questionCount ??
-        raw?.totalQuestion ??
-        raw?.numQuestions,
+        raw?.totalQuestions ?? raw?.questions ?? raw?.questionCount ?? raw?.totalQuestion ?? raw?.numQuestions,
         0
     );
 
-    // attempt.score bên BE đang là % (0..100)
     const scorePct = safeNum(raw?.score ?? raw?.scorePct ?? raw?.percentage ?? 0, 0);
-
     const totalScore = safeNum(raw?.totalScore ?? raw?.totalPoints ?? raw?.maxScore ?? 100, 100);
 
     const directCorrect = raw?.correctAnswers ?? raw?.correctCount ?? raw?.numCorrect ?? raw?.correct ?? null;
@@ -137,8 +122,7 @@ function normalizeAttempt(raw) {
         }
     }
 
-    let durationMinutes =
-        raw?.durationMinutes ?? raw?.duration ?? raw?.timeMinutes ?? raw?.minutes ?? null;
+    let durationMinutes = raw?.durationMinutes ?? raw?.duration ?? raw?.timeMinutes ?? raw?.minutes ?? null;
 
     if (durationMinutes == null && startTime && submitTime) {
         const diffMs = new Date(submitTime).getTime() - new Date(startTime).getTime();
@@ -146,12 +130,12 @@ function normalizeAttempt(raw) {
     }
     durationMinutes = safeNum(durationMinutes, 0);
 
-    const accuracy =
-        totalQuestions > 0 ? Number(((correctAnswers / totalQuestions) * 100).toFixed(1)) : 0;
+    const accuracy = totalQuestions > 0 ? Number(((correctAnswers / totalQuestions) * 100).toFixed(1)) : 0;
 
     return {
         _raw: raw,
         id,
+        type,
         name,
         module: module || "Chưa gắn module",
         className: className || "Chưa gắn lớp",
@@ -213,18 +197,79 @@ const StatCard = ({ icon, title, value, subtitle, color }) => (
     </Paper>
 );
 
+// review API -> PracticeReviewDialog shape
+const adaptToPracticeReview = (rawReview, selectedTest) => {
+    const arr = Array.isArray(rawReview) ? rawReview : rawReview?.items || [];
+    const items = (arr || []).map((it) => {
+        const qType = String(it?.questionType || "MCQ").toUpperCase();
+        const isMcq = qType === "MCQ";
+
+        let options = it?.options ?? it?.optionsMap ?? null;
+        if (!options && typeof it?.optionsJson === "string") {
+            try {
+                options = JSON.parse(it.optionsJson);
+            } catch {
+                options = null;
+            }
+        }
+
+        const selectedAnswer = it?.selectedAnswer ?? null;
+        const correctAnswer = it?.correctAnswer ?? null;
+
+        const yourAnswer = it?.yourAnswer ?? it?.textAnswer ?? "";
+        const sampleAnswer = it?.sampleAnswer ?? it?.expectedAnswer ?? "";
+
+        const isCorrect =
+            typeof it?.isCorrect === "boolean"
+                ? it.isCorrect
+                : isMcq
+                    ? String(selectedAnswer || "") === String(correctAnswer || "")
+                    : safeNum(it?.score, 0) > 0;
+
+        return {
+            questionId: it?.questionId ?? it?.id ?? null,
+            questionType: qType,
+            content: it?.content ?? it?.questionContent ?? it?.questionText ?? "(Không có nội dung câu hỏi)",
+            options: options || {},
+            selectedAnswer,
+            correctAnswer,
+            yourAnswer,
+            sampleAnswer,
+            score: safeNum(it?.score, 0),
+            maxScore: safeNum(it?.maxScore, 0),
+            feedback: it?.feedback ?? it?.explanation ?? "",
+            isCorrect,
+        };
+    });
+
+    const totalQuestions = safeNum(rawReview?.totalQuestions, items.length);
+    const correctCount = Number.isFinite(rawReview?.correctCount)
+        ? rawReview.correctCount
+        : items.filter((x) => x.isCorrect).length;
+
+    const score = safeNum(rawReview?.score, safeNum(selectedTest?.scorePct, 0)); // /100
+
+    return {
+        score,
+        correctCount,
+        totalQuestions,
+        items,
+        aiFeedback: String(rawReview?.aiFeedback ?? "").trim(),
+    };
+};
+
 export default function UserReview() {
     const [testsRaw, setTestsRaw] = useState([]);
     const tests = useMemo(() => testsRaw.map(normalizeAttempt), [testsRaw]);
 
     const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
+
     const [selectedTest, setSelectedTest] = useState(null);
     const [detailDialogOpen, setDetailDialogOpen] = useState(false);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // ✅ Stats giống Dashboard (dùng chung getDashboardStatsApi)
     const [stats, setStats] = useState({
         completedLessons: 0,
         onlineTime: 0,
@@ -232,6 +277,12 @@ export default function UserReview() {
         rank: 0,
         totalStudents: 0,
     });
+
+    // ✅ Review state (chỉ mở khi bấm nút)
+    const [openReview, setOpenReview] = useState(false);
+    const [reviewData, setReviewData] = useState(null);
+    const [reviewLoading, setReviewLoading] = useState(false);
+    const [reviewError, setReviewError] = useState(null);
 
     // Filters
     const [searchText, setSearchText] = useState("");
@@ -255,7 +306,6 @@ export default function UserReview() {
                 const token = localStorage.getItem("accessToken");
                 if (!token || token === "null") throw new Error("No valid token. Please login.");
 
-                // ✅ chạy song song: attempts + dashboard stats
                 const [attemptsRes, dashStatsRes] = await Promise.allSettled([
                     getMyExamAttemptsApi(),
                     getDashboardStatsApi(),
@@ -263,7 +313,6 @@ export default function UserReview() {
 
                 if (!alive) return;
 
-                // attempts
                 if (attemptsRes.status === "fulfilled") {
                     const data = Array.isArray(attemptsRes.value?.data) ? attemptsRes.value.data : [];
                     setTestsRaw(data);
@@ -278,7 +327,6 @@ export default function UserReview() {
                     throw attemptsRes.reason;
                 }
 
-                // stats (dashboard)
                 if (dashStatsRes.status === "fulfilled") {
                     const s = dashStatsRes.value?.data || {};
                     setStats({
@@ -290,7 +338,6 @@ export default function UserReview() {
                     });
                 } else {
                     console.warn("UserReview dashboard stats error:", dashStatsRes.reason);
-                    // không block UI nếu stats fail
                 }
             } catch (err) {
                 if (!alive) return;
@@ -343,16 +390,71 @@ export default function UserReview() {
         return filtered;
     }, [tests, searchText, selectedModule, selectedClass, startDate, endDate]);
 
-    useEffect(() => setPaginationModel(prev => ({ ...prev, page: 0 })), [searchText, selectedModule, selectedClass, startDate, endDate]);
+    useEffect(() => setPaginationModel((prev) => ({ ...prev, page: 0 })), [
+        searchText,
+        selectedModule,
+        selectedClass,
+        startDate,
+        endDate,
+    ]);
 
+    const getScoreColor = (scorePct) =>
+        scorePct >= 80 ? COLORS.success : scorePct >= 50 ? COLORS.warning : COLORS.danger;
+
+    // ✅ Chỉ mở dialog tổng quan (không load review ở đây)
     const handleViewDetail = (test) => {
         setSelectedTest(test);
         setDetailDialogOpen(true);
+
+        // reset trạng thái review cho lần xem mới
+        setOpenReview(false);
+        setReviewData(null);
+        setReviewError(null);
+        setReviewLoading(false);
     };
+
+    // ✅ bấm nút mới load review + mở PracticeReviewDialog
+    const handleOpenReview = async () => {
+        const attemptId = selectedTest?.id;
+        if (!attemptId) {
+            setReviewError("Không tìm thấy attemptId để tải chi tiết bài làm.");
+            return;
+        }
+
+        // nếu đã có data rồi -> mở luôn
+        if (reviewData && (reviewData?.items?.length ?? 0) > 0) {
+            setOpenReview(true);
+            return;
+        }
+
+        try {
+            setReviewLoading(true);
+            setReviewError(null);
+
+            const raw = await practiceApi.review(attemptId);
+            const adapted = adaptToPracticeReview(raw, selectedTest);
+            setReviewData(adapted);
+
+            setOpenReview(true);
+        } catch (e) {
+            console.error("Load review error:", e);
+            setReviewError(e?.response?.data?.message || e?.message || "Không tải được chi tiết bài làm.");
+        } finally {
+            setReviewLoading(false);
+        }
+    };
+
     const handleCloseDetail = () => {
         setDetailDialogOpen(false);
         setSelectedTest(null);
+
+        // reset review
+        setOpenReview(false);
+        setReviewData(null);
+        setReviewError(null);
+        setReviewLoading(false);
     };
+
     const handleResetFilters = () => {
         setSearchText("");
         setSelectedModule(ALL);
@@ -360,12 +462,6 @@ export default function UserReview() {
         setStartDate("");
         setEndDate("");
     };
-
-    const getScoreColor = (scorePct) =>
-        scorePct >= 80 ? COLORS.success : scorePct >= 50 ? COLORS.warning : COLORS.danger;
-
-    const getScoreLabel = (scorePct) =>
-        scorePct >= 80 ? "Xuất sắc" : scorePct >= 50 ? "Đạt" : "Chưa đạt";
 
     const columns = useMemo(() => {
         const pageOffset = paginationModel.page * paginationModel.pageSize;
@@ -390,31 +486,9 @@ export default function UserReview() {
                     return centerCell(pageOffset + idx + 1);
                 },
             },
-            {
-                field: "name",
-                headerName: "Tên bài test",
-                flex: 1.5,
-                minWidth: 200,
-                renderCell: (params) => params.value,
-            },
-            {
-                field: "module",
-                headerName: "Module",
-                flex: 1,
-                minWidth: 150,
-                headerAlign: "center",
-                align: "center",
-                renderCell: (params) => params.value,
-            },
-            {
-                field: "className",
-                headerName: "Lớp học",
-                flex: 1,
-                minWidth: 150,
-                headerAlign: "center",
-                align: "center",
-                renderCell: (params) => params.value,
-            },
+            { field: "name", headerName: "Tên bài test", flex: 1.5, minWidth: 200, renderCell: (p) => p.value },
+            { field: "module", headerName: "Module", flex: 1, minWidth: 150, headerAlign: "center", align: "center" },
+            { field: "className", headerName: "Lớp học", flex: 1, minWidth: 150, headerAlign: "center", align: "center" },
             {
                 field: "submitTime",
                 headerName: "Ngày làm",
@@ -476,10 +550,7 @@ export default function UserReview() {
                     <IconButton
                         size="small"
                         onClick={() => handleViewDetail(params.row)}
-                        sx={{
-                            bgcolor: COLORS.primaryBlue + "10",
-                            "&:hover": { bgcolor: COLORS.primaryBlue + "20" }
-                        }}
+                        sx={{ bgcolor: COLORS.primaryBlue + "10", "&:hover": { bgcolor: COLORS.primaryBlue + "20" } }}
                     >
                         <Visibility sx={{ color: COLORS.primaryBlue }} />
                     </IconButton>
@@ -504,12 +575,8 @@ export default function UserReview() {
             <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", bgcolor: COLORS.bgLight, p: 3 }}>
                 <Paper sx={{ p: 4, maxWidth: 600, textAlign: "center", borderRadius: "16px" }}>
                     <Typography sx={{ fontSize: 48, mb: 2 }}>⚠️</Typography>
-                    <Typography sx={{ fontSize: 24, fontWeight: 900, mb: 2, color: COLORS.danger }}>
-                        Đã xảy ra lỗi
-                    </Typography>
-                    <Alert severity="error" sx={{ mb: 3 }}>
-                        {error}
-                    </Alert>
+                    <Typography sx={{ fontSize: 24, fontWeight: 900, mb: 2, color: COLORS.danger }}>Đã xảy ra lỗi</Typography>
+                    <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>
                     <Stack direction="row" spacing={2} justifyContent="center">
                         <Button variant="contained" onClick={() => window.location.reload()} sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700 }}>
                             Tải lại trang
@@ -530,115 +597,46 @@ export default function UserReview() {
                     Đánh giá học tập
                 </Typography>
 
-                {/* ✅ Stats giống Dashboard */}
                 <Grid container spacing={3} sx={{ mb: 4 }}>
                     <Grid item xs={12} md={3}>
-                        <StatCard
-                            icon={<AssignmentIcon />}
-                            title="HOÀN THÀNH"
-                            value={stats.completedLessons}
-                            subtitle="Bài kiểm tra đã nộp"
-                            color={COLORS.primaryBlue}
-                        />
+                        <StatCard icon={<AssignmentIcon />} title="HOÀN THÀNH" value={stats.completedLessons} subtitle="Bài kiểm tra đã nộp" color={COLORS.primaryBlue} />
                     </Grid>
-
                     <Grid item xs={12} md={3}>
-                        <StatCard
-                            icon={<Timer />}
-                            title="THỜI GIAN"
-                            value={`${stats.onlineTime}h`}
-                            subtitle="Tổng thời lượng học"
-                            color={COLORS.success}
-                        />
+                        <StatCard icon={<Timer />} title="THỜI GIAN" value={`${stats.onlineTime}h`} subtitle="Tổng thời lượng học" color={COLORS.success} />
                     </Grid>
-
                     <Grid item xs={12} md={3}>
-                        <StatCard
-                            icon={<TrendingIcon />}
-                            title="ĐIỂM TRUNG BÌNH"
-                            value={`${stats.averageScore}%`}
-                            subtitle="Tỉ lệ hoàn thành"
-                            color={COLORS.warning}
-                        />
+                        <StatCard icon={<TrendingIcon />} title="ĐIỂM TRUNG BÌNH" value={`${stats.averageScore}%`} subtitle="Tỉ lệ hoàn thành" color={COLORS.warning} />
                     </Grid>
-
                     <Grid item xs={12} md={3}>
-                        <StatCard
-                            icon={<CheckCircle />}
-                            title="THỨ HẠNG"
-                            value={`${stats.rank}/${stats.totalStudents}`}
-                            subtitle={`Trong tổng ${stats.totalStudents} học viên`}
-                            color={COLORS.secondaryOrange}
-                        />
+                        <StatCard icon={<CheckCircle />} title="THỨ HẠNG" value={`${stats.rank}/${stats.totalStudents}`} subtitle={`Trong tổng ${stats.totalStudents} học viên`} color={COLORS.secondaryOrange} />
                     </Grid>
                 </Grid>
 
-                {/* Filters */}
                 <FilterPanel
-                    search={{
-                        placeholder: "Tìm kiếm theo tên bài test, module, lớp...",
-                        value: searchText,
-                        onChange: setSearchText,
-                    }}
+                    search={{ placeholder: "Tìm kiếm theo tên bài test, module, lớp...", value: searchText, onChange: setSearchText }}
                     showFilters={showFilters}
                     onToggleFilters={() => setShowFilters(!showFilters)}
                     onReset={handleResetFilters}
                     resetTooltip="Xóa bộ lọc"
                     fields={{
-                        module: {
-                            enabled: true,
-                            label: "Module",
-                            value: selectedModule,
-                            options: modules.map((m) => ({ value: m, label: m })),
-                            onChange: setSelectedModule,
-                            loading: false,
-                        },
-                        class: {
-                            enabled: true,
-                            label: "Lớp học",
-                            value: selectedClass,
-                            options: classes.map((c) => ({ value: c, label: c })),
-                            onChange: setSelectedClass,
-                            loading: false,
-                        },
-                        startDate: {
-                            enabled: true,
-                            label: "Từ ngày",
-                            value: startDate,
-                            onChange: setStartDate,
-                        },
-                        endDate: {
-                            enabled: true,
-                            label: "Đến ngày",
-                            value: endDate,
-                            onChange: setEndDate,
-                        },
+                        module: { enabled: true, label: "Module", value: selectedModule, options: modules.map((m) => ({ value: m, label: m })), onChange: setSelectedModule, loading: false },
+                        class: { enabled: true, label: "Lớp học", value: selectedClass, options: classes.map((c) => ({ value: c, label: c })), onChange: setSelectedClass, loading: false },
+                        startDate: { enabled: true, label: "Từ ngày", value: startDate, onChange: setStartDate },
+                        endDate: { enabled: true, label: "Đến ngày", value: endDate, onChange: setEndDate },
                     }}
                 />
+
                 <Box sx={{ my: 3 }} />
 
                 <Typography sx={{ mb: 2, color: COLORS.textSecondary, fontWeight: 700 }}>
                     Hiển thị {filteredTests.length} kết quả{filteredTests.length !== tests.length && ` (từ ${tests.length} bài test)`}
                 </Typography>
 
-                {/* DataGrid - PHẦN DUY NHẤT ĐƯỢC SỬA */}
-                <Paper
-                    elevation={0}
-                    sx={{
-                        borderRadius: 2,
-                        overflow: "hidden",
-                        border: "1px solid",
-                        borderColor: "divider",
-                        display: "flex",
-                        flexDirection: "column",
-                        minHeight: 420,
-                    }}
-                >
+                <Paper elevation={0} sx={{ borderRadius: 2, overflow: "hidden", border: "1px solid", borderColor: "divider", display: "flex", flexDirection: "column", minHeight: 420 }}>
                     <Box sx={{ flex: 1, minHeight: 0 }}>
                         <DataGrid
                             rows={filteredTests}
                             columns={columns}
-                            loading={loading}
                             disableRowSelectionOnClick
                             getRowId={(r) => r.id ?? `${Math.random()}`}
                             paginationModel={paginationModel}
@@ -649,30 +647,14 @@ export default function UserReview() {
                             sx={{
                                 border: 0,
                                 height: "100%",
-                                "& .MuiDataGrid-columnHeaders": {
-                                    bgcolor: "background.paper",
-                                    borderBottom: "1px solid",
-                                    borderColor: "divider",
-                                },
+                                "& .MuiDataGrid-columnHeaders": { bgcolor: "background.paper", borderBottom: "1px solid", borderColor: "divider" },
                                 "& .MuiDataGrid-row:nth-of-type(odd)": { bgcolor: "action.hover" },
                                 "& .MuiDataGrid-cell:focus, & .MuiDataGrid-columnHeader:focus": { outline: "none" },
                             }}
                         />
                     </Box>
 
-                    <Box
-                        sx={{
-                            px: 1.5,
-                            py: 1,
-                            borderTop: "1px solid",
-                            borderColor: "divider",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "flex-end",
-                            gap: 1,
-                            flexWrap: "wrap",
-                        }}
-                    >
+                    <Box sx={{ px: 1.5, py: 1, borderTop: "1px solid", borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 1, flexWrap: "wrap" }}>
                         <AppPagination
                             page={paginationModel.page + 1}
                             pageSize={paginationModel.pageSize}
@@ -685,15 +667,19 @@ export default function UserReview() {
                     </Box>
                 </Paper>
 
-                {/* Detail Dialog */}
+                {/* ✅ Dialog tổng quan: CHỈ HIỂN THỊ NÚT, không auto mở review */}
                 <Dialog open={detailDialogOpen} onClose={handleCloseDetail} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: "16px" } }}>
                     <DialogTitle>
                         <Typography sx={{ fontWeight: 900 }}>Chi tiết bài test</Typography>
                     </DialogTitle>
+
                     <DialogContent>
                         {selectedTest && (
                             <Box>
-                                <Typography sx={{ fontWeight: 700, fontSize: 20, mb: 2, textAlign: "center" }}>{selectedTest.name}</Typography>
+                                <Typography sx={{ fontWeight: 700, fontSize: 20, mb: 2, textAlign: "center" }}>
+                                    {selectedTest.name}
+                                </Typography>
+
                                 <Table sx={{ width: "100%", borderCollapse: "collapse", mt: 1 }}>
                                     <TableHead>
                                         <TableRow sx={{ backgroundColor: "#f4f6fc" }}>
@@ -717,12 +703,8 @@ export default function UserReview() {
                                     </TableHead>
                                     <TableBody>
                                         <TableRow>
-                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>
-                                                {selectedTest.module}
-                                            </TableCell>
-                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>
-                                                {selectedTest.className}
-                                            </TableCell>
+                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>{selectedTest.module}</TableCell>
+                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>{selectedTest.className}</TableCell>
                                             <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none", whiteSpace: "nowrap" }}>
                                                 <Typography sx={{ fontSize: 14 }}>
                                                     {formatDateTime(selectedTest.submitTime || selectedTest.startTime).split(" ")[1]}
@@ -731,9 +713,7 @@ export default function UserReview() {
                                                     {formatDateTime(selectedTest.submitTime || selectedTest.startTime).split(" ")[0]}
                                                 </Typography>
                                             </TableCell>
-                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>
-                                                {selectedTest.durationMinutes} phút
-                                            </TableCell>
+                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>{selectedTest.durationMinutes} phút</TableCell>
                                             <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>
                                                 <Typography sx={{ fontWeight: 900, color: getScoreColor(selectedTest.scorePct) }}>
                                                     {selectedTest.scorePct}/{selectedTest.totalScore}
@@ -758,15 +738,40 @@ export default function UserReview() {
                                         </TableRow>
                                     </TableBody>
                                 </Table>
+
+                                <Divider sx={{ my: 2 }} />
+
+                                <Typography sx={{ fontWeight: 900, mb: 1 }}>Chi tiết bài làm</Typography>
+
+                                {reviewError && (
+                                    <Alert severity="error" sx={{ mb: 2 }}>
+                                        {reviewError}
+                                    </Alert>
+                                )}
+
+                                <Stack direction="row" spacing={1} justifyContent="flex-end">
+                                    <Button
+                                        variant="contained"
+                                        onClick={handleOpenReview}
+                                        disabled={reviewLoading}
+                                        sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 800 }}
+                                    >
+                                        {reviewLoading ? "Đang tải..." : "Xem lại đáp án"}
+                                    </Button>
+                                </Stack>
                             </Box>
                         )}
                     </DialogContent>
+
                     <DialogActions sx={{ p: 2 }}>
                         <Button onClick={handleCloseDetail} variant="contained" sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700 }}>
                             Đóng
                         </Button>
                     </DialogActions>
                 </Dialog>
+
+                {/* ✅ dialog review chỉ mở khi bấm nút */}
+                <PracticeReviewDialog open={openReview} onClose={() => setOpenReview(false)} review={reviewData} />
             </Container>
         </Box>
     );
