@@ -11,6 +11,7 @@ import {
     Tooltip,
     Chip,
     Divider,
+    keyframes,
 } from "@mui/material";
 
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
@@ -42,6 +43,33 @@ const COLORS = {
     orangeHover: "#e67e00",
     bg: "#F8FAFC",
 };
+
+
+// ===== Typing Indicator (3 dots) =====
+const bounce = keyframes`
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1); }
+`;
+
+function TypingIndicator() {
+    return (
+        <Stack direction="row" spacing={0.5} alignItems="center" sx={{ height: 24 }}>
+            {[0, 1, 2].map((i) => (
+                <Box
+                    key={i}
+                    sx={{
+                        width: 6,
+                        height: 6,
+                        bgcolor: COLORS.textSecondary,
+                        borderRadius: "50%",
+                        animation: `${bounce} 1.4s infinite ease-in-out both`,
+                        animationDelay: `${i * 0.16}s`,
+                    }}
+                />
+            ))}
+        </Stack>
+    );
+}
 
 const MODE = {
     IDLE: "IDLE",
@@ -196,7 +224,7 @@ export default function PracticePage() {
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messagesToRender]);
+    }, [messagesToRender, loading]);
 
     const appendMessage = useCallback((msg) => {
         setMessages((prev) => [...prev, { id: uid(msg.role?.[0] || "m"), ...msg }]);
@@ -493,14 +521,14 @@ export default function PracticePage() {
             const keywords = v.value;
             appendStudyMessage({ role: "user", text: keywords });
 
+            setStudyBooting(true);
             try {
                 let sid = studySessionId;
                 if (!sid) {
-                    setStudyBooting(true);
                     const s = await chatApi.startSession(matId);
                     sid = s?.sessionId;
+                    if (!sid) throw new Error("Missing sessionId");
                     setStudySessionId(sid);
-                    setStudyBooting(false);
                 }
 
                 const res = await chatApi.ask(sid, keywords);
@@ -926,7 +954,7 @@ export default function PracticePage() {
 
     const isSplit = Boolean(materialId || sessionToken || attemptDetail || result);
 
-    const ChatBubble = ({ role, text }) => {
+    const ChatBubble = ({ role, text, children }) => {
         const isUser = role === "user";
         return (
             <Box sx={{ display: "flex", gap: 1.5, mb: 2.5, flexDirection: isUser ? "row-reverse" : "row" }}>
@@ -966,7 +994,51 @@ export default function PracticePage() {
                             border: isUser ? "none" : `1px solid ${COLORS.border}`,
                         }}
                     >
-                        <Typography sx={{ fontSize: 14, lineHeight: 1.6 }}>{text}</Typography>
+                        {children ? children : <Typography sx={{ fontSize: 14, lineHeight: 1.6 }}>{text}</Typography>}
+                    </Paper>
+                </Box>
+            </Box>
+        );
+    };
+
+
+    const ChatTypingBubble = () => {
+        return (
+            <Box sx={{ display: "flex", gap: 1.5, mb: 2.5, flexDirection: "row" }}>
+                <Avatar
+                    sx={{
+                        width: 32,
+                        height: 32,
+                        bgcolor: "transparent",
+                        border: `1px solid ${COLORS.border}`,
+                    }}
+                >
+                    <AutoAwesomeRoundedIcon sx={{ fontSize: 18, color: "primary.main" }} />
+                </Avatar>
+
+                <Box sx={{ maxWidth: "80%" }}>
+                    <Typography
+                        sx={{
+                            fontSize: 12,
+                            fontWeight: 800,
+                            color: COLORS.textSecondary,
+                            mb: 0.5,
+                            textAlign: "left",
+                        }}
+                    >
+                        AI
+                    </Typography>
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            p: 1.5,
+                            borderRadius: 3,
+                            bgcolor: "grey.100",
+                            color: "text.primary",
+                            border: `1px solid ${COLORS.border}`,
+                        }}
+                    >
+                        <TypingIndicator />
                     </Paper>
                 </Box>
             </Box>
@@ -1147,6 +1219,7 @@ export default function PracticePage() {
                                 {messagesToRender.map((m) => (
                                     <ChatBubble key={m.id} role={m.role} text={m.text} />
                                 ))}
+                                {(assistantMode === ASSISTANT_MODE.STUDY ? studyBooting : loading) && <ChatTypingBubble />}
                                 <div ref={messagesEndRef} />
                             </Box>
                         </Box>
