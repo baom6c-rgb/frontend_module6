@@ -44,7 +44,6 @@ const COLORS = {
     bg: "#F8FAFC",
 };
 
-
 // ===== Typing Indicator (3 dots) =====
 const bounce = keyframes`
     0%, 80%, 100% { transform: scale(0); }
@@ -189,6 +188,9 @@ export default function PracticePage() {
 
     const [attemptDetail, setAttemptDetail] = useState(null);
 
+    // ✅ NEW: số câu thực tế của attempt (đóng băng) để hiển thị ở RESULT
+    const [attemptQuestionCount, setAttemptQuestionCount] = useState(null);
+
     const [result, setResult] = useState(null);
     const [reviewOpen, setReviewOpen] = useState(false);
     const [reviewData, setReviewData] = useState(null);
@@ -224,7 +226,7 @@ export default function PracticePage() {
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messagesToRender, loading]);
+    }, [messagesToRender, loading, studyBooting]);
 
     const appendMessage = useCallback((msg) => {
         setMessages((prev) => [...prev, { id: uid(msg.role?.[0] || "m"), ...msg }]);
@@ -290,6 +292,7 @@ export default function PracticePage() {
             setDeadlineIso(null);
 
             setAttemptDetail(null);
+            setAttemptQuestionCount(null); // ✅ reset frozen count
 
             setResult(null);
             setReviewOpen(false);
@@ -368,6 +371,8 @@ export default function PracticePage() {
                 setStartedAtIso(null);
                 setDeadlineIso(null);
                 setAttemptDetail(null);
+                setAttemptQuestionCount(null); // ✅ reset frozen count
+
                 setResult(null);
                 setReviewOpen(false);
                 setReviewData(null);
@@ -391,7 +396,11 @@ export default function PracticePage() {
                 console.error(e);
                 const status = e?.response?.status;
                 const serverMsg =
-                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Upload failed";
+                    e?.response?.data?.message ||
+                    e?.response?.data?.error ||
+                    e?.response?.data ||
+                    e?.message ||
+                    "Upload failed";
                 showToast(`Upload học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
                 appendMessage({ role: "assistant", text: "Không upload/đọc được file. Kiểm tra định dạng/size nhé." });
             } finally {
@@ -427,6 +436,8 @@ export default function PracticePage() {
                 setStartedAtIso(null);
                 setDeadlineIso(null);
                 setAttemptDetail(null);
+                setAttemptQuestionCount(null); // ✅ reset frozen count
+
                 setResult(null);
                 setReviewOpen(false);
                 setReviewData(null);
@@ -450,7 +461,11 @@ export default function PracticePage() {
                 console.error(e);
                 const status = e?.response?.status;
                 const serverMsg =
-                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Create material failed";
+                    e?.response?.data?.message ||
+                    e?.response?.data?.error ||
+                    e?.response?.data ||
+                    e?.message ||
+                    "Create material failed";
                 showToast(`Gửi học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
                 appendMessage({ role: "assistant", text: "Không tạo được học liệu từ text này. Thử lại nhé." });
             } finally {
@@ -590,6 +605,7 @@ export default function PracticePage() {
             setMode(MODE.READY);
             setIsCanvasOpen(true);
 
+            // ✅ đây vẫn là config, chưa “đóng băng” attempt
             saveActiveSession({
                 mode: MODE.READY,
                 sessionToken: token,
@@ -640,6 +656,10 @@ export default function PracticePage() {
 
             const detail = buildAttemptDetailFromV2(data, token);
             setAttemptDetail(detail);
+
+            // ✅ đóng băng số câu theo attempt thật (không phụ thuộc header)
+            const qLen = Array.isArray(detail?.questions) ? detail.questions.length : null;
+            if (qLen != null) setAttemptQuestionCount(qLen);
 
             const startedAt = data?.startedAt || null;
             const deadline = data?.deadline || null;
@@ -706,9 +726,16 @@ export default function PracticePage() {
                 setMode(MODE.RESULT);
                 setIsCanvasOpen(true);
 
+                // ✅ persist frozen count để reload vẫn đúng “số câu đã làm”
+                const frozenCount =
+                    (typeof attemptQuestionCount === "number" ? attemptQuestionCount : null) ??
+                    (Array.isArray(attemptDetail?.questions) ? attemptDetail.questions.length : null) ??
+                    Number(questionCount);
+
                 savePersistedResult({
                     materialId: materialIdRef.current ?? materialId ?? null,
-                    questionCount: Number(questionCount),
+                    questionCount: Number(questionCount), // config (giữ lại)
+                    attemptQuestionCount: frozenCount, // ✅ attempt (đúng cho RESULT)
                     durationMinutes: Number(durationMinutes),
                     result: data,
                     savedAt: Date.now(),
@@ -736,7 +763,18 @@ export default function PracticePage() {
                 setLoading(false);
             }
         },
-        [appendMessage, durationMinutes, materialId, questionCount, saveActiveSession, savePersistedResult, sessionToken, showToast]
+        [
+            appendMessage,
+            attemptDetail,
+            attemptQuestionCount,
+            durationMinutes,
+            materialId,
+            questionCount,
+            saveActiveSession,
+            savePersistedResult,
+            sessionToken,
+            showToast,
+        ]
     );
 
     const openReview = useCallback(async () => {
@@ -783,6 +821,10 @@ export default function PracticePage() {
 
                 const detail = buildAttemptDetailFromV2(data, token);
                 setAttemptDetail(detail);
+
+                // ✅ đóng băng số câu theo retest attempt thật
+                const qLen = Array.isArray(detail?.questions) ? detail.questions.length : null;
+                if (qLen != null) setAttemptQuestionCount(qLen);
 
                 const startedAt = data?.startedAt || null;
                 const deadline = data?.deadline || null;
@@ -838,6 +880,9 @@ export default function PracticePage() {
                         if (typeof pr?.questionCount === "number") setQuestionCount(pr.questionCount);
                         if (typeof pr?.durationMinutes === "number") setDurationMinutes(pr.durationMinutes);
 
+                        // ✅ restore frozen attempt count (ưu tiên attemptQuestionCount)
+                        if (typeof pr?.attemptQuestionCount === "number") setAttemptQuestionCount(pr.attemptQuestionCount);
+
                         setResult(r);
                         setMode(MODE.RESULT);
                         setIsCanvasOpen(true);
@@ -881,6 +926,11 @@ export default function PracticePage() {
 
                     if (!cancelled) {
                         setAttemptDetail(detail);
+
+                        // ✅ đóng băng số câu khi resume DOING
+                        const qLen = Array.isArray(detail?.questions) ? detail.questions.length : null;
+                        if (qLen != null) setAttemptQuestionCount(qLen);
+
                         setMode(MODE.DOING);
                         setIsCanvasOpen(true);
 
@@ -1001,7 +1051,6 @@ export default function PracticePage() {
         );
     };
 
-
     const ChatTypingBubble = () => {
         return (
             <Box sx={{ display: "flex", gap: 1.5, mb: 2.5, flexDirection: "row" }}>
@@ -1062,6 +1111,13 @@ export default function PracticePage() {
     const allowUpload = assistantMode === ASSISTANT_MODE.GENERATE && mode !== MODE.DOING;
 
     const showFloatingTimer = mode === MODE.DOING && Boolean(attemptStartTs) && Number(durationMinutes) > 0;
+
+    // ✅ số câu hiển thị trong RESULT: ưu tiên attemptQuestionCount (đóng băng)
+    const resultQuestionCount = useMemo(() => {
+        if (typeof attemptQuestionCount === "number") return attemptQuestionCount;
+        if (Array.isArray(attemptDetail?.questions)) return attemptDetail.questions.length;
+        return Number(questionCount);
+    }, [attemptDetail?.questions, attemptQuestionCount, questionCount]);
 
     return (
         <Box
@@ -1369,7 +1425,8 @@ export default function PracticePage() {
                             {mode === MODE.RESULT && (
                                 <PracticeResult
                                     result={result}
-                                    numberOfQuestions={Number(questionCount)}
+                                    // ✅ FIX: số câu ở kết quả = số câu attempt đã làm, không phụ thuộc header
+                                    numberOfQuestions={Number(resultQuestionCount)}
                                     onRetry={async () => {
                                         // ✅ Retest: button sẽ chỉ enable khi BE cho phép (PracticeResult handle)
                                         const attemptId = result?.attemptId;
@@ -1381,6 +1438,7 @@ export default function PracticePage() {
                                         // fallback
                                         setResult(null);
                                         setAttemptDetail(null);
+                                        setAttemptQuestionCount(null);
                                         setStartedAtIso(null);
                                         setDeadlineIso(null);
                                         setMode(MODE.IDLE);
@@ -1431,7 +1489,11 @@ export default function PracticePage() {
                                 },
                             }}
                         >
-                            {isCanvasOpen ? <ChevronRightRoundedIcon sx={{ color: "#fff" }} /> : <ChevronLeftRoundedIcon sx={{ color: "#fff" }} />}
+                            {isCanvasOpen ? (
+                                <ChevronRightRoundedIcon sx={{ color: "#fff" }} />
+                            ) : (
+                                <ChevronLeftRoundedIcon sx={{ color: "#fff" }} />
+                            )}
                         </IconButton>
                     </Tooltip>
                 </Box>
