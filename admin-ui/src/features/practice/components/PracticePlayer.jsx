@@ -1,5 +1,12 @@
 // src/features/practice/components/PracticePlayer.jsx
-import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import React, {
+    forwardRef,
+    useEffect,
+    useImperativeHandle,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import { Box, Button, Paper, Typography, Divider } from "@mui/material";
 import QuestionCard from "./QuestionCard";
 import QuizProgressBar from "./QuizProgressBar";
@@ -26,7 +33,10 @@ const PracticePlayer = forwardRef(function PracticePlayer(
     const questions = attemptDetail?.questions || [];
     const total = questions.length;
 
-    const storageKey = useMemo(() => buildStorageKey(attemptId, attemptDetail), [attemptId, attemptDetail]);
+    const storageKey = useMemo(
+        () => buildStorageKey(attemptId, attemptDetail),
+        [attemptId, attemptDetail]
+    );
 
     const [index, setIndex] = useState(0);
 
@@ -38,6 +48,7 @@ const PracticePlayer = forwardRef(function PracticePlayer(
      */
     const [answersMap, setAnswersMap] = useState({});
 
+    // submission flag (doesn't trigger re-render)
     const submittedRef = useRef(false);
 
     const getQid = (q) => q?.questionId ?? q?.id ?? null;
@@ -176,6 +187,69 @@ const PracticePlayer = forwardRef(function PracticePlayer(
         return () => window.removeEventListener("beforeunload", handler);
     }, []);
 
+    // ===== Anti-cheat (best-effort): chặn F12/DevTools hotkeys + chuột phải + copy/paste =====
+    // Lưu ý: Không thể chặn DevTools 100% (người dùng vẫn mở được bằng cách khác).
+    useEffect(() => {
+        const onKeyDown = (e) => {
+            if (submittedRef.current) return;
+
+            const key = String(e.key || "").toLowerCase();
+            const ctrlOrMeta = e.ctrlKey || e.metaKey;
+
+            // F12
+            if (e.key === "F12") {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            // Ctrl/Meta + Shift + I/J/C (DevTools)
+            if (ctrlOrMeta && e.shiftKey && ["i", "j", "c"].includes(key)) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            // Ctrl/Meta + U (View source)
+            if (ctrlOrMeta && key === "u") {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            // Optional: chặn copy/paste/select all trong lúc làm bài
+            if (ctrlOrMeta && ["c", "v", "x", "a"].includes(key)) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+        };
+
+        const onContextMenu = (e) => {
+            if (submittedRef.current) return;
+            e.preventDefault();
+        };
+
+        const onCopyCutPaste = (e) => {
+            if (submittedRef.current) return;
+            e.preventDefault();
+        };
+
+        document.addEventListener("keydown", onKeyDown, true);
+        document.addEventListener("contextmenu", onContextMenu, true);
+        document.addEventListener("copy", onCopyCutPaste, true);
+        document.addEventListener("cut", onCopyCutPaste, true);
+        document.addEventListener("paste", onCopyCutPaste, true);
+
+        return () => {
+            document.removeEventListener("keydown", onKeyDown, true);
+            document.removeEventListener("contextmenu", onContextMenu, true);
+            document.removeEventListener("copy", onCopyCutPaste, true);
+            document.removeEventListener("cut", onCopyCutPaste, true);
+            document.removeEventListener("paste", onCopyCutPaste, true);
+        };
+    }, []);
+
     // ===== Build answers array =====
     const buildAnswersArray = () => {
         return questions.map((q) => {
@@ -184,7 +258,11 @@ const PracticePlayer = forwardRef(function PracticePlayer(
             const a = qid ? answersMap[qid] : null;
 
             if (type === "MCQ") {
-                return { questionId: qid, selectedAnswer: a?.selectedAnswer ?? null, textAnswer: "" };
+                return {
+                    questionId: qid,
+                    selectedAnswer: a?.selectedAnswer ?? null,
+                    textAnswer: "",
+                };
             }
             return { questionId: qid, textAnswer: a?.textAnswer ?? "", selectedAnswer: null };
         });
@@ -212,7 +290,9 @@ const PracticePlayer = forwardRef(function PracticePlayer(
     if (!questions.length) {
         return (
             <Paper elevation={0} sx={{ p: 2, borderRadius: 3, border: "1px solid #E3E8EF" }}>
-                <Typography sx={{ fontWeight: 800, color: "#6C757D" }}>Không có câu hỏi để làm.</Typography>
+                <Typography sx={{ fontWeight: 800, color: "#6C757D" }}>
+                    Không có câu hỏi để làm.
+                </Typography>
             </Paper>
         );
     }
@@ -245,7 +325,9 @@ const PracticePlayer = forwardRef(function PracticePlayer(
 
             <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
                 <Box>
-                    <Typography sx={{ fontWeight: 900, color: "#1B2559", fontSize: 18 }}>3) Làm bài</Typography>
+                    <Typography sx={{ fontWeight: 900, color: "#1B2559", fontSize: 18 }}>
+                        3) Làm bài
+                    </Typography>
 
                     {/* ❌ BỎ text tiến độ theo yêu cầu (không show “Tiến độ” ở header) */}
                     {/* <Typography sx={{ mt: 0.5, color: "#6C757D", fontWeight: 700 }}>
