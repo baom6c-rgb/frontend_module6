@@ -25,6 +25,7 @@ export default function AdminSettings() {
     const [form, setForm] = useState({
         passScore: "",
         minutesPerQuestion: "",
+        retestCooldownMinutes: 30,
         emailNotificationsEnabled: false,
         adminEmails: "",
     });
@@ -43,6 +44,7 @@ export default function AdminSettings() {
                 setForm({
                     passScore: data.passScore ?? "",
                     minutesPerQuestion: data.minutesPerQuestion ?? "",
+                    retestCooldownMinutes: data.retestCooldownMinutes ?? 30,
                     emailNotificationsEnabled: !!data.emailNotificationsEnabled,
                     adminEmails: data.adminEmails ?? "",
                 });
@@ -73,6 +75,7 @@ export default function AdminSettings() {
             const payload = {
                 passScore: Number(form.passScore),
                 minutesPerQuestion: Number(form.minutesPerQuestion),
+                retestCooldownMinutes: Number(form.retestCooldownMinutes),
                 emailNotificationsEnabled: form.emailNotificationsEnabled,
                 adminEmails: form.adminEmails,
             };
@@ -116,6 +119,17 @@ export default function AdminSettings() {
                             fullWidth
                             inputProps={{ min: 0, step: 0.5 }}
                         />
+
+                        <TextField
+                            label="Cooldown làm lại (phút)"
+                            type="number"
+                            value={form.retestCooldownMinutes}
+                            onChange={handleChange("retestCooldownMinutes")}
+                            fullWidth
+                            inputProps={{ min: 0, max: 1440, step: 1 }}
+                            helperText="Ví dụ: 30 phút. Sau khi trượt, học viên phải chờ đủ thời gian này mới được làm lại."
+                        />
+
                         <TextField
                             label="Email quản trị viên"
                             value={form.adminEmails}
@@ -123,6 +137,7 @@ export default function AdminSettings() {
                             fullWidth
                             placeholder="admin1@email.com, admin2@email.com"
                         />
+
                         <FormControlLabel
                             control={
                                 <Switch

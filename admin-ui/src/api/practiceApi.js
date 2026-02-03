@@ -32,4 +32,15 @@ export const practiceApi = {
         axiosPrivate
             .post(`/student/practice/v2/sessions/${sessionToken}/submit`, payload)
             .then((r) => r.data),
+
+    // ===== V2 Retest =====
+    getRetestStatusV2: (attemptId) =>
+        axiosPrivate
+            .get(`/student/practice/v2/attempts/${attemptId}/retest-status`)
+            .then((r) => r.data),
+
+    startRetestV2: (attemptId) =>
+        axiosPrivate
+            .post(`/student/practice/v2/attempts/${attemptId}/retest/start`)
+            .then((r) => r.data),
 };

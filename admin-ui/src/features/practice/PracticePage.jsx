@@ -21,7 +21,7 @@ import AccessTimeFilledRoundedIcon from "@mui/icons-material/AccessTimeFilledRou
 
 import { practiceApi } from "../../api/practiceApi";
 import { materialApi } from "../../api/materialApi";
-import { chatApi } from "../../api/chatApi"; // ✅ US17
+import { chatApi } from "../../api/chatApi";
 
 import GlobalLoading from "../../components/common/GlobalLoading";
 import { useToast } from "../../components/common/AppToast";
@@ -51,11 +51,12 @@ const MODE = {
 };
 
 const ASSISTANT_MODE = {
-    GENERATE: "GENERATE", // upload/paste + tạo đề
-    STUDY: "STUDY", // US17 keyword-only
+    GENERATE: "GENERATE",
+    STUDY: "STUDY",
 };
 
 const ACTIVE_SESSION_KEY = "practice_active_session_v2";
+const RESULT_PERSIST_KEY = "practice_result_v2";
 
 const unwrap = (res) => (res && typeof res === "object" && "data" in res ? res.data : res);
 
@@ -63,7 +64,6 @@ function uid(prefix = "m") {
     return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
-// ✅ Adapter: dùng questionKey làm questionId (ổn định -> reload không mất đáp án)
 function buildAttemptDetailFromV2(serverRes, sessionToken) {
     const qs = Array.isArray(serverRes?.questions) ? serverRes.questions : [];
 
@@ -85,11 +85,9 @@ function buildAttemptDetailFromV2(serverRes, sessionToken) {
     };
 }
 
-// ===== Upload validate =====
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_EXT_REGEX = /\.(pdf|docx|txt|xlsx)$/i;
 
-// ===== US17 keyword validation (FE sync BE) =====
 const US17_MAX_CHARS = 80;
 const US17_MAX_WORDS = 8;
 const normalizeSpaces = (s) => String(s || "").replace(/\s+/g, " ").trim();
@@ -117,12 +115,9 @@ function validateKeywords(raw) {
 export default function PracticePage() {
     const { showToast } = useToast();
 
-    // ===== Focus mode: auto-hide sidebar (integration point) =====
     useEffect(() => {
-        // 1) add body class for CSS-based hiding
         document.body.classList.add("practice-focus-mode");
 
-        // 2) dispatch events for layout/context listeners
         const fire = (open) => {
             try {
                 window.dispatchEvent(
@@ -130,17 +125,12 @@ export default function PracticePage() {
                         detail: { open, source: "PracticePage" },
                     })
                 );
-            } catch {
-                // ignore
-            }
-            // Optional hooks (không phá nếu app không có)
+            } catch {}
             try {
                 if (typeof window?.setSidebarOpen === "function") window.setSidebarOpen(open);
                 if (typeof window?.__APP_SET_SIDEBAR_OPEN__ === "function") window.__APP_SET_SIDEBAR_OPEN__(open);
                 if (window?.appSidebar && typeof window.appSidebar.setOpen === "function") window.appSidebar.setOpen(open);
-            } catch {
-                // ignore
-            }
+            } catch {}
         };
 
         fire(false);
@@ -151,45 +141,34 @@ export default function PracticePage() {
         };
     }, []);
 
-    // ===== loading =====
     const [loading, setLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState("Vui lòng chờ...");
 
-    // ===== config =====
     const [questionCount, setQuestionCount] = useState(10);
-    const [durationMinutes, setDurationMinutes] = useState(0); // auto from BE
+    const [durationMinutes, setDurationMinutes] = useState(0);
 
-    // ===== material =====
     const [materialId, setMaterialId] = useState(null);
     const materialIdRef = useRef(null);
 
-    // ===== session =====
     const [mode, setMode] = useState(MODE.IDLE);
     const [sessionToken, setSessionToken] = useState("");
     const sessionTokenRef = useRef("");
 
-    // timing from BE
     const [startedAtIso, setStartedAtIso] = useState(null);
     const [deadlineIso, setDeadlineIso] = useState(null);
 
-    // ===== Canvas =====
     const [isCanvasOpen, setIsCanvasOpen] = useState(true);
 
-    // ===== attempt detail =====
     const [attemptDetail, setAttemptDetail] = useState(null);
 
-    // ===== result/review =====
     const [result, setResult] = useState(null);
     const [reviewOpen, setReviewOpen] = useState(false);
     const [reviewData, setReviewData] = useState(null);
 
-    // player ref (timer outside auto-submit)
     const playerRef = useRef(null);
 
-    // ===== assistant mode =====
     const [assistantMode, setAssistantMode] = useState(ASSISTANT_MODE.GENERATE);
 
-    // ===== chat (GENERATE) =====
     const [messages, setMessages] = useState([
         {
             id: uid("a"),
@@ -199,7 +178,6 @@ export default function PracticePage() {
         },
     ]);
 
-    // ===== chat (STUDY - US17) =====
     const [studySessionId, setStudySessionId] = useState(null);
     const [studyMessages, setStudyMessages] = useState([
         {
@@ -233,21 +211,28 @@ export default function PracticePage() {
         return Number.isFinite(n) && n >= 1;
     }, [questionCount]);
 
-    // ===== active session persistence =====
     const saveActiveSession = useCallback((next) => {
         try {
             localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(next));
-        } catch {
-            // ignore
-        }
+        } catch {}
     }, []);
 
     const clearActiveSession = useCallback(() => {
         try {
             localStorage.removeItem(ACTIVE_SESSION_KEY);
-        } catch {
-            // ignore
-        }
+        } catch {}
+    }, []);
+
+    const savePersistedResult = useCallback((payload) => {
+        try {
+            localStorage.setItem(RESULT_PERSIST_KEY, JSON.stringify(payload));
+        } catch {}
+    }, []);
+
+    const clearPersistedResult = useCallback(() => {
+        try {
+            localStorage.removeItem(RESULT_PERSIST_KEY);
+        } catch {}
     }, []);
 
     const resetStudyChat = useCallback(() => {
@@ -262,10 +247,10 @@ export default function PracticePage() {
         ]);
     }, []);
 
-    // ===== Reset state =====
     const resetPracticeState = useCallback(
         (opts = { keepMessages: true }) => {
             clearActiveSession();
+            clearPersistedResult();
 
             setMaterialId(null);
             materialIdRef.current = null;
@@ -298,10 +283,9 @@ export default function PracticePage() {
                 setMessages([{ id: uid("a"), role: "assistant", text: "Ok! Gửi học liệu mới để bắt đầu." }]);
             }
         },
-        [appendMessage, clearActiveSession, resetStudyChat]
+        [appendMessage, clearActiveSession, clearPersistedResult, resetStudyChat]
     );
 
-    // ===== poll extracted text =====
     async function waitForExtractedTextOrReady(id) {
         const MAX_TRIES = 25;
         const SLEEP_MS = 700;
@@ -312,17 +296,12 @@ export default function PracticePage() {
                 const data = unwrap(res);
                 const t = typeof data === "string" ? data : data?.text ?? data?.extractedText ?? "";
                 if (t && t.trim().length > 0) return t.trim();
-            } catch {
-                // ignore
-            }
+            } catch {}
             await new Promise((r) => setTimeout(r, SLEEP_MS));
         }
         return "";
     }
 
-    // =========================
-    // Upload file -> chỉ tạo materialId (KHÔNG tự tạo đề)
-    // =========================
     const handleUploadFile = useCallback(
         async (file) => {
             if (!file) return;
@@ -350,6 +329,8 @@ export default function PracticePage() {
                 const data = unwrap(res);
                 const id = data?.id || data?.materialId;
                 if (!id) throw new Error("Missing materialId from upload response");
+
+                clearPersistedResult();
 
                 setMaterialId(id);
                 materialIdRef.current = id;
@@ -389,12 +370,9 @@ export default function PracticePage() {
                 setLoading(false);
             }
         },
-        [appendMessage, clearActiveSession, resetStudyChat, showToast]
+        [appendMessage, clearActiveSession, clearPersistedResult, resetStudyChat, showToast]
     );
 
-    // =========================
-    // Paste text -> tạo materialId (KHÔNG tự tạo đề)
-    // =========================
     const handleSendText = useCallback(
         async (rawText) => {
             const t = String(rawText || "").trim();
@@ -410,6 +388,8 @@ export default function PracticePage() {
                 const data = unwrap(res);
                 const id = data?.id || data?.materialId;
                 if (!id) throw new Error("Missing materialId from createFromText response");
+
+                clearPersistedResult();
 
                 setMaterialId(id);
                 materialIdRef.current = id;
@@ -442,23 +422,16 @@ export default function PracticePage() {
                 console.error(e);
                 const status = e?.response?.status;
                 const serverMsg =
-                    e?.response?.data?.message ||
-                    e?.response?.data?.error ||
-                    e?.response?.data ||
-                    e?.message ||
-                    "Create material failed";
+                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Create material failed";
                 showToast(`Gửi học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
                 appendMessage({ role: "assistant", text: "Không tạo được học liệu từ text này. Thử lại nhé." });
             } finally {
                 setLoading(false);
             }
         },
-        [appendMessage, clearActiveSession, resetStudyChat, showToast]
+        [appendMessage, clearActiveSession, clearPersistedResult, resetStudyChat, showToast]
     );
 
-    // =========================
-    // US17: boot chat session when switch to STUDY
-    // =========================
     useEffect(() => {
         const boot = async () => {
             if (assistantMode !== ASSISTANT_MODE.STUDY) return;
@@ -548,153 +521,136 @@ export default function PracticePage() {
         [appendStudyMessage, loading, materialId, showToast, studySessionId]
     );
 
-    // =========================
-    // V2 Step 1: Generate session (duration lấy từ BE)
-    // =========================
-    const generateSessionV2 = useCallback(
-        async () => {
-            const matId = materialIdRef.current ?? materialId;
+    const generateSessionV2 = useCallback(async () => {
+        const matId = materialIdRef.current ?? materialId;
 
-            if (!matId) {
-                showToast("Chưa có học liệu. Hãy upload/paste trước.", "warning");
-                return { ok: false };
-            }
-            if (!configOk) {
-                showToast("Số câu hỏi chưa hợp lệ.", "warning");
-                return { ok: false };
-            }
+        if (!matId) {
+            showToast("Chưa có học liệu. Hãy upload/paste trước.", "warning");
+            return { ok: false };
+        }
+        if (!configOk) {
+            showToast("Số câu hỏi chưa hợp lệ.", "warning");
+            return { ok: false };
+        }
 
-            setLoading(true);
-            setLoadingMessage("AI đang tạo đề…");
-            appendMessage({ role: "assistant", text: "AI đang tạo đề… (thời gian lấy từ BE)" });
+        clearPersistedResult();
 
-            try {
-                const data = await practiceApi.generateSessionV2({
-                    materialId: matId,
-                    numberOfQuestions: Number(questionCount),
-                });
+        setLoading(true);
+        setLoadingMessage("AI đang tạo đề…");
+        appendMessage({ role: "assistant", text: "AI đang tạo đề… (thời gian lấy từ BE)" });
 
-                const token = data?.sessionToken;
-                const dur = data?.durationMinutes;
+        try {
+            const data = await practiceApi.generateSessionV2({
+                materialId: matId,
+                numberOfQuestions: Number(questionCount),
+            });
 
-                if (!token) throw new Error("Missing sessionToken from server");
-                if (!Number.isFinite(Number(dur))) throw new Error("Missing durationMinutes from server");
+            const token = data?.sessionToken;
+            const dur = data?.durationMinutes;
 
-                setSessionToken(token);
-                sessionTokenRef.current = token;
+            if (!token) throw new Error("Missing sessionToken from server");
+            if (!Number.isFinite(Number(dur))) throw new Error("Missing durationMinutes from server");
 
-                setDurationMinutes(Number(dur));
+            setSessionToken(token);
+            sessionTokenRef.current = token;
 
-                setStartedAtIso(null);
-                setDeadlineIso(null);
+            setDurationMinutes(Number(dur));
 
-                setMode(MODE.READY);
-                setIsCanvasOpen(true);
+            setStartedAtIso(null);
+            setDeadlineIso(null);
 
-                saveActiveSession({
-                    mode: MODE.READY,
-                    sessionToken: token,
-                    attemptId: token,
-                    materialId: matId,
-                    questionCount: Number(questionCount),
-                    durationMinutes: Number(dur),
-                    startedAtIso: null,
-                    deadlineIso: null,
-                });
+            setMode(MODE.READY);
+            setIsCanvasOpen(true);
 
-                appendMessage({
-                    role: "assistant",
-                    text: `Đã tạo đề xong. Thời gian làm bài: ${Number(dur)} phút. Bấm “Bắt đầu làm bài” ở Canvas.`,
-                });
+            saveActiveSession({
+                mode: MODE.READY,
+                sessionToken: token,
+                attemptId: token,
+                materialId: matId,
+                questionCount: Number(questionCount),
+                durationMinutes: Number(dur),
+                startedAtIso: null,
+                deadlineIso: null,
+            });
 
-                return { ok: true, token, durationMinutes: Number(dur) };
-            } catch (e) {
-                console.error(e);
-                const status = e?.response?.status;
-                const serverMsg =
-                    e?.response?.data?.message ||
-                    e?.response?.data?.error ||
-                    e?.response?.data ||
-                    e?.message ||
-                    "Generate failed";
-                showToast(`Không tạo được đề${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
-                appendMessage({ role: "assistant", text: "Lỗi tạo đề (AI/Server). Thử gửi lại hoặc đổi học liệu." });
-                return { ok: false };
-            } finally {
-                setLoading(false);
-            }
-        },
-        [appendMessage, configOk, materialId, questionCount, saveActiveSession, showToast]
-    );
+            appendMessage({
+                role: "assistant",
+                text: `Đã tạo đề xong. Thời gian làm bài: ${Number(dur)} phút. Bấm “Bắt đầu làm bài” ở Canvas.`,
+            });
 
-    // =========================
-    // V2 Step 2: Start session
-    // =========================
-    const startSessionV2 = useCallback(
-        async () => {
-            const token = sessionTokenRef.current || sessionToken;
+            return { ok: true, token, durationMinutes: Number(dur) };
+        } catch (e) {
+            console.error(e);
+            const status = e?.response?.status;
+            const serverMsg =
+                e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Generate failed";
+            showToast(`Không tạo được đề${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
+            appendMessage({ role: "assistant", text: "Lỗi tạo đề (AI/Server). Thử gửi lại hoặc đổi học liệu." });
+            return { ok: false };
+        } finally {
+            setLoading(false);
+        }
+    }, [appendMessage, clearPersistedResult, configOk, materialId, questionCount, saveActiveSession, showToast]);
 
-            if (!token) {
-                showToast("Chưa có đề. Hãy bấm Gửi để tạo đề trước.", "warning");
-                return;
+    const startSessionV2 = useCallback(async () => {
+        const token = sessionTokenRef.current || sessionToken;
+
+        if (!token) {
+            showToast("Chưa có đề. Hãy bấm Gửi để tạo đề trước.", "warning");
+            return;
+        }
+
+        setLoading(true);
+        setLoadingMessage("Đang bắt đầu làm bài…");
+
+        try {
+            const data = await practiceApi.startSessionV2({ sessionToken: token });
+
+            if (Number.isFinite(Number(data?.durationMinutes))) {
+                setDurationMinutes(Number(data.durationMinutes));
             }
 
-            setLoading(true);
-            setLoadingMessage("Đang bắt đầu làm bài…");
+            const detail = buildAttemptDetailFromV2(data, token);
+            setAttemptDetail(detail);
 
-            try {
-                const data = await practiceApi.startSessionV2({ sessionToken: token });
+            const startedAt = data?.startedAt || null;
+            const deadline = data?.deadline || null;
 
-                if (Number.isFinite(Number(data?.durationMinutes))) {
-                    setDurationMinutes(Number(data.durationMinutes));
-                }
+            setStartedAtIso(startedAt);
+            setDeadlineIso(deadline);
 
-                const detail = buildAttemptDetailFromV2(data, token);
-                setAttemptDetail(detail);
+            setMode(MODE.DOING);
+            setIsCanvasOpen(true);
 
-                const startedAt = data?.startedAt || null;
-                const deadline = data?.deadline || null;
+            saveActiveSession({
+                mode: MODE.DOING,
+                sessionToken: token,
+                attemptId: token,
+                materialId: materialIdRef.current ?? materialId,
+                questionCount: Number(questionCount),
+                durationMinutes: Number.isFinite(Number(data?.durationMinutes))
+                    ? Number(data.durationMinutes)
+                    : Number(durationMinutes),
+                startedAtIso: startedAt,
+                deadlineIso: deadline,
+            });
 
-                setStartedAtIso(startedAt);
-                setDeadlineIso(deadline);
+            appendMessage({ role: "assistant", text: "Bắt đầu rồi! Làm bài ở Canvas bên phải nhé." });
+        } catch (e) {
+            console.error(e);
+            const status = e?.response?.status;
+            const msg =
+                e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Start failed";
+            showToast(`Không bắt đầu được${status ? ` (${status})` : ""}: ${String(msg)}`, "error");
+            appendMessage({
+                role: "assistant",
+                text: "Không start được. Session có thể đã hết hạn, hãy bấm Gửi để tạo lại đề.",
+            });
+        } finally {
+            setLoading(false);
+        }
+    }, [appendMessage, durationMinutes, materialId, questionCount, saveActiveSession, sessionToken, showToast]);
 
-                setMode(MODE.DOING);
-                setIsCanvasOpen(true);
-
-                saveActiveSession({
-                    mode: MODE.DOING,
-                    sessionToken: token,
-                    attemptId: token,
-                    materialId: materialIdRef.current ?? materialId,
-                    questionCount: Number(questionCount),
-                    durationMinutes: Number.isFinite(Number(data?.durationMinutes))
-                        ? Number(data.durationMinutes)
-                        : Number(durationMinutes),
-                    startedAtIso: startedAt,
-                    deadlineIso: deadline,
-                });
-
-                appendMessage({ role: "assistant", text: "Bắt đầu rồi! Làm bài ở Canvas bên phải nhé." });
-            } catch (e) {
-                console.error(e);
-                const status = e?.response?.status;
-                const msg =
-                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Start failed";
-                showToast(`Không bắt đầu được${status ? ` (${status})` : ""}: ${String(msg)}`, "error");
-                appendMessage({
-                    role: "assistant",
-                    text: "Không start được. Session có thể đã hết hạn, hãy bấm Gửi để tạo lại đề.",
-                });
-            } finally {
-                setLoading(false);
-            }
-        },
-        [appendMessage, durationMinutes, materialId, questionCount, saveActiveSession, sessionToken, showToast]
-    );
-
-    // =========================
-    // Submit V2
-    // =========================
     const submitSessionV2 = useCallback(
         async (answersArray, meta = {}) => {
             const token = sessionTokenRef.current || sessionToken;
@@ -722,10 +678,19 @@ export default function PracticePage() {
                 setMode(MODE.RESULT);
                 setIsCanvasOpen(true);
 
+                savePersistedResult({
+                    materialId: materialIdRef.current ?? materialId ?? null,
+                    questionCount: Number(questionCount),
+                    durationMinutes: Number(durationMinutes),
+                    result: data,
+                    savedAt: Date.now(),
+                });
+
                 saveActiveSession({
                     mode: MODE.RESULT,
                     sessionToken: token,
                     attemptId: data?.attemptId ?? null,
+                    materialId: materialIdRef.current ?? materialId ?? null,
                 });
 
                 appendMessage({
@@ -743,12 +708,9 @@ export default function PracticePage() {
                 setLoading(false);
             }
         },
-        [appendMessage, saveActiveSession, sessionToken, showToast]
+        [appendMessage, durationMinutes, materialId, questionCount, saveActiveSession, savePersistedResult, sessionToken, showToast]
     );
 
-    // =========================
-    // Review
-    // =========================
     const openReview = useCallback(async () => {
         const attemptId = result?.attemptId;
         if (!attemptId) {
@@ -768,14 +730,93 @@ export default function PracticePage() {
         }
     }, [result?.attemptId, showToast]);
 
-    // =========================
-    // RESUME after reload
-    // =========================
+    // ✅ Start retest (BE decides weak areas based on wrong answers + ai feedback)
+    const startRetestV2 = useCallback(
+        async (attemptId) => {
+            if (!attemptId) return;
+
+            setLoading(true);
+            setLoadingMessage("Đang tạo bài thi lại…");
+
+            try {
+                const data = await practiceApi.startRetestV2(attemptId);
+
+                const token = data?.sessionToken;
+                if (!token) throw new Error("Missing sessionToken from retest start response");
+
+                // retest start success => clear old result persisted
+                clearPersistedResult();
+                setResult(null);
+
+                setSessionToken(token);
+                sessionTokenRef.current = token;
+
+                if (Number.isFinite(Number(data?.durationMinutes))) setDurationMinutes(Number(data.durationMinutes));
+
+                const detail = buildAttemptDetailFromV2(data, token);
+                setAttemptDetail(detail);
+
+                const startedAt = data?.startedAt || null;
+                const deadline = data?.deadline || null;
+                setStartedAtIso(startedAt);
+                setDeadlineIso(deadline);
+
+                setMode(MODE.DOING);
+                setIsCanvasOpen(true);
+
+                saveActiveSession({
+                    mode: MODE.DOING,
+                    sessionToken: token,
+                    attemptId: token,
+                    materialId: materialIdRef.current ?? materialId ?? null,
+                    questionCount: Number(questionCount),
+                    durationMinutes: Number.isFinite(Number(data?.durationMinutes))
+                        ? Number(data.durationMinutes)
+                        : Number(durationMinutes),
+                    startedAtIso: startedAt,
+                    deadlineIso: deadline,
+                });
+
+                appendMessage({ role: "assistant", text: "Ok! Mình đã tạo bài thi lại tập trung phần sai. Bắt đầu làm nhé." });
+            } catch (e) {
+                console.error(e);
+                const status = e?.response?.status;
+                const msg =
+                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Retest failed";
+                showToast(`Không tạo được bài thi lại${status ? ` (${status})` : ""}: ${String(msg)}`, "error");
+            } finally {
+                setLoading(false);
+            }
+        },
+        [appendMessage, clearPersistedResult, durationMinutes, materialId, questionCount, saveActiveSession, showToast]
+    );
+
     useEffect(() => {
         let cancelled = false;
 
         const resume = async () => {
             try {
+                const rawResult = localStorage.getItem(RESULT_PERSIST_KEY);
+                if (rawResult) {
+                    const pr = JSON.parse(rawResult);
+
+                    const r = pr?.result || null;
+                    if (r && !cancelled) {
+                        if (pr?.materialId) {
+                            setMaterialId(pr.materialId);
+                            materialIdRef.current = pr.materialId;
+                        }
+
+                        if (typeof pr?.questionCount === "number") setQuestionCount(pr.questionCount);
+                        if (typeof pr?.durationMinutes === "number") setDurationMinutes(pr.durationMinutes);
+
+                        setResult(r);
+                        setMode(MODE.RESULT);
+                        setIsCanvasOpen(true);
+                        return;
+                    }
+                }
+
                 const raw = localStorage.getItem(ACTIVE_SESSION_KEY);
                 const sess = raw ? JSON.parse(raw) : null;
                 if (!sess?.sessionToken) return;
@@ -787,12 +828,9 @@ export default function PracticePage() {
                 if (typeof sess?.questionCount === "number") setQuestionCount(sess.questionCount);
                 if (typeof sess?.durationMinutes === "number") setDurationMinutes(sess.durationMinutes);
 
-                if (sess?.mode === MODE.RESULT) {
-                    if (!cancelled) {
-                        setMode(MODE.RESULT);
-                        setIsCanvasOpen(true);
-                    }
-                    return;
+                if (sess?.materialId) {
+                    setMaterialId(sess.materialId);
+                    materialIdRef.current = sess.materialId;
                 }
 
                 setLoading(true);
@@ -859,9 +897,8 @@ export default function PracticePage() {
                 console.error(e);
                 try {
                     localStorage.removeItem(ACTIVE_SESSION_KEY);
-                } catch {
-                    // ignore
-                }
+                    localStorage.removeItem(RESULT_PERSIST_KEY);
+                } catch {}
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -874,7 +911,6 @@ export default function PracticePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // ===== Timer startTs (source-of-truth from BE) =====
     const attemptStartTs = useMemo(() => {
         if (startedAtIso) {
             const ts = Date.parse(startedAtIso);
@@ -942,21 +978,17 @@ export default function PracticePage() {
         return t || null;
     }, [sessionToken]);
 
-    // ===== UI: auto time from BE + lock duration input =====
     const durationLabel = useMemo(() => {
         if (Number(durationMinutes) > 0) return durationMinutes;
         if (mode === MODE.IDLE) return 0;
         return durationMinutes;
     }, [durationMinutes, mode]);
 
-    // ===== Layout: 70% Canvas - 30% AI panel (flexbox) =====
     const leftWidth = isCanvasOpen && isSplit ? "30%" : "100%";
     const rightWidth = isCanvasOpen && isSplit ? "70%" : "0%";
 
-    // upload chỉ mở ở GENERATE và không phải lúc DOING
     const allowUpload = assistantMode === ASSISTANT_MODE.GENERATE && mode !== MODE.DOING;
 
-    // ===== Floating timer: luôn visible dù Canvas đóng/mở (khi đã DOING) =====
     const showFloatingTimer = mode === MODE.DOING && Boolean(attemptStartTs) && Number(durationMinutes) > 0;
 
     return (
@@ -972,7 +1004,6 @@ export default function PracticePage() {
                 position: "relative",
             }}
         >
-            {/* Floating countdown (độc lập canvas, giống nút '>') */}
             {showFloatingTimer && (
                 <Paper
                     elevation={0}
@@ -1013,7 +1044,7 @@ export default function PracticePage() {
             )}
 
             <Box sx={{ display: "flex", flex: 1, gap: 2, minHeight: 0, overflow: "hidden" }}>
-                {/* LEFT: AI Panel (30%) */}
+                {/* LEFT: AI Panel */}
                 <Box
                     sx={{
                         width: leftWidth,
@@ -1038,19 +1069,16 @@ export default function PracticePage() {
                             bgcolor: "#fff",
                         }}
                     >
-                        {/* Header config */}
                         <Box sx={{ p: 2, pb: 0 }}>
                             <PracticeHeaderConfig
                                 questionCount={questionCount}
                                 durationMinutes={durationLabel}
                                 onChangeQuestionCount={(v) => setQuestionCount(Number(v))}
                                 attemptId={mode === MODE.DOING ? doingAttemptId : null}
-                                // ✅ timer đã chuyển ra ngoài (floating), không render trong header nữa
                                 attemptStartTs={null}
                                 onTimeExpired={null}
                             />
 
-                            {/* Assistant mode switch */}
                             <Box sx={{ mt: 1.5, px: 0.5 }}>
                                 <Paper
                                     elevation={0}
@@ -1067,9 +1095,7 @@ export default function PracticePage() {
                                                 AI Practice Assistant
                                             </Typography>
                                             <Typography sx={{ fontSize: 12, color: COLORS.textSecondary }}>
-                                                {assistantMode === ASSISTANT_MODE.GENERATE
-                                                    ? "Upload/Paste để tạo đề"
-                                                    : "Keyword-only • Không đáp án"}
+                                                {assistantMode === ASSISTANT_MODE.GENERATE ? "Upload/Paste để tạo đề" : "Keyword-only • Không đáp án"}
                                             </Typography>
                                         </Stack>
 
@@ -1107,7 +1133,6 @@ export default function PracticePage() {
                             </Box>
                         </Box>
 
-                        {/* Chat Stream (scroll inside) */}
                         <Box
                             sx={{
                                 flex: 1,
@@ -1126,7 +1151,6 @@ export default function PracticePage() {
                             </Box>
                         </Box>
 
-                        {/* Composer */}
                         <Box sx={{ p: 2, pt: 0 }}>
                             <ChatComposer
                                 allowUpload={allowUpload}
@@ -1143,7 +1167,7 @@ export default function PracticePage() {
                     </Paper>
                 </Box>
 
-                {/* RIGHT: Canvas (70%) */}
+                {/* RIGHT: Canvas */}
                 {isSplit && (
                     <Box
                         sx={{
@@ -1160,7 +1184,6 @@ export default function PracticePage() {
                             minHeight: 0,
                         }}
                     >
-                        {/* Header Canvas: nút đổi học liệu chuyển sang góc bên trái */}
                         <Box
                             sx={{
                                 p: 1.5,
@@ -1274,7 +1297,15 @@ export default function PracticePage() {
                                 <PracticeResult
                                     result={result}
                                     numberOfQuestions={Number(questionCount)}
-                                    onRetry={() => {
+                                    onRetry={async () => {
+                                        // ✅ Retest: button sẽ chỉ enable khi BE cho phép (PracticeResult handle)
+                                        const attemptId = result?.attemptId;
+                                        if (attemptId) {
+                                            await startRetestV2(attemptId);
+                                            return;
+                                        }
+
+                                        // fallback
                                         setResult(null);
                                         setAttemptDetail(null);
                                         setStartedAtIso(null);
@@ -1287,6 +1318,7 @@ export default function PracticePage() {
                                         setDurationMinutes(0);
 
                                         clearActiveSession();
+                                        clearPersistedResult();
                                         appendMessage({ role: "assistant", text: "Ok! Bạn có thể bấm “Tạo đề ngay” để làm lại." });
                                     }}
                                     onNewMaterial={() => resetPracticeState({ keepMessages: true })}
@@ -1298,7 +1330,6 @@ export default function PracticePage() {
                 )}
             </Box>
 
-            {/* Toggle Canvas: đẩy lên giữa cạnh phải như ảnh */}
             {isSplit && (
                 <Box
                     sx={{
@@ -1327,11 +1358,7 @@ export default function PracticePage() {
                                 },
                             }}
                         >
-                            {isCanvasOpen ? (
-                                <ChevronRightRoundedIcon sx={{ color: "#fff" }} />
-                            ) : (
-                                <ChevronLeftRoundedIcon sx={{ color: "#fff" }} />
-                            )}
+                            {isCanvasOpen ? <ChevronRightRoundedIcon sx={{ color: "#fff" }} /> : <ChevronLeftRoundedIcon sx={{ color: "#fff" }} />}
                         </IconButton>
                     </Tooltip>
                 </Box>
