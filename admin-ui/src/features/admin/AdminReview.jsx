@@ -465,7 +465,7 @@ const AdminReview = () => {
                     const scorePercent = params.row.totalScore
                         ? (Number(params.row.score) / Number(params.row.totalScore)) * 100
                         : 0;
-                    const isPassed = scorePercent >= 50;
+                    const isPassed = scorePercent >= 80;
 
                     return (
                         <Box
