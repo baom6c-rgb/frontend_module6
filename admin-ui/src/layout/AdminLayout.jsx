@@ -219,11 +219,18 @@ const AdminLayout = () => {
     const doLogout = () => {
         handleClose();
 
+        // ✅ clear Practice persisted state (v2)
+        localStorage.removeItem("practice_active_session_v2");
+        localStorage.removeItem("practice_result_v2");
+
         dispatch(logout());
 
         localStorage.removeItem("pendingApproval");
         localStorage.removeItem("onboardingCreated");
         localStorage.removeItem("refreshToken");
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("userRoles");
+        localStorage.removeItem("userData");
 
         navigate("/login", { replace: true });
     };
