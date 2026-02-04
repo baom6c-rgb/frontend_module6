@@ -234,6 +234,10 @@ export default function UserLayout() {
     // ===== Logout =====
     const doLogout = () => {
         closeMenu();
+        // ✅ clear Practice persisted state (v2)
+        localStorage.removeItem("practice_active_session_v2");
+        localStorage.removeItem("practice_result_v2");
+
         dispatch(logout());
         localStorage.removeItem("accessToken");
         localStorage.removeItem("userRoles");
