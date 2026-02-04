@@ -19,12 +19,10 @@ import {
     alpha,
 } from "@mui/material";
 import {
-    Settings as SettingsIcon,
     Email as EmailIcon,
     Assessment as AssessmentIcon,
     School as SchoolIcon,
     Schedule as ScheduleIcon,
-    Language as LanguageIcon,
     CheckCircle as CheckCircleIcon,
 } from "@mui/icons-material";
 
@@ -43,6 +41,14 @@ const isValidTimeHHmm = (s) => {
     return /^([01]\d|2[0-3]):[0-5]\d$/.test(s.trim());
 };
 
+const formatYearMonthToMMYYYY = (ym) => {
+    if (!ym || typeof ym !== "string") return "";
+    const m = ym.trim().match(/^(\d{4})-(\d{2})$/);
+    if (!m) return ym;
+    const year = m[1];
+    const month = m[2]; // đã là 2-digit
+    return `${month}/${year}`; // "02/2026"
+};
 const TIME_PRESETS = [
     "00:00",
     "06:00",
@@ -220,8 +226,29 @@ export default function AdminSettings() {
             };
 
             const updated = await adminSettingsApi.update(payload);
+
             setUpdatedAt(updated.updatedAt ?? null);
-            setLastSentYearMonth(updated.monthlyReportLastSentYearMonth ?? null);
+            setLastSentYearMonth(updated.monthlyReportLastSentYearMonth ?? lastSentYearMonth);
+
+            const monthlyTime = updated.monthlyReportTime ?? form.monthlyReportTime ?? "23:59";
+            const isPreset = TIME_PRESETS.includes(monthlyTime);
+            setTimeMode(isPreset ? "preset" : "custom");
+            setTimePresetValue(isPreset ? monthlyTime : timePresetValue);
+
+            setForm((prev) => ({
+                ...prev,
+                passScore: updated.passScore ?? prev.passScore,
+                minutesPerQuestion: updated.minutesPerQuestion ?? prev.minutesPerQuestion,
+                retestCooldownMinutes: updated.retestCooldownMinutes ?? prev.retestCooldownMinutes,
+
+                emailNotificationsEnabled: !!updated.emailNotificationsEnabled,
+                adminEmails: updated.adminEmails ?? prev.adminEmails,
+
+                monthlyReportEnabled: !!updated.monthlyReportEnabled,
+                monthlyReportDayOfMonth: updated.monthlyReportDayOfMonth ?? prev.monthlyReportDayOfMonth,
+                monthlyReportTime: monthlyTime,
+                monthlyReportTimeZone: updated.monthlyReportTimeZone ?? prev.monthlyReportTimeZone,
+            }));
 
             showToast("Lưu cấu hình thành công!", "success");
         } catch {
@@ -458,6 +485,7 @@ export default function AdminSettings() {
                                 alignItems: "center",
                                 justifyContent: "center",
                                 width: 40,
+                                /* height: 40, */
                                 height: 40,
                                 borderRadius: 1.5,
                                 bgcolor: (theme) => alpha(theme.palette.success.main, 0.1),
@@ -619,7 +647,7 @@ export default function AdminSettings() {
                                 }}
                             >
                                 <Typography variant="body2" color="info.main">
-                                    📊 Đã gửi gần nhất: <strong>{lastSentYearMonth}</strong>
+                                    📊 Đã gửi gần nhất: {formatYearMonthToMMYYYY(lastSentYearMonth)}
                                 </Typography>
                             </Box>
                         )}
