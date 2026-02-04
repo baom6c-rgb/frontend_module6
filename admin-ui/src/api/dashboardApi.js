@@ -49,4 +49,25 @@ export const getDashboardStatsApi = () => {
     return dashboardClient.get("/users/dashboard/stats");
 };
 
+// =====================================================
+// ADMIN DASHBOARD API (BỔ SUNG ĐÚNG THỨ CẦN)
+// =====================================================
+
+/**
+ * Tổng quan admin dashboard
+ * POST /admin/analytics/overview
+ * Trả full response (bao gồm students + atRiskStudents + timeSeries...)
+ */
+export const getAdminAnalyticsOverviewApi = (payload) => {
+    return dashboardClient.post("/admin/analytics/overview", payload);
+};
+
+/**
+ * AI insights cho admin dashboard
+ * POST /admin/analytics/ai-insights
+ */
+export const getAdminAiInsightsApi = (payload) => {
+    return dashboardClient.post("/admin/analytics/ai-insights", payload);
+};
+
 export default dashboardClient;
