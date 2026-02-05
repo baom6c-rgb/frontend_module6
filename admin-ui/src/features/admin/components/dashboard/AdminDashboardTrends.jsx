@@ -25,6 +25,7 @@ const CardShell = ({ children, sx }) => (
             background: COLORS.white,
             boxShadow: "0px 18px 45px rgba(15, 23, 42, 0.06)",
             overflow: "hidden",
+            minWidth: 0, // ✅ chống vỡ
             ...sx,
         }}
     >
@@ -75,13 +76,10 @@ export default function AdminDashboardTrends({ timeSeries = [] }) {
     );
 
     return (
-        <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
+        <Grid container spacing={3} alignItems="stretch">
+            <Grid item xs={12} md={6} sx={{ minWidth: 0 }}>
                 <CardShell sx={{ height: "100%" }}>
-                    <ChartHeader
-                        title="Attempts theo ngày"
-                        subtitle="Giúp thấy volume học tập tăng/giảm theo thời gian"
-                    />
+                    <ChartHeader title="Attempts theo ngày" subtitle="Giúp thấy volume học tập tăng/giảm theo thời gian" />
                     <Divider sx={{ borderColor: COLORS.border }} />
                     <Box sx={{ p: 2.5 }}>
                         <ResponsiveContainer width="100%" height={280}>
@@ -90,7 +88,7 @@ export default function AdminDashboardTrends({ timeSeries = [] }) {
                                 <XAxis dataKey="name" stroke={COLORS.textSecondary} axisLine={false} tickLine={false} />
                                 <YAxis stroke={COLORS.textSecondary} axisLine={false} tickLine={false} />
                                 <Tooltip
-                                    formatter={(value, name, props) => {
+                                    formatter={(value, name) => {
                                         if (name === "attempts") return [value, "Tổng bài làm"];
                                         return [value, name];
                                     }}
@@ -109,12 +107,9 @@ export default function AdminDashboardTrends({ timeSeries = [] }) {
                 </CardShell>
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6} sx={{ minWidth: 0 }}>
                 <CardShell sx={{ height: "100%" }}>
-                    <ChartHeader
-                        title="Tỉ lệ đạt theo ngày"
-                        subtitle="Nhìn trend để biết tuần này đang tốt lên hay xấu đi"
-                    />
+                    <ChartHeader title="Tỉ lệ đạt theo ngày" subtitle="Nhìn trend để biết tuần này đang tốt lên hay xấu đi" />
                     <Divider sx={{ borderColor: COLORS.border }} />
                     <Box sx={{ p: 2.5 }}>
                         <ResponsiveContainer width="100%" height={280}>
