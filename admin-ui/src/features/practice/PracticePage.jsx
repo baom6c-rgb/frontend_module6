@@ -303,7 +303,7 @@ export default function PracticePage() {
             setIsCanvasOpen(true);
 
             setAssistantMode(ASSISTANT_MODE.GENERATE);
-            resetStudyChat();
+            resetStudyChat(); // ✅ chỉ reset khi đổi học liệu
 
             if (opts?.keepMessages) {
                 appendMessage({
@@ -371,7 +371,7 @@ export default function PracticePage() {
                 setStartedAtIso(null);
                 setDeadlineIso(null);
                 setAttemptDetail(null);
-                setAttemptQuestionCount(null); // ✅ reset frozen count
+                setAttemptQuestionCount(null);
 
                 setResult(null);
                 setReviewOpen(false);
@@ -380,7 +380,7 @@ export default function PracticePage() {
                 setDurationMinutes(0);
                 clearActiveSession();
 
-                resetStudyChat();
+                resetStudyChat(); // ✅ đổi học liệu => reset chat
 
                 const extracted = await waitForExtractedTextOrReady(id);
 
@@ -436,7 +436,7 @@ export default function PracticePage() {
                 setStartedAtIso(null);
                 setDeadlineIso(null);
                 setAttemptDetail(null);
-                setAttemptQuestionCount(null); // ✅ reset frozen count
+                setAttemptQuestionCount(null);
 
                 setResult(null);
                 setReviewOpen(false);
@@ -445,7 +445,7 @@ export default function PracticePage() {
                 setDurationMinutes(0);
                 clearActiveSession();
 
-                resetStudyChat();
+                resetStudyChat(); // ✅ đổi học liệu => reset chat
 
                 const extracted = await waitForExtractedTextOrReady(id);
 
@@ -605,7 +605,6 @@ export default function PracticePage() {
             setMode(MODE.READY);
             setIsCanvasOpen(true);
 
-            // ✅ đây vẫn là config, chưa “đóng băng” attempt
             saveActiveSession({
                 mode: MODE.READY,
                 sessionToken: token,
@@ -657,7 +656,6 @@ export default function PracticePage() {
             const detail = buildAttemptDetailFromV2(data, token);
             setAttemptDetail(detail);
 
-            // ✅ đóng băng số câu theo attempt thật (không phụ thuộc header)
             const qLen = Array.isArray(detail?.questions) ? detail.questions.length : null;
             if (qLen != null) setAttemptQuestionCount(qLen);
 
@@ -669,6 +667,9 @@ export default function PracticePage() {
 
             setMode(MODE.DOING);
             setIsCanvasOpen(true);
+
+            // ✅ AUTO SWITCH (KHÔNG reset chat)
+            setAssistantMode(ASSISTANT_MODE.STUDY);
 
             saveActiveSession({
                 mode: MODE.DOING,
@@ -683,7 +684,10 @@ export default function PracticePage() {
                 deadlineIso: deadline,
             });
 
-            appendMessage({ role: "assistant", text: "Bắt đầu làm bài!" });
+            appendMessage({
+                role: "assistant",
+                text: "Bắt đầu làm bài! Mình đã chuyển sang tab “Hỏi khái niệm” để bạn hỏi nhanh trong lúc làm.",
+            });
         } catch (e) {
             console.error(e);
             const status = e?.response?.status;
@@ -726,7 +730,6 @@ export default function PracticePage() {
                 setMode(MODE.RESULT);
                 setIsCanvasOpen(true);
 
-                // ✅ persist frozen count để reload vẫn đúng “số câu đã làm”
                 const frozenCount =
                     (typeof attemptQuestionCount === "number" ? attemptQuestionCount : null) ??
                     (Array.isArray(attemptDetail?.questions) ? attemptDetail.questions.length : null) ??
@@ -734,8 +737,8 @@ export default function PracticePage() {
 
                 savePersistedResult({
                     materialId: materialIdRef.current ?? materialId ?? null,
-                    questionCount: Number(questionCount), // config (giữ lại)
-                    attemptQuestionCount: frozenCount, // ✅ attempt (đúng cho RESULT)
+                    questionCount: Number(questionCount),
+                    attemptQuestionCount: frozenCount,
                     durationMinutes: Number(durationMinutes),
                     result: data,
                     savedAt: Date.now(),
@@ -796,7 +799,6 @@ export default function PracticePage() {
         }
     }, [result?.attemptId, showToast]);
 
-    // ✅ Start retest (BE decides weak areas based on wrong answers + ai feedback)
     const startRetestV2 = useCallback(
         async (attemptId) => {
             if (!attemptId) return;
@@ -810,7 +812,6 @@ export default function PracticePage() {
                 const token = data?.sessionToken;
                 if (!token) throw new Error("Missing sessionToken from retest start response");
 
-                // retest start success => clear old result persisted
                 clearPersistedResult();
                 setResult(null);
 
@@ -822,7 +823,6 @@ export default function PracticePage() {
                 const detail = buildAttemptDetailFromV2(data, token);
                 setAttemptDetail(detail);
 
-                // ✅ đóng băng số câu theo retest attempt thật
                 const qLen = Array.isArray(detail?.questions) ? detail.questions.length : null;
                 if (qLen != null) setAttemptQuestionCount(qLen);
 
@@ -833,6 +833,9 @@ export default function PracticePage() {
 
                 setMode(MODE.DOING);
                 setIsCanvasOpen(true);
+
+                // ✅ AUTO SWITCH (KHÔNG reset chat)
+                setAssistantMode(ASSISTANT_MODE.STUDY);
 
                 saveActiveSession({
                     mode: MODE.DOING,
@@ -880,7 +883,6 @@ export default function PracticePage() {
                         if (typeof pr?.questionCount === "number") setQuestionCount(pr.questionCount);
                         if (typeof pr?.durationMinutes === "number") setDurationMinutes(pr.durationMinutes);
 
-                        // ✅ restore frozen attempt count (ưu tiên attemptQuestionCount)
                         if (typeof pr?.attemptQuestionCount === "number") setAttemptQuestionCount(pr.attemptQuestionCount);
 
                         setResult(r);
@@ -927,12 +929,14 @@ export default function PracticePage() {
                     if (!cancelled) {
                         setAttemptDetail(detail);
 
-                        // ✅ đóng băng số câu khi resume DOING
                         const qLen = Array.isArray(detail?.questions) ? detail.questions.length : null;
                         if (qLen != null) setAttemptQuestionCount(qLen);
 
                         setMode(MODE.DOING);
                         setIsCanvasOpen(true);
+
+                        // ✅ AUTO SWITCH khi resume DOING
+                        setAssistantMode(ASSISTANT_MODE.STUDY);
 
                         appendMessage({
                             role: "assistant",
@@ -1052,12 +1056,11 @@ export default function PracticePage() {
         );
     };
 
-    const ChatTypingBubble = ({ role }) => {
-        const isUser = role === "user";
+    const ChatTypingBubble = () => {
         return (
             <Box sx={{ display: "flex", gap: 1.5, mb: 2.5, flexDirection: "row" }}>
                 <Avatar
-                    src={isUser ? undefined : "/images/AI_logo.png"}
+                    src={"/images/AI_logo.png"}
                     sx={{
                         width: 32,
                         height: 32,
@@ -1115,7 +1118,6 @@ export default function PracticePage() {
 
     const showFloatingTimer = mode === MODE.DOING && Boolean(attemptStartTs) && Number(durationMinutes) > 0;
 
-    // ✅ số câu hiển thị trong RESULT: ưu tiên attemptQuestionCount (đóng băng)
     const resultQuestionCount = useMemo(() => {
         if (typeof attemptQuestionCount === "number") return attemptQuestionCount;
         if (Array.isArray(attemptDetail?.questions)) return attemptDetail.questions.length;
@@ -1226,7 +1228,9 @@ export default function PracticePage() {
                                                 Bumblefly AI
                                             </Typography>
                                             <Typography sx={{ fontSize: 12, color: COLORS.textSecondary }}>
-                                                {assistantMode === ASSISTANT_MODE.GENERATE ? "Upload/Paste để tạo đề" : "Keyword-only • Không đáp án"}
+                                                {assistantMode === ASSISTANT_MODE.GENERATE
+                                                    ? "Upload/Paste để tạo đề"
+                                                    : "Keyword-only • Không đáp án"}
                                             </Typography>
                                         </Stack>
 
@@ -1288,7 +1292,10 @@ export default function PracticePage() {
                                 allowUpload={allowUpload}
                                 onUploadFile={handleUploadFile}
                                 onSendText={assistantMode === ASSISTANT_MODE.GENERATE ? handleSendText : handleAskStudy}
-                                disabled={loading || (assistantMode === ASSISTANT_MODE.STUDY && !(materialIdRef.current ?? materialId))}
+                                disabled={
+                                    loading ||
+                                    (assistantMode === ASSISTANT_MODE.STUDY && !(materialIdRef.current ?? materialId))
+                                }
                                 helperText={
                                     assistantMode === ASSISTANT_MODE.GENERATE
                                         ? "Upload file xong bấm Gửi để Fly AI tạo đề."
@@ -1380,7 +1387,8 @@ export default function PracticePage() {
                                         Đã tạo đề xong
                                     </Typography>
                                     <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 1.5 }}>
-                                        Số câu: <b>{Number(questionCount)}</b> • Thời gian:  <b>{Number(durationMinutes) || "—"} phút</b>
+                                        Số câu: <b>{Number(questionCount)}</b> • Thời gian:{" "}
+                                        <b>{Number(durationMinutes) || "—"} phút</b>
                                     </Typography>
                                     <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 2 }}>
                                         Bấm “Bắt đầu làm bài” để làm bài ngay. Nếu muốn đổi học liệu thì bấm “Đổi học liệu”.
@@ -1428,17 +1436,14 @@ export default function PracticePage() {
                             {mode === MODE.RESULT && (
                                 <PracticeResult
                                     result={result}
-                                    // ✅ FIX: số câu ở kết quả = số câu attempt đã làm, không phụ thuộc header
                                     numberOfQuestions={Number(resultQuestionCount)}
                                     onRetry={async () => {
-                                        // ✅ Retest: button sẽ chỉ enable khi BE cho phép (PracticeResult handle)
                                         const attemptId = result?.attemptId;
                                         if (attemptId) {
                                             await startRetestV2(attemptId);
                                             return;
                                         }
 
-                                        // fallback
                                         setResult(null);
                                         setAttemptDetail(null);
                                         setAttemptQuestionCount(null);
