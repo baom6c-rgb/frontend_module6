@@ -71,8 +71,13 @@ const KpiCard = ({ variant = "blue", label, value, meta, icon }) => {
                         color: v.accent,
                     }}
                 >
-                    {meta}
-                </Typography>
+                    <Typography sx={{ fontWeight: 950, color: COLORS.textPrimary, fontSize: 34, lineHeight: 1 }}>
+                        {fmtInt(total)}
+                    </Typography>
+                    <Typography sx={{ mt: 0.3, color: COLORS.textSecondary, fontWeight: 850, fontSize: 12 }}>
+                        Tổng số bài làm
+                    </Typography>
+                </Box>
             </Box>
 
             {/* Icon Badge */}
@@ -89,9 +94,24 @@ const KpiCard = ({ variant = "blue", label, value, meta, icon }) => {
                     background: v.iconBg,
                 }}
             >
-                {React.cloneElement(icon, {
-                    sx: { fontSize: { xs: 24, md: 28 }, color: v.accent },
-                })}
+                <Stack spacing={1.2}>
+                    <LegendRow color={COLORS.success} label="Số bài Đạt" value={safePass} />
+                    <LegendRow color={COLORS.danger} label="Số bài Trượt" value={safeFail} />
+                </Stack>
+
+                <Box sx={{ mt: 1.5 }}>
+                    <Chip
+                        size="small"
+                        label={`Tỉ lệ đạt: ${pct0(passRate)} • Tỉ lệ trượt: ${pct0(failRate)}`}
+                        sx={{
+                            borderRadius: "999px",
+                            bgcolor: COLORS.white,
+                            border: `1px solid ${COLORS.border}`,
+                            fontWeight: 900,
+                            color: COLORS.textSecondary,
+                        }}
+                    />
+                </Box>
             </Box>
         </Box>
     );
@@ -112,31 +132,68 @@ export default function AdminDashboardKpiCards({ overview, metrics }) {
         metrics?.failCount ?? Math.round(safeNumber(totalAttempts, 0) * safeNumber(failRate, 0));
 
     return (
-        <Paper
-            elevation={0}
-            sx={{
-                background: "#fff",
-                borderRadius: "20px",
-                px: { xs: "20px", md: "24px" }, // ✅ bỏ px 82px gây thừa trắng
-                py: "20px",
-                boxShadow: "0 2px 8px rgba(0,0,0,.04)",
-                width: "100%",
-                border: "1px solid #f0f0f0",
-                height: "100%", // ✅ stretch
-                display: "flex",
-                flexDirection: "column",
-                minWidth: 0,
-            }}
+        <SectionShell
+            title="Hoạt động học tập"
+            subtitle="Tổng quan về học viên và kết quả học tập"
         >
-            {/* Header */}
-            <Box sx={{ marginBottom: "18px", flexShrink: 0 }}>
-                <Typography sx={{ fontSize: "22px", fontWeight: 700, color: "#1a1a1a", marginBottom: "6px" }}>
-                    Tổng quan nhanh
-                </Typography>
-                <Typography sx={{ fontSize: "14px", color: "#64748b", fontWeight: 500 }}>
-                    KPI bám theo bộ lọc
-                </Typography>
-            </Box>
+            {/* 1 row / 2 boxes */}
+            <Grid container spacing={3} alignItems="stretch">
+                {/* Box A (left) - KPI cards 2x2 */}
+                <Grid item xs={12} md={7}>
+                    <BoxShell sx={{ p: 2.25 }}>
+                        <Grid container spacing={2}>
+                            <Grid item xs={12} sm={6}>
+                                <KpiCard
+                                    title="Tổng số bài làm"
+                                    value={totalAttempts}
+                                    icon={<TrendingUpRounded />}
+                                    toneKey="blue"
+                                    hint="Total Exams"
+                                />
+                            </Grid>
+
+                            <Grid item xs={12} sm={6}>
+                                <KpiCard
+                                    title="Số học viên hoạt động"
+                                    value={totalStudents}
+                                    icon={<PeopleAltRounded />}
+                                    toneKey="orange"
+                                    hint="Students Activities"
+                                />
+                            </Grid>
+
+                            <Grid item xs={12} sm={6}>
+                                <KpiCard
+                                    title="Số bài Đạt"
+                                    value={passCount}
+                                    icon={<HowToRegRounded />}
+                                    toneKey="green"
+                                    hint={pct0(passRate)}
+                                />
+                            </Grid>
+
+                            <Grid item xs={12} sm={6}>
+                                <KpiCard
+                                    title="Số bài Trượt"
+                                    value={failCount}
+                                    icon={<BlockRounded />}
+                                    toneKey="red"
+                                    hint={pct0(failRate)}
+                                />
+                            </Grid>
+                        </Grid>
+                    </BoxShell>
+                </Grid>
+
+                {/* Box B (right) - Result donut + legend */}
+                <Grid item xs={12} md={5}>
+                    <BoxShell sx={{ p: 2.25 }}>
+                        <Typography sx={{ fontWeight: 950, color: COLORS.textPrimary, fontSize: 16 }}>
+                            🎯 Tỷ lệ kết quả làm bài của học viên
+                        </Typography>
+                        <Typography sx={{ mt: 0.4, color: COLORS.textSecondary, fontWeight: 750, fontSize: 13 }}>
+                            Phân loại theo kết quả làm bài (Đạt / Trượt)
+                        </Typography>
 
             {/* KPI Grid */}
             <Box

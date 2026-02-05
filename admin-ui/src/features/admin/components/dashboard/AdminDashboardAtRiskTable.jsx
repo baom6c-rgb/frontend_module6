@@ -148,7 +148,7 @@ export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
                             ⚠️ Danh sách học viên đã làm bài
                         </Typography>
                         <Typography sx={{ mt: 0.4, color: COLORS.textSecondary, fontWeight: 700, fontSize: 13 }}>
-                            Sắp xếp theo mức độ rủi ro (nguy hiểm → đạt). Chỉ bấm “Xem chi tiết” để mở ngăn kéo.
+                            Sắp xếp theo mức độ rủi ro (Nguy hiểm → Đạt).
                         </Typography>
                     </Box>
 
@@ -225,7 +225,7 @@ export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
                             {rows.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={7} sx={{ color: COLORS.textSecondary, fontWeight: 800 }}>
-                                        Chưa có dữ liệu theo bộ lọc hiện tại.
+                                        Chưa có dữ liệu.
                                     </TableCell>
                                 </TableRow>
                             ) : (

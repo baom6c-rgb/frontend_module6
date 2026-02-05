@@ -124,7 +124,7 @@ export default function AdminDashboardFilterBar({
             borderWidth: 2,
         },
         "& .MuiInputLabel-root": {
-            fontWeight: 850,
+            fontWeight: 500,
             color: "rgba(27,37,89,0.80)",
         },
         "& .MuiOutlinedInput-input": {
@@ -134,7 +134,7 @@ export default function AdminDashboardFilterBar({
             display: "flex",
             alignItems: "center",
             boxSizing: "border-box",
-            fontWeight: 850,
+            fontWeight: 500,
             color: "#1B2559",
         },
         "& .MuiSelect-select": {
@@ -144,7 +144,7 @@ export default function AdminDashboardFilterBar({
             display: "flex",
             alignItems: "center",
             boxSizing: "border-box",
-            fontWeight: 850,
+            fontWeight: 500,
             color: "#1B2559",
         },
     };
@@ -230,18 +230,18 @@ export default function AdminDashboardFilterBar({
                             letterSpacing: 0.2,
                         }}
                     >
-                        Admin Dashboard
+                        Trang chủ Hệ thống
                     </Typography>
 
                     <Typography
                         sx={{
                             mt: 0.45,
                             fontSize: { xs: 13.5, md: 14.5 },
-                            fontWeight: 850,
+                            fontWeight: 700,
                             color: "rgba(108,117,125,0.95)",
                         }}
                     >
-                        Tổng quan hệ thống học viên
+                        Tổng quan hệ thống quản lý học viên
                     </Typography>
                 </Box>
 
