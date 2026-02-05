@@ -145,7 +145,7 @@ export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
                 <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
                     <Box sx={{ minWidth: 0 }}>
                         <Typography sx={{ fontWeight: 950, color: COLORS.textPrimary, fontSize: 16 }}>
-                            ⚠️ Danh sách học viên đã làm bài
+                            Danh sách học viên đã làm bài
                         </Typography>
                         <Typography sx={{ mt: 0.4, color: COLORS.textSecondary, fontWeight: 700, fontSize: 13 }}>
                             Sắp xếp theo mức độ rủi ro (Nguy hiểm → Đạt).

@@ -404,33 +404,9 @@ export default function AdminDashboardAiInsightPanel(props) {
                         </Box>
 
                         <Box sx={{ mb: 3 }}>
-                            <Typography sx={sectionTitleSx}>⚖️ Điểm mạnh & Điểm yếu của học viên</Typography>
+                            <Typography sx={sectionTitleSx}>⚖️ Điểm yếu học viên cần cải thiện</Typography>
 
-                            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
-                                <Box
-                                    sx={{
-                                        p: 2,
-                                        borderRadius: 2,
-                                        bgcolor: "#F1F3F7",
-                                        borderLeft: "4px solid #16a34a",
-                                    }}
-                                >
-                                    <Typography sx={{ fontWeight: 950, color: "#1e293b", mb: 1 }}>
-                                        ✅ Điểm mạnh
-                                    </Typography>
-                                    <Stack spacing={0.75}>
-                                        {normalized.strengths.slice(0, 10).map((t, idx) => (
-                                            <Typography key={idx} sx={{ color: "#1e293b", fontWeight: 750 }}>
-                                                • {t}
-                                            </Typography>
-                                        ))}
-                                        {!normalized.strengths.length ? (
-                                            <Typography sx={{ color: "#64748b", fontWeight: 750 }}>
-                                                (Chưa có dữ liệu điểm mạnh.)
-                                            </Typography>
-                                        ) : null}
-                                    </Stack>
-                                </Box>
+                            <Box sx={{ display: "grid", gap: 2, width: "100%" }}>
 
                                 <Box
                                     sx={{
