@@ -162,6 +162,40 @@ export default function AdminDashboardFilterBar({
             background: "rgba(255,255,255,0.14)",
             paddingRight: "8px",
         },
+        "& .MuiOutlinedInput-notchedOutline": {
+            borderColor: "rgba(227,232,239,0.50)",
+        },
+        "& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline": {
+            borderColor: "rgba(46,45,132,0.55)",
+        },
+        "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
+            borderColor: "#2E2D84",
+            borderWidth: 2,
+        },
+        "& .MuiInputLabel-root": {
+            fontWeight: 500,
+            color: "rgba(27,37,89,0.80)",
+        },
+        "& .MuiOutlinedInput-input": {
+            paddingTop: 0,
+            paddingBottom: 0,
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            boxSizing: "border-box",
+            fontWeight: 500,
+            color: "#1B2559",
+        },
+        "& .MuiSelect-select": {
+            paddingTop: 0,
+            paddingBottom: 0,
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            boxSizing: "border-box",
+            fontWeight: 500,
+            color: "#1B2559",
+        },
     };
 
     const filterBtnSx = {
@@ -209,14 +243,30 @@ export default function AdminDashboardFilterBar({
 
     return (
         <Box sx={glassSx}>
-            {/* HEADER */}
-            <Stack direction="row" justifyContent="space-between" spacing={2}>
-                <Box>
-                    <Typography sx={{ fontSize: 28, fontWeight: 950 }}>
-                        Admin Dashboard
+            {/* ===== TITLE + ACTIONS ===== */}
+            <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
+                <Box sx={{ minWidth: 0 }}>
+                    <Typography
+                        sx={{
+                            fontSize: { xs: 24, md: 30 },
+                            fontWeight: 950,
+                            lineHeight: 1.12,
+                            color: "#1B2559",
+                            letterSpacing: 0.2,
+                        }}
+                    >
+                        Trang chủ Hệ thống
                     </Typography>
-                    <Typography sx={{ fontSize: 14, fontWeight: 700 }}>
-                        Tổng quan hệ thống học viên
+
+                    <Typography
+                        sx={{
+                            mt: 0.45,
+                            fontSize: { xs: 13.5, md: 14.5 },
+                            fontWeight: 700,
+                            color: "rgba(108,117,125,0.95)",
+                        }}
+                    >
+                        Tổng quan hệ thống quản lý học viên
                     </Typography>
                 </Box>
 

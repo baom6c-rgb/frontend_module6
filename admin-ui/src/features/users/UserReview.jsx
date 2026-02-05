@@ -534,7 +534,7 @@ export default function UserReview() {
 
                     return (
                         <span style={{ color: isPassed ? COLORS.success : COLORS.danger }}>
-                            {isPassed ? "Đạt" : "Không đạt"}
+                            {isPassed ? "Đạt" : "Trượt"}
                         </span>
                     );
                 },
@@ -732,7 +732,7 @@ export default function UserReview() {
                                                         fontSize: 14,
                                                     }}
                                                 >
-                                                    {selectedTest.scorePct >= 80 ? "Đạt" : "Không đạt"}
+                                                    {selectedTest.scorePct >= 80 ? "Đạt" : "Trượt"}
                                                 </Box>
                                             </TableCell>
                                         </TableRow>

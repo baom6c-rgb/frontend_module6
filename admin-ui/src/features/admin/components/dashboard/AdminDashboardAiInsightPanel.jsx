@@ -134,7 +134,7 @@ export default function AdminDashboardAiInsightPanel(props) {
                 e?.response?.data?.message ||
                 e?.response?.data?.error ||
                 e?.message ||
-                "Không thể lấy AI insight.";
+                "Hệ thống không thể đưa ra nhận xét.";
             setInternalError(msg);
         } finally {
             setInternalLoading(false);
@@ -147,19 +147,18 @@ export default function AdminDashboardAiInsightPanel(props) {
     };
 
     const headerTitle =
-        title || (resolvedMode === "GLOBAL" ? "AI phân tích theo bộ lọc" : "AI feedback học viên");
+        title || (resolvedMode === "GLOBAL" ? "Phân tích theo bộ lọc" : "Nhận xét học viên (AI)");
 
     const headerSubtitle =
         subtitle ||
         (resolvedMode === "GLOBAL"
-            ? "Chỉ chạy khi admin bấm nút. Kết quả phụ thuộc bộ lọc thời gian/lớp/module."
-            : "Chỉ chạy khi admin bấm nút. Dựa trên dữ liệu bài làm của học viên trong DB.");
+            ? "Kết quả phụ thuộc theo bộ lọc thời gian/lớp/module."
+            : "Dựa trên dữ liệu bài làm của học viên.");
 
     const metaChips = useMemo(() => {
         const out = [];
         if (overview?.totalStudents != null) out.push({ label: `👥 ${overview.totalStudents} học viên` });
         if (overview?.totalAttempts != null) out.push({ label: `📝 ${overview.totalAttempts} bài làm` });
-        if (normalized?.confidence) out.push({ label: `🎯 ${String(normalized.confidence).toUpperCase()}` });
         return out;
     }, [overview?.totalStudents, overview?.totalAttempts, normalized?.confidence]);
 
@@ -177,7 +176,7 @@ export default function AdminDashboardAiInsightPanel(props) {
 
     return (
         <>
-            <GlobalLoading open={loading} message="AI đang phân tích theo bộ lọc..." />
+            <GlobalLoading open={loading} message="Đang phân tích dữ liệu hệ thống..." />
 
             {/* ✅ Gradient header cũ được chuyển xuống đây */}
             <Paper
@@ -210,11 +209,6 @@ export default function AdminDashboardAiInsightPanel(props) {
                                         <Typography sx={{ fontWeight: 950, color: "#1B2559", fontSize: 15 }}>
                                             {headerTitle}
                                         </Typography>
-                                        <Tooltip title={headerSubtitle}>
-                                            <IconButton size="small" sx={{ mt: "-2px" }}>
-                                                <InfoOutlinedIcon fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
                                     </Stack>
 
                                     {resolvedMode === "STUDENT" ? (
@@ -232,7 +226,6 @@ export default function AdminDashboardAiInsightPanel(props) {
                                     onClick={runAi}
                                     disabled={loading || (resolvedMode === "STUDENT" && !student?.userId)}
                                     variant="contained"
-                                    startIcon={<AutoAwesomeRoundedIcon />}
                                     sx={{
                                         borderRadius: 2,
                                         textTransform: "none",
@@ -242,7 +235,7 @@ export default function AdminDashboardAiInsightPanel(props) {
                                         "&:hover": { bgcolor: "#1f1e5c", boxShadow: "none" },
                                     }}
                                 >
-                                    Chạy AI
+                                    Phân tích (AI)
                                 </Button>
                             </Stack>
                         </Box>
@@ -262,7 +255,7 @@ export default function AdminDashboardAiInsightPanel(props) {
 
                             {!isValidInsight ? (
                                 <Typography sx={{ color: "#6C757D", fontWeight: 800 }}>
-                                    Bấm “Chạy AI” để tạo phân tích.
+                                    Bấm “Phân tích (AI)” để xem đánh giá chi tiết các học viên.
                                 </Typography>
                             ) : (
                                 <Box sx={{ borderRadius: 2, border: "1px solid #E3E8EF", overflow: "hidden", bgcolor: "#fff" }}>
@@ -280,10 +273,10 @@ export default function AdminDashboardAiInsightPanel(props) {
                                     >
                                         <Box sx={{ minWidth: 0 }}>
                                             <Typography sx={{ fontWeight: 950, color: "#1B2559" }}>
-                                                Kết quả phân tích AI
+                                                Kết quả phân tích (AI)
                                             </Typography>
                                             <Typography sx={{ mt: 0.35, color: "#6C757D", fontWeight: 800, fontSize: 12.5 }}>
-                                                Nhấn “Xem feedback” để xem chi tiết.
+                                                Nhấn “Xem đánh giá” để xem chi tiết.
                                             </Typography>
                                         </Box>
 
@@ -300,7 +293,7 @@ export default function AdminDashboardAiInsightPanel(props) {
                                                 "&:hover": { bgcolor: "#d64a20" },
                                             }}
                                         >
-                                            Xem feedback
+                                            Xem đánh giá
                                         </Button>
                                     </Box>
 
@@ -325,7 +318,7 @@ export default function AdminDashboardAiInsightPanel(props) {
                                     ) : null}
 
                                     {normalized?.summary ? (
-                                        <Box sx={{ px: 2, pb: 2 }}>
+                                        <Box sx={{ px: 2, py: 2 }}>
                                             <Typography sx={{ color: "#6C757D", fontWeight: 750, lineHeight: 1.6 }}>
                                                 {normalized.summary}
                                             </Typography>
@@ -347,24 +340,9 @@ export default function AdminDashboardAiInsightPanel(props) {
                 title={
                     <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
                         <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
-                            <Box
-                                sx={{
-                                    width: 48,
-                                    height: 48,
-                                    borderRadius: 2.5,
-                                    bgcolor: "rgba(255,255,255,0.16)",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    flexShrink: 0,
-                                }}
-                            >
-                                <AutoAwesomeRoundedIcon sx={{ color: "#fff" }} />
-                            </Box>
-
                             <Box sx={{ minWidth: 0 }}>
                                 <Typography sx={{ fontWeight: 950, color: "#fff", fontSize: 16 }}>
-                                    Báo cáo phân tích AI chi tiết
+                                    Báo cáo phân tích chi tiết
                                 </Typography>
                                 <Typography sx={{ color: "rgba(255,255,255,0.80)", fontWeight: 800, fontSize: 12.5 }}>
                                     {resolvedMode === "STUDENT"
@@ -390,11 +368,11 @@ export default function AdminDashboardAiInsightPanel(props) {
             >
                 {!isValidInsight ? (
                     <Typography sx={{ color: "#6C757D", fontWeight: 800 }}>
-                        Chưa có dữ liệu phân tích hợp lệ để hiển thị.
+                        Chưa có dữ liệu hợp lệ để hiển thị.
                     </Typography>
                 ) : (
                     <Box>
-                        <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 2 }}>
+                        <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 2}}>
                             {metaChips.map((c, idx) => (
                                 <Chip
                                     key={idx}
@@ -420,13 +398,13 @@ export default function AdminDashboardAiInsightPanel(props) {
                                 }}
                             >
                                 <Typography sx={{ color: "#1e293b", fontWeight: 750, lineHeight: 1.85 }}>
-                                    {normalized.summary || "(Không có tổng quan.)"}
+                                    {normalized.summary || "(Không có đánh giá tổng quan.)"}
                                 </Typography>
                             </Box>
                         </Box>
 
                         <Box sx={{ mb: 3 }}>
-                            <Typography sx={sectionTitleSx}>⚖️ Điểm mạnh & Điểm yếu</Typography>
+                            <Typography sx={sectionTitleSx}>⚖️ Điểm mạnh & Điểm yếu của học viên</Typography>
 
                             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
                                 <Box
@@ -510,14 +488,23 @@ export default function AdminDashboardAiInsightPanel(props) {
                                                     width: 34,
                                                     height: 34,
                                                     borderRadius: 2,
-                                                    background: "linear-gradient(135deg, #EC5E32 0%, #d64a20 100%)",
+                                                    background: "linear-gradient(135deg)",
                                                     display: "flex",
                                                     alignItems: "center",
                                                     justifyContent: "center",
                                                     flexShrink: 0,
                                                 }}
                                             >
-                                                <AutoAwesomeRoundedIcon sx={{ color: "#fff", fontSize: 18 }} />
+                                                <Box
+                                                    component="img"
+                                                    src="/images/AI_logo.png"
+                                                    alt="Mô tả ảnh"
+                                                    sx={{
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        objectFit: 'cover',
+                                                    }}
+                                                />
                                             </Box>
                                             <Typography sx={{ color: "#1e293b", fontWeight: 800, lineHeight: 1.65 }}>
                                                 {t}
