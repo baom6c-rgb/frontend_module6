@@ -1427,7 +1427,7 @@ export default function PracticePage() {
                                 <PracticePlayer
                                     ref={playerRef}
                                     attemptDetail={attemptDetail}
-                                    attemptId={doingAttemptId}
+                                    attemptId={attemptDetail?.sessionToken || doingAttemptId}
                                     attemptStartTs={attemptStartTs}
                                     onSubmit={(answersArray, meta) => submitSessionV2(answersArray, meta)}
                                 />

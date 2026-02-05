@@ -18,10 +18,11 @@ import QuizProgressBar from "./QuizProgressBar";
  * - timer: startTs lấy từ BE (attemptStartTs) và persist để reload không reset
  */
 const buildStorageKey = (attemptId, attemptDetail) => {
-    if (attemptId && String(attemptId).trim()) return `practice_v2_attempt_${String(attemptId).trim()}`;
-
+    // ✅ V2: token là ID chuẩn nhất
     const token = attemptDetail?.sessionToken || attemptDetail?.token || null;
     if (token && String(token).trim()) return `practice_v2_attempt_${String(token).trim()}`;
+
+    if (attemptId && String(attemptId).trim()) return `practice_v2_attempt_${String(attemptId).trim()}`;
 
     return "practice_v2_attempt_unknown";
 };
@@ -51,7 +52,13 @@ const PracticePlayer = forwardRef(function PracticePlayer(
     // submission flag (doesn't trigger re-render)
     const submittedRef = useRef(false);
 
-    const getQid = (q) => q?.questionId ?? q?.id ?? null;
+    // ✅ tránh effect persist ghi đè answersMap={} lên localStorage ngay lúc mới restore
+    const skipPersistRef = useRef(true);
+
+    const getQid = (q) => {
+        const v = q?.questionId ?? q?.questionKey ?? q?.id ?? null;
+        return v == null ? null : String(v); // ✅ key localStorage luôn stable
+    };
 
     const currentQuestion = questions[index];
     const currentQid = useMemo(() => getQid(currentQuestion), [currentQuestion]);
@@ -93,6 +100,9 @@ const PracticePlayer = forwardRef(function PracticePlayer(
      */
     useEffect(() => {
         submittedRef.current = false;
+
+        // ✅ sau khi restore xong, bỏ qua 1 lần persist để không ghi đè answers={}
+        skipPersistRef.current = true;
 
         try {
             const raw = localStorage.getItem(storageKey);
@@ -156,6 +166,12 @@ const PracticePlayer = forwardRef(function PracticePlayer(
      * ✅ Persist answers + index (keep startTs stable)
      */
     useEffect(() => {
+        // ✅ tránh ghi đè answersMap={} lên localStorage ngay lúc mới mount/restore
+        if (skipPersistRef.current) {
+            skipPersistRef.current = false;
+            return;
+        }
+
         try {
             const raw = localStorage.getItem(storageKey);
             const parsed = raw ? JSON.parse(raw) : {};

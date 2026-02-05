@@ -321,7 +321,7 @@ export default function AdminSettings() {
                     onChange={handleChange("passScore")}
                     fullWidth
                     inputProps={{ min: 0, max: 100, step: 1 }}
-                    helperText="Học viên cần đạt ít nhất số điểm này để được cấp chứng chỉ."
+                    helperText="Học viên cần đạt ít nhất số điểm này để đạt đủ điểm yêu cầu."
                     InputProps={{
                         startAdornment: <InputAdornment position="start">🎯</InputAdornment>,
                     }}
