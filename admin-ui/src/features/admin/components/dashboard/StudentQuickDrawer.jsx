@@ -69,7 +69,7 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
             onClose={onClose}
             PaperProps={{
                 sx: {
-                    width: { xs: "100%", sm: 420 },
+                    width: { xs: "100%", sm: 650 },
                     bgcolor: COLORS.white,
                     borderLeft: `1px solid ${COLORS.border}`,
                 },
@@ -224,36 +224,6 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                                     MỨC ĐỘ
                                 </Typography>
                             </Box>
-                        </Box>
-
-                        {/* Class / Module (placeholder nếu thiếu) */}
-                        <Box
-                            sx={{
-                                border: `1px solid ${COLORS.border}`,
-                                borderRadius: 2,
-                                p: 1.75,
-                                bgcolor: COLORS.white,
-                            }}
-                        >
-                            <Typography sx={{ fontWeight: 950, color: COLORS.textPrimary, mb: 1 }}>
-                                Lớp & Module
-                            </Typography>
-
-                            <Stack spacing={0.9}>
-                                <Stack direction="row" justifyContent="space-between" spacing={2}>
-                                    <Typography sx={{ color: COLORS.textSecondary, fontWeight: 800 }}>Lớp</Typography>
-                                    <Typography sx={{ color: COLORS.textPrimary, fontWeight: 950 }}>
-                                        {student.className || student.classTitle || <span style={{ color: COLORS.textSecondary }}>—</span>}
-                                    </Typography>
-                                </Stack>
-
-                                <Stack direction="row" justifyContent="space-between" spacing={2}>
-                                    <Typography sx={{ color: COLORS.textSecondary, fontWeight: 800 }}>Module</Typography>
-                                    <Typography sx={{ color: COLORS.textPrimary, fontWeight: 950, textAlign: "right" }}>
-                                        {student.moduleName || student.moduleTitle || <span style={{ color: COLORS.textSecondary }}>—</span>}
-                                    </Typography>
-                                </Stack>
-                            </Stack>
                         </Box>
 
                         <Divider sx={{ borderColor: COLORS.border }} />

@@ -176,7 +176,7 @@ const ResultDonut = ({ total, pass, fail, passRate, failRate }) => {
                         {fmtInt(total)}
                     </Typography>
                     <Typography sx={{ mt: 0.3, color: COLORS.textSecondary, fontWeight: 850, fontSize: 12 }}>
-                        Tổng bài làm
+                        Tổng số bài làm
                     </Typography>
                 </Box>
             </Box>
@@ -193,9 +193,8 @@ const ResultDonut = ({ total, pass, fail, passRate, failRate }) => {
                 }}
             >
                 <Stack spacing={1.2}>
-                    <LegendRow color={COLORS.success} label="Đạt" value={safePass} />
-                    <LegendRow color={COLORS.danger} label="Trượt" value={safeFail} />
-                    <LegendRow color={COLORS.amber} label="Khác (hiếm)" value={other} />
+                    <LegendRow color={COLORS.success} label="Số bài Đạt" value={safePass} />
+                    <LegendRow color={COLORS.danger} label="Số bài Trượt" value={safeFail} />
                 </Stack>
 
                 <Box sx={{ mt: 1.5 }}>
@@ -245,38 +244,38 @@ export default function AdminDashboardKpiCards({ overview }) {
 
     return (
         <SectionShell
-            title="Tổng quan nhanh"
-            subtitle="KPI và phân loại kết quả nằm cùng 1 hàng (bám theo bộ lọc)"
+            title="Hoạt động học tập"
+            subtitle="Tổng quan về học viên và kết quả học tập"
         >
             {/* 1 row / 2 boxes */}
             <Grid container spacing={3} alignItems="stretch">
                 {/* Box A (left) - KPI cards 2x2 */}
                 <Grid item xs={12} md={7}>
                     <BoxShell sx={{ p: 2.25 }}>
-                        <Grid container spacing={3}>
+                        <Grid container spacing={2}>
                             <Grid item xs={12} sm={6}>
                                 <KpiCard
-                                    title="Tổng bài làm"
+                                    title="Tổng số bài làm"
                                     value={totalAttempts}
                                     icon={<TrendingUpRounded />}
                                     toneKey="blue"
-                                    hint="Trong khoảng lọc"
+                                    hint="Total Exams"
                                 />
                             </Grid>
 
                             <Grid item xs={12} sm={6}>
                                 <KpiCard
-                                    title="Học viên hoạt động"
+                                    title="Số học viên hoạt động"
                                     value={totalStudents}
                                     icon={<PeopleAltRounded />}
                                     toneKey="orange"
-                                    hint="Unique attempted"
+                                    hint="Students Activities"
                                 />
                             </Grid>
 
                             <Grid item xs={12} sm={6}>
                                 <KpiCard
-                                    title="Đạt"
+                                    title="Số bài Đạt"
                                     value={passCount}
                                     icon={<HowToRegRounded />}
                                     toneKey="green"
@@ -286,7 +285,7 @@ export default function AdminDashboardKpiCards({ overview }) {
 
                             <Grid item xs={12} sm={6}>
                                 <KpiCard
-                                    title="Trượt"
+                                    title="Số bài Trượt"
                                     value={failCount}
                                     icon={<BlockRounded />}
                                     toneKey="red"
@@ -301,10 +300,10 @@ export default function AdminDashboardKpiCards({ overview }) {
                 <Grid item xs={12} md={5}>
                     <BoxShell sx={{ p: 2.25 }}>
                         <Typography sx={{ fontWeight: 950, color: COLORS.textPrimary, fontSize: 16 }}>
-                            🎯 Phân loại kết quả
+                            🎯 Tỷ lệ kết quả làm bài của học viên
                         </Typography>
                         <Typography sx={{ mt: 0.4, color: COLORS.textSecondary, fontWeight: 750, fontSize: 13 }}>
-                            Phân loại theo bài làm trong khoảng lọc (Đạt / Trượt)
+                            Phân loại theo kết quả làm bài (Đạt / Trượt)
                         </Typography>
 
                         <Box sx={{ mt: 2 }}>

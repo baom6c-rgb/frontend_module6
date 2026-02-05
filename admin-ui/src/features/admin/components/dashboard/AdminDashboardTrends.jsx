@@ -79,8 +79,8 @@ export default function AdminDashboardTrends({ timeSeries = [] }) {
             <Grid item xs={12} md={6}>
                 <CardShell sx={{ height: "100%" }}>
                     <ChartHeader
-                        title="Attempts theo ngày"
-                        subtitle="Giúp thấy volume học tập tăng/giảm theo thời gian"
+                        title="Số lần làm bài tính theo ngày"
+                        subtitle="Cường độ học tập và làm bài tăng/giảm theo thời gian"
                     />
                     <Divider sx={{ borderColor: COLORS.border }} />
                     <Box sx={{ p: 2.5 }}>
@@ -112,8 +112,8 @@ export default function AdminDashboardTrends({ timeSeries = [] }) {
             <Grid item xs={12} md={6}>
                 <CardShell sx={{ height: "100%" }}>
                     <ChartHeader
-                        title="Tỉ lệ đạt theo ngày"
-                        subtitle="Nhìn trend để biết tuần này đang tốt lên hay xấu đi"
+                        title="Tỷ lệ bài Đạt theo ngày"
+                        subtitle="Tỷ lệ bài Đạt trên tổng số bài làm của học viên"
                     />
                     <Divider sx={{ borderColor: COLORS.border }} />
                     <Box sx={{ p: 2.5 }}>
