@@ -25,6 +25,7 @@ const CardShell = ({ children, sx }) => (
             background: COLORS.white,
             boxShadow: "0px 18px 45px rgba(15, 23, 42, 0.06)",
             overflow: "hidden",
+            minWidth: 0, // ✅ chống vỡ
             ...sx,
         }}
     >
@@ -75,8 +76,8 @@ export default function AdminDashboardTrends({ timeSeries = [] }) {
     );
 
     return (
-        <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
+        <Grid container spacing={3} alignItems="stretch">
+            <Grid item xs={12} md={6} sx={{ minWidth: 0 }}>
                 <CardShell sx={{ height: "100%" }}>
                     <ChartHeader
                         title="Số lần làm bài tính theo ngày"
@@ -90,7 +91,7 @@ export default function AdminDashboardTrends({ timeSeries = [] }) {
                                 <XAxis dataKey="name" stroke={COLORS.textSecondary} axisLine={false} tickLine={false} />
                                 <YAxis stroke={COLORS.textSecondary} axisLine={false} tickLine={false} />
                                 <Tooltip
-                                    formatter={(value, name, props) => {
+                                    formatter={(value, name) => {
                                         if (name === "attempts") return [value, "Tổng bài làm"];
                                         return [value, name];
                                     }}
@@ -109,7 +110,7 @@ export default function AdminDashboardTrends({ timeSeries = [] }) {
                 </CardShell>
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={6} sx={{ minWidth: 0 }}>
                 <CardShell sx={{ height: "100%" }}>
                     <ChartHeader
                         title="Tỷ lệ bài Đạt theo ngày"

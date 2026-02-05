@@ -1,6 +1,6 @@
 // src/features/admin/components/dashboard/AdminDashboardKpiCards.jsx
 import React, { useMemo } from "react";
-import { Box, Chip, Divider, Grid, Paper, Stack, Typography } from "@mui/material";
+import { Box, Paper, Typography } from "@mui/material";
 import {
     TrendingUpRounded,
     PeopleAltRounded,
@@ -8,168 +8,67 @@ import {
     BlockRounded,
 } from "@mui/icons-material";
 
-import { DASHBOARD_COLORS as COLORS, safeNumber } from "./dashboard.helpers";
+import { safeNumber } from "./dashboard.helpers";
 
-/** ===== Utils ===== */
+/** ===== Utils (GIỮ LOGIC) ===== */
 const fmtInt = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString() : "0");
 const pct0 = (ratio) => `${Math.round(safeNumber(ratio, 0) * 100)}%`;
 
-const tone = (t) => {
-    if (t === "green") return { c: COLORS.success, bg: `${COLORS.success}14` };
-    if (t === "red") return { c: COLORS.danger, bg: `${COLORS.danger}14` };
-    if (t === "orange") return { c: COLORS.accentOrange, bg: `${COLORS.accentOrange}14` };
-    if (t === "amber") return { c: COLORS.amber, bg: `${COLORS.amber}14` };
-    // navy/neutral
-    return { c: COLORS.primaryBlue, bg: `${COLORS.primaryBlue}12` };
+/** ===== UI VARIANTS (GIỮ NGUYÊN) ===== */
+const VARIANTS = {
+    blue: { iconBg: "#e0f2fe", accent: "#0284c7" },
+    orange: { iconBg: "#fff7ed", accent: "#ea580c" },
+    green: { iconBg: "#dcfce7", accent: "#16a34a" },
+    red: { iconBg: "#fee2e2", accent: "#dc2626" },
 };
 
-/** ===== Shared shells ===== */
-const SectionShell = ({ title, subtitle, children }) => (
-    <Paper
-        elevation={0}
-        sx={{
-            borderRadius: "20px",
-            border: `1px solid ${COLORS.border}`,
-            background: COLORS.white,
-            boxShadow: "0px 18px 45px rgba(15, 23, 42, 0.06)",
-            overflow: "hidden",
-        }}
-    >
-        <Box sx={{ px: 2.75, py: 2.25 }}>
-            <Typography sx={{ fontWeight: 950, color: COLORS.textPrimary, fontSize: 18 }}>
-                {title}
-            </Typography>
-            {subtitle ? (
-                <Typography sx={{ mt: 0.4, color: COLORS.textSecondary, fontWeight: 750, fontSize: 13 }}>
-                    {subtitle}
-                </Typography>
-            ) : null}
-        </Box>
-        <Divider sx={{ borderColor: COLORS.border }} />
-        <Box sx={{ p: 2.75 }}>{children}</Box>
-    </Paper>
-);
-
-const BoxShell = ({ children, sx }) => (
-    <Paper
-        elevation={0}
-        sx={{
-            height: "100%",
-            borderRadius: "18px",
-            border: `1px solid ${COLORS.border}`,
-            background: COLORS.white,
-            boxShadow: "0px 18px 45px rgba(15, 23, 42, 0.05)",
-            overflow: "hidden",
-            ...sx,
-        }}
-    >
-        {children}
-    </Paper>
-);
-
-/** ===== KPI card (compact) ===== */
-const KpiCard = ({ title, value, icon, toneKey, hint }) => {
-    const cfg = useMemo(() => tone(toneKey), [toneKey]);
+const KpiCard = ({ variant = "blue", label, value, meta, icon }) => {
+    const v = useMemo(() => VARIANTS[variant] || VARIANTS.blue, [variant]);
 
     return (
-        <Paper
-            elevation={0}
+        <Box
             sx={{
-                borderRadius: "18px",
-                border: `1px solid ${COLORS.border}`,
-                bgcolor: COLORS.white,
-                boxShadow: "0px 18px 45px rgba(15, 23, 42, 0.05)",
-                p: 2.25,
-                height: "100%",
+                background: "#fafafa",
+                border: "1px solid #f0f0f0",
+                borderRadius: "16px",
+                padding: { xs: "18px", md: "20px" }, // ✅ gọn hơn, tránh thừa trắng
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                minWidth: 0,
             }}
         >
-            <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
-                <Box sx={{ minWidth: 0 }}>
-                    <Typography sx={{ color: COLORS.textSecondary, fontSize: 13, fontWeight: 900 }}>
-                        {title}
-                    </Typography>
-
-                    <Typography sx={{ mt: 0.5, color: COLORS.textPrimary, fontSize: 34, fontWeight: 950 }}>
-                        {fmtInt(value)}
-                    </Typography>
-
-                    {hint ? (
-                        <Chip
-                            size="small"
-                            label={hint}
-                            sx={{
-                                mt: 1,
-                                height: 26,
-                                borderRadius: "999px",
-                                fontWeight: 900,
-                                bgcolor: cfg.bg,
-                                color: cfg.c,
-                                border: `1px solid ${COLORS.border}`,
-                            }}
-                        />
-                    ) : null}
-                </Box>
-
-                <Box
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography
                     sx={{
-                        width: 86,
-                        height: 46,
-                        borderRadius: "16px",
-                        bgcolor: cfg.bg,
-                        border: `1px solid ${COLORS.border}`,
-                        display: "grid",
-                        placeItems: "center",
-                        flex: "0 0 auto",
+                        fontSize: "15px",
+                        color: "#64748b",
+                        marginBottom: "12px",
+                        fontWeight: 500,
+                        lineHeight: 1.4,
                     }}
                 >
-                    {React.cloneElement(icon, { sx: { fontSize: 26, color: cfg.c } })}
-                </Box>
-            </Stack>
-        </Paper>
-    );
-};
+                    {label}
+                </Typography>
 
-/** ===== Donut + Legend (attempt-based) ===== */
-const ResultDonut = ({ total, pass, fail, passRate, failRate }) => {
-    const safeTotal = Math.max(1, safeNumber(total, 0));
-    const safePass = Math.max(0, safeNumber(pass, 0));
-    const safeFail = Math.max(0, safeNumber(fail, 0));
-    const other = Math.max(0, safeTotal - safePass - safeFail);
-
-    const passDeg = (safePass / safeTotal) * 360;
-    const otherDeg = (other / safeTotal) * 360;
-
-    const ringBg = `conic-gradient(
-        ${COLORS.success} 0deg ${passDeg}deg,
-        ${COLORS.amber} ${passDeg}deg ${passDeg + otherDeg}deg,
-        ${COLORS.danger} ${passDeg + otherDeg}deg 360deg
-    )`;
-
-    return (
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={2.25} alignItems="center">
-            {/* Donut */}
-            <Box
-                sx={{
-                    width: 220,
-                    height: 220,
-                    borderRadius: "999px",
-                    background: ringBg,
-                    display: "grid",
-                    placeItems: "center",
-                    boxShadow: "0px 18px 35px rgba(15, 23, 42, 0.12)",
-                }}
-            >
-                <Box
+                <Typography
                     sx={{
-                        width: 140,
-                        height: 140,
-                        borderRadius: "999px",
-                        bgcolor: COLORS.white,
-                        border: `1px solid ${COLORS.border}`,
-                        display: "grid",
-                        placeItems: "center",
-                        textAlign: "center",
-                        px: 1,
+                        fontSize: { xs: "34px", md: "38px" },
+                        fontWeight: 700,
+                        color: "#1a1a1a",
+                        lineHeight: 1,
+                        marginBottom: "10px",
+                    }}
+                >
+                    {fmtInt(value)}
+                </Typography>
+
+                <Typography
+                    sx={{
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        padding: "4px 0",
+                        color: v.accent,
                     }}
                 >
                     <Typography sx={{ fontWeight: 950, color: COLORS.textPrimary, fontSize: 34, lineHeight: 1 }}>
@@ -181,15 +80,18 @@ const ResultDonut = ({ total, pass, fail, passRate, failRate }) => {
                 </Box>
             </Box>
 
-            {/* Legend box bo tròn đẹp */}
+            {/* Icon Badge */}
             <Box
                 sx={{
-                    width: "100%",
-                    flex: 1,
-                    borderRadius: "16px",
-                    bgcolor: COLORS.bg,
-                    border: `1px solid ${COLORS.border}`,
-                    p: 1.75,
+                    width: { xs: 52, md: 60 },
+                    height: { xs: 52, md: 60 },
+                    borderRadius: "14px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    marginLeft: "14px",
+                    background: v.iconBg,
                 }}
             >
                 <Stack spacing={1.2}>
@@ -211,36 +113,23 @@ const ResultDonut = ({ total, pass, fail, passRate, failRate }) => {
                     />
                 </Box>
             </Box>
-        </Stack>
+        </Box>
     );
 };
 
-const LegendRow = ({ color, label, value }) => (
-    <Stack direction="row" alignItems="center" justifyContent="space-between">
-        <Stack direction="row" spacing={1} alignItems="center">
-            <Box sx={{ width: 10, height: 10, borderRadius: "999px", bgcolor: color }} />
-            <Typography sx={{ fontWeight: 850, color: COLORS.textPrimary, fontSize: 13 }}>
-                {label}
-            </Typography>
-        </Stack>
-        <Typography sx={{ fontWeight: 950, color: COLORS.textPrimary, fontSize: 14 }}>
-            {fmtInt(value)}
-        </Typography>
-    </Stack>
-);
+/** ===== Main (GIỮ LOGIC + FLOW) ===== */
+export default function AdminDashboardKpiCards({ overview, metrics }) {
+    // ✅ ưu tiên metrics từ parent để đồng bộ
+    const totalAttempts = metrics?.totalAttempts ?? safeNumber(overview?.totalAttempts, 0);
+    const totalStudents = metrics?.totalStudents ?? safeNumber(overview?.totalStudents, 0);
 
-/** ===== Main ===== */
-export default function AdminDashboardKpiCards({ overview }) {
-    // Attempt-based numbers (bám filter)
-    const totalAttempts = safeNumber(overview?.totalAttempts, 0);
-    const totalStudents = safeNumber(overview?.totalStudents, 0);
+    const passRate = metrics?.passRate ?? safeNumber(overview?.passRate, 0);
+    const failRate = metrics?.failRate ?? safeNumber(overview?.failRate, 0);
 
-    const passRate = safeNumber(overview?.passRate, 0);
-    const failRate = safeNumber(overview?.failRate, 0);
-
-    // counts from rates (không đổi logic hiện có)
-    const passCount = Math.round(totalAttempts * passRate);
-    const failCount = Math.round(totalAttempts * failRate);
+    const passCount =
+        metrics?.passCount ?? Math.round(safeNumber(totalAttempts, 0) * safeNumber(passRate, 0));
+    const failCount =
+        metrics?.failCount ?? Math.round(safeNumber(totalAttempts, 0) * safeNumber(failRate, 0));
 
     return (
         <SectionShell
@@ -306,18 +195,50 @@ export default function AdminDashboardKpiCards({ overview }) {
                             Phân loại theo kết quả làm bài (Đạt / Trượt)
                         </Typography>
 
-                        <Box sx={{ mt: 2 }}>
-                            <ResultDonut
-                                total={totalAttempts}
-                                pass={passCount}
-                                fail={failCount}
-                                passRate={passRate}
-                                failRate={failRate}
-                            />
-                        </Box>
-                    </BoxShell>
-                </Grid>
-            </Grid>
-        </SectionShell>
+            {/* KPI Grid */}
+            <Box
+                sx={{
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
+                    gap: { xs: "14px", md: "16px" },
+                    flex: 1,
+                    minHeight: 280, // ✅ tránh box bị “lõm”
+                    alignContent: "start",
+                    minWidth: 0,
+                }}
+            >
+                <KpiCard
+                    variant="blue"
+                    label="Tổng bài làm"
+                    value={totalAttempts}
+                    meta="Trong khoảng lọc"
+                    icon={<TrendingUpRounded />}
+                />
+
+                <KpiCard
+                    variant="orange"
+                    label="Học viên hoạt động"
+                    value={totalStudents}
+                    meta="Unique attempted"
+                    icon={<PeopleAltRounded />}
+                />
+
+                <KpiCard
+                    variant="green"
+                    label="Đạt"
+                    value={passCount}
+                    meta={pct0(passRate)}
+                    icon={<HowToRegRounded />}
+                />
+
+                <KpiCard
+                    variant="red"
+                    label="Trượt"
+                    value={failCount}
+                    meta={pct0(failRate)}
+                    icon={<BlockRounded />}
+                />
+            </Box>
+        </Paper>
     );
 }
