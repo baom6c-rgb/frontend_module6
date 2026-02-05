@@ -1,5 +1,5 @@
 // src/features/admin/components/dashboard/AdminDashboardAtRiskTable.jsx
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
     Paper,
     Box,
@@ -22,6 +22,8 @@ import {
     InfoRounded,
     CheckCircleRounded,
 } from "@mui/icons-material";
+
+import AppPagination from "../../../../components/common/AppPagination";
 
 import {
     DASHBOARD_COLORS as COLORS,
@@ -111,6 +113,10 @@ const paletteBySeverity = (sev) => {
 };
 
 export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
+    // ✅ Pagination state (1-based)
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+
     const rows = useMemo(() => {
         const arr = Array.isArray(students) ? [...students] : [];
         arr.sort((a, b) => {
@@ -139,6 +145,30 @@ export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
         return arr;
     }, [students]);
 
+    // ✅ Reset page khi data thay đổi (filter đổi)
+    useEffect(() => {
+        setPage(1);
+    }, [students]);
+
+    const total = rows.length;
+
+    const totalPages = useMemo(() => {
+        const ps = Math.max(1, Number(pageSize) || 10);
+        return Math.max(1, Math.ceil(total / ps));
+    }, [total, pageSize]);
+
+    const safePage = useMemo(() => {
+        const p = Math.max(1, Number(page) || 1);
+        return Math.min(p, totalPages);
+    }, [page, totalPages]);
+
+    const pagedRows = useMemo(() => {
+        const ps = Math.max(1, Number(pageSize) || 10);
+        const start = (safePage - 1) * ps;
+        const end = start + ps;
+        return rows.slice(start, end);
+    }, [rows, safePage, pageSize]);
+
     return (
         <CardShell>
             <Box sx={{ px: 2.75, py: 2.25 }}>
@@ -154,7 +184,7 @@ export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
 
                     <Chip
                         icon={<WarningAmberRounded sx={{ fontSize: 18, color: COLORS.amber }} />}
-                        label={`${fmtInt(rows.length)} học viên`}
+                        label={`${fmtInt(total)} học viên`}
                         sx={{
                             borderRadius: "999px",
                             bgcolor: `${COLORS.amber}12`,
@@ -168,15 +198,12 @@ export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
 
             <Divider sx={{ borderColor: COLORS.border }} />
 
-            <Box sx={{ p: 2.5 }}>
+            <Box sx={{ p: 2.5, pt: 2.25 }}>
                 <TableContainer>
                     <Table size="small">
                         <TableHead>
                             <TableRow>
-                                <TableCell
-                                    align="center"
-                                    sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 60 }}
-                                >
+                                <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 60 }}>
                                     STT
                                 </TableCell>
 
@@ -184,52 +211,39 @@ export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
                                     Học viên
                                 </TableCell>
 
-                                <TableCell
-                                    align="center"
-                                    sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 120 }}
-                                >
+                                <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 120 }}>
                                     Bài làm
                                 </TableCell>
 
-                                <TableCell
-                                    align="center"
-                                    sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 120 }}
-                                >
+                                <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 120 }}>
                                     Điểm TB
                                 </TableCell>
 
-                                <TableCell
-                                    align="center"
-                                    sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 140 }}
-                                >
+                                <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 140 }}>
                                     Tiến độ
                                 </TableCell>
 
-                                <TableCell
-                                    align="center"
-                                    sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 170 }}
-                                >
+                                <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 170 }}>
                                     Mức độ
                                 </TableCell>
 
-                                <TableCell
-                                    align="center"
-                                    sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 140 }}
-                                >
+                                <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 140 }}>
                                     Chi tiết
                                 </TableCell>
                             </TableRow>
                         </TableHead>
 
                         <TableBody>
-                            {rows.length === 0 ? (
+                            {total === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={7} sx={{ color: COLORS.textSecondary, fontWeight: 800 }}>
                                         Chưa có dữ liệu.
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                rows.map((u, idx) => {
+                                pagedRows.map((u, idx) => {
+                                    const globalIndex = (safePage - 1) * pageSize + idx + 1;
+
                                     // helper (để không đụng business logic cũ)
                                     const { tone: helperTone } = mapRiskLevel(u?.riskLevel);
 
@@ -250,12 +264,12 @@ export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
 
                                     return (
                                         <TableRow
-                                            key={u.userId ?? `${u.email ?? "row"}_${idx}`}
+                                            key={u.userId ?? `${u.email ?? "row"}_${globalIndex}`}
                                             hover
                                             sx={{ cursor: "default" }}
                                         >
                                             <TableCell align="center" sx={{ fontWeight: 900 }}>
-                                                {idx + 1}
+                                                {globalIndex}
                                             </TableCell>
 
                                             <TableCell>
@@ -355,6 +369,28 @@ export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
                         </TableBody>
                     </Table>
                 </TableContainer>
+
+                {/* ✅ Pagination footer */}
+                {total > 0 ? (
+                    <Box sx={{ mt: 2 }}>
+                        <Divider sx={{ borderColor: COLORS.border, mb: 1.5 }} />
+                        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                            <AppPagination
+                                page={safePage}
+                                pageSize={pageSize}
+                                total={total}
+                                onPageChange={(p) => setPage(p)}
+                                onPageSizeChange={(ps) => {
+                                    setPageSize(ps);
+                                    setPage(1);
+                                }}
+                                pageSizeOptions={[10, 20, 50, 100]}
+                                showPageSize
+                                loading={false}
+                            />
+                        </Box>
+                    </Box>
+                ) : null}
             </Box>
         </CardShell>
     );
