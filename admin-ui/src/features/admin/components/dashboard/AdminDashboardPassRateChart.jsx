@@ -14,6 +14,20 @@ import {
 
 import { DASHBOARD_COLORS as COLORS, safeNumber } from "./dashboard.helpers";
 
+// Hàm format ngày tháng
+const formatDate = (dateStr) => {
+    if (!dateStr) return "";
+    try {
+        const date = new Date(dateStr);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+    } catch {
+        return dateStr;
+    }
+};
+
 const CardShell = ({ children, sx }) => (
     <Paper
         elevation={0}
@@ -46,7 +60,7 @@ const ChartHeader = ({ title, subtitle }) => (
             <Stack direction="row" spacing={1} alignItems="center">
                 <ScheduleRounded sx={{ fontSize: 16, color: COLORS.textSecondary }} />
                 <Typography sx={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: 800 }}>
-                    Theo khoảng lọc
+                    Theo khoảng thời gian
                 </Typography>
             </Stack>
         </Stack>
@@ -66,7 +80,7 @@ export default function AdminDashboardPassRateChart({ timeSeries = [] }) {
     return (
         <CardShell sx={{ height: "100%" }}>
             <ChartHeader
-                title="Tỷ lệ bài Đạt theo ngày"
+                title="Tỷ lệ bài Đạt tính theo ngày"
                 subtitle="Tỷ lệ bài Đạt trên tổng số bài làm của học viên"
             />
             <Divider sx={{ borderColor: COLORS.border }} />
@@ -74,7 +88,15 @@ export default function AdminDashboardPassRateChart({ timeSeries = [] }) {
                 <ResponsiveContainer width="100%" height={280}>
                     <LineChart data={passRateData}>
                         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} vertical={false} />
-                        <XAxis dataKey="name" stroke={COLORS.textSecondary} axisLine={false} tickLine={false} />
+                        <XAxis
+                            dataKey="name"
+                            stroke={COLORS.textSecondary}
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={formatDate}
+                            dy={10}
+                            style={{ fontSize: '12px' }}
+                        />
                         <YAxis
                             stroke={COLORS.textSecondary}
                             axisLine={false}
