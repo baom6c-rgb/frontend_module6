@@ -17,17 +17,16 @@ const OverviewBoxShell = ({ title, subtitle, children }) => (
             boxShadow: "0 2px 8px rgba(0,0,0,.04)",
             width: "100%",
             border: "1px solid #f0f0f0",
-            // ✅ bỏ padding “phình ngang + thừa trắng”
             px: { xs: "20px", md: "24px" },
-            py: "20px",
-            height: "100%", // ✅ stretch
+            py: "16px",
+            height: "100%",
             display: "flex",
             flexDirection: "column",
             minWidth: 0,
         }}
     >
-        <Box sx={{ mb: "18px", flexShrink: 0 }}>
-            <Typography sx={{ fontSize: "22px", fontWeight: 700, color: "#1a1a1a", mb: "6px" }}>
+        <Box sx={{ mb: "8px", flexShrink: 0 }}>
+            <Typography sx={{ fontSize: "22px", fontWeight: 700, color: "#1a1a1a", mb: "4px" }}>
                 {title}
             </Typography>
 
@@ -38,7 +37,7 @@ const OverviewBoxShell = ({ title, subtitle, children }) => (
             ) : null}
         </Box>
 
-        <Box sx={{ flex: 1, minWidth: 0, minHeight: 280 }}>
+        <Box sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center" }}>
             {children}
         </Box>
     </Paper>
@@ -75,12 +74,12 @@ const ResultDonut = ({ total, pass, fail, passRate, failRate, other }) => {
   )`;
 
     return (
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={2.25} alignItems="center">
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={2.25} alignItems="center" sx={{ width: "100%" }}>
             {/* Donut */}
             <Box
                 sx={{
-                    width: 220,
-                    height: 220,
+                    width: 160,
+                    height: 160,
                     borderRadius: "999px",
                     background: ringBg,
                     display: "grid",
@@ -91,8 +90,8 @@ const ResultDonut = ({ total, pass, fail, passRate, failRate, other }) => {
             >
                 <Box
                     sx={{
-                        width: 140,
-                        height: 140,
+                        width: 110,
+                        height: 110,
                         borderRadius: "999px",
                         bgcolor: "#fff",
                         border: "1px solid #f0f0f0",
@@ -105,8 +104,8 @@ const ResultDonut = ({ total, pass, fail, passRate, failRate, other }) => {
                     <Typography sx={{ fontWeight: 700, color: "#1a1a1a", fontSize: 34, lineHeight: 1 }}>
                         {fmtInt(total)}
                     </Typography>
-                    <Typography sx={{ mt: 0.3, color: "#64748b", fontWeight: 500, fontSize: 12 }}>
-                        Tổng bài làm
+                    <Typography sx={{ mt: 0.3, color: "#64748b", fontWeight: 500, fontSize: 11 }}>
+                        Tổng số bài
                     </Typography>
                 </Box>
             </Box>
@@ -126,7 +125,6 @@ const ResultDonut = ({ total, pass, fail, passRate, failRate, other }) => {
                 <Stack spacing={1.2}>
                     <LegendRow color={COLORS.success} label="Đạt" value={safePass} />
                     <LegendRow color={COLORS.danger} label="Trượt" value={safeFail} />
-                    <LegendRow color={COLORS.amber} label="Khác (hiếm)" value={safeOther} />
                 </Stack>
 
                 <Box sx={{ mt: 1.5 }}>
@@ -162,7 +160,7 @@ export default function AdminDashboardResultClassificationBox({ overview, metric
         metrics?.otherCount ?? Math.max(0, safeNumber(totalAttempts, 0) - passCount - failCount);
 
     return (
-        <OverviewBoxShell title="Phân loại kết quả" subtitle="Biểu đồ Donut + Legend (bám theo bộ lọc)">
+        <OverviewBoxShell title="Biểu đồ thống kê kết quả học tập" subtitle="Thống kê số bài Đạt và số bài Trượt">
             <ResultDonut
                 total={totalAttempts}
                 pass={passCount}
