@@ -9,6 +9,7 @@ import AdminDashboardFilterBar from "./components/dashboard/AdminDashboardFilter
 
 import {
     AdminDashboardKpiCards,
+    AdminDashboardResultClassificationBox,
     AdminDashboardTrends,
     AdminDashboardAtRiskTable,
     AdminDashboardAiInsightPanel,
@@ -20,13 +21,68 @@ import {
     normalizeOption,
     buildRequestBody,
     getDefaultFilters7d,
+    safeNumber,
 } from "./components/dashboard/dashboard.helpers";
 
 const PageShell = ({ children }) => (
-    <Box sx={{ width: "100%", mx: "auto", px: { xs: 2, md: 6 }, pb: 4 }}>
+    <Box
+        sx={{
+            width: "100%",
+            mx: "auto",
+            px: { xs: 2, md: 6 },
+            pb: 4,
+            minWidth: 0, // ✅ quan trọng khi sidebar co giãn
+        }}
+    >
         {children}
     </Box>
 );
+
+/** ✅ 1 nguồn metrics để đồng bộ KPI + Donut + Trends */
+const computeMetrics = (overview) => {
+    const totalAttempts = Math.max(0, safeNumber(overview?.totalAttempts, 0));
+    const totalStudents = Math.max(0, safeNumber(overview?.totalStudents, 0));
+
+    const passRate = Math.max(0, safeNumber(overview?.passRate, 0));
+    const failRate = Math.max(0, safeNumber(overview?.failRate, 0));
+
+    let passCount = Math.round(totalAttempts * passRate);
+    let failCount = Math.round(totalAttempts * failRate);
+
+    // ✅ clamp để không âm / không vượt total
+    passCount = Math.max(0, Math.min(passCount, totalAttempts));
+    failCount = Math.max(0, Math.min(failCount, totalAttempts - passCount));
+
+    const otherCount = Math.max(0, totalAttempts - passCount - failCount);
+
+    const timeSeries = Array.isArray(overview?.timeSeries) ? overview.timeSeries : [];
+
+    const attemptsByDay = timeSeries.map((x) => ({
+        name: x?.date || "",
+        attempts: Math.max(0, safeNumber(x?.attempts, 0)),
+    }));
+
+    const passRateByDay = timeSeries.map((x) => {
+        const fr = Math.max(0, safeNumber(x?.failRate, 0));
+        return {
+            name: x?.date || "",
+            passRate: Math.max(0, Math.min(1, 1 - fr)),
+        };
+    });
+
+    return {
+        totalAttempts,
+        totalStudents,
+        passRate,
+        failRate,
+        passCount,
+        failCount,
+        otherCount,
+        attemptsByDay,
+        passRateByDay,
+        timeSeries,
+    };
+};
 
 export default function AdminDashboard() {
     const initFilters = () => {
@@ -108,7 +164,9 @@ export default function AdminDashboard() {
             setAiError("");
         } catch (e) {
             console.error("overview error:", e);
-            setDashError("Không tải được thống kê. Kiểm tra quyền ADMIN và endpoint /admin/analytics/overview.");
+            setDashError(
+                "Không tải được thống kê. Kiểm tra quyền ADMIN và endpoint /admin/analytics/overview."
+            );
         } finally {
             setDashLoading(false);
         }
@@ -149,14 +207,14 @@ export default function AdminDashboard() {
         }
     };
 
-    const timeSeries = useMemo(() => overview?.timeSeries || [], [overview]);
+    const metrics = useMemo(() => computeMetrics(overview), [overview]);
 
     return (
         <Fade in timeout={350}>
             <Box sx={{ background: COLORS.bg, minHeight: "calc(100vh - 120px)" }}>
                 <PageShell>
                     {/* HEADER: chỉ 1 box Filter */}
-                    <Box sx={{ mt: 2, mb: 2 }}>
+                    <Box sx={{ mt: 2, mb: 2, minWidth: 0 }}>
                         <AdminDashboardFilterBar
                             classes={classes}
                             modules={modules}
@@ -174,7 +232,7 @@ export default function AdminDashboard() {
                         ) : null}
                     </Box>
 
-                    {/* BODY: Filter -> AI -> Students -> KPI -> Trends */}
+                    {/* BODY: Loading */}
                     {!overview && dashLoading ? (
                         <Box
                             sx={{
@@ -194,8 +252,8 @@ export default function AdminDashboard() {
                         </Box>
                     ) : null}
 
-                    {/* 1) AI phân tích theo bộ lọc (gradient áp vào component này) */}
-                    <Box sx={{ mt: 2 }}>
+                    {/* ✅ 1) AI phân tích theo bộ lọc — NGAY DƯỚI FILTER */}
+                    <Box sx={{ mt: 2, minWidth: 0 }}>
                         <AdminDashboardAiInsightPanel
                             overview={overview}
                             insight={aiInsight}
@@ -205,23 +263,37 @@ export default function AdminDashboard() {
                         />
                     </Box>
 
-                    {/* 2) Danh sách học viên đã làm bài */}
-                    <Box sx={{ mt: 3 }} ref={studentsSectionRef}>
+                    {/* ✅ 2) Danh sách học viên đã làm bài — NGAY DƯỚI AI */}
+                    <Box sx={{ mt: 3, minWidth: 0 }} ref={studentsSectionRef}>
                         <AdminDashboardAtRiskTable
-                            // ✅ FIX: bảng phải hiển thị toàn bộ học viên (không chỉ nhóm nguy hiểm)
                             students={overview?.students || []}
                             onSelect={onSelectStudent}
                         />
                     </Box>
 
-                    {/* KPI */}
-                    <Box sx={{ mt: 3 }}>
-                        <AdminDashboardKpiCards overview={overview} onJumpAtRisk={onJumpStudents} />
+                    {/* ✅ 3) KPI + Phân loại: đổi sang CSS grid để sidebar co giãn không vỡ */}
+                    <Box
+                        sx={{
+                            mt: 3,
+                            display: "grid",
+                            gridTemplateColumns: { xs: "1fr", lg: "1.12fr 0.88fr" },
+                            gap: 3,
+                            alignItems: "stretch",
+                            minWidth: 0,
+                        }}
+                    >
+                        <Box sx={{ minWidth: 0 }}>
+                            <AdminDashboardKpiCards overview={overview} metrics={metrics} onJumpAtRisk={onJumpStudents} />
+                        </Box>
+
+                        <Box sx={{ minWidth: 0 }}>
+                            <AdminDashboardResultClassificationBox overview={overview} metrics={metrics} />
+                        </Box>
                     </Box>
 
-                    {/* Trends */}
-                    <Box sx={{ mt: 3 }}>
-                        <AdminDashboardTrends timeSeries={timeSeries} />
+                    {/* Trends: vẫn giữ timeSeries, nhưng truyền thêm metrics để đồng bộ nếu muốn */}
+                    <Box sx={{ mt: 3, minWidth: 0 }}>
+                        <AdminDashboardTrends timeSeries={metrics.timeSeries} />
                     </Box>
 
                     <StudentQuickDrawer
