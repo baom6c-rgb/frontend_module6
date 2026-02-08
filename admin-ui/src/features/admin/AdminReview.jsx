@@ -533,7 +533,7 @@ const AdminReview = () => {
             {/* Filters */}
             <FilterPanel
                 search={{
-                    placeholder: "Tìm kiếm theo tên bài test, module, lớp...",
+                    placeholder: "Tìm kiếm theo tên bài thi, module, lớp...",
                     value: searchText,
                     onChange: setSearchText,
                 }}

@@ -28,9 +28,10 @@ const PageShell = ({ children }) => (
     <Box
         sx={{
             width: "100%",
+            maxWidth: 1400,
             mx: "auto",
-            px: { xs: 2, md: 6 },
-            pb: 4,
+            px: { xs: 1.5, sm: 2, md: 4, lg: 6 },
+            pb: { xs: 3, md: 4 },
             minWidth: 0, // ✅ quan trọng khi sidebar co giãn
         }}
     >
@@ -211,10 +212,10 @@ export default function AdminDashboard() {
 
     return (
         <Fade in timeout={350}>
-            <Box sx={{ background: COLORS.bg, minHeight: "calc(100vh - 120px)" }}>
+            <Box sx={{ background: COLORS.bg, minHeight: "calc(100vh - 120px)", width: "100%" }}>
                 <PageShell>
-                    {/* HEADER: chỉ 1 box Filter */}
-                    <Box sx={{ mt: 2, mb: 2, minWidth: 0 }}>
+                    {/* HEADER: Filter */}
+                    <Box sx={{ mt: { xs: 1.5, md: 2 }, mb: { xs: 1.5, md: 2 }, minWidth: 0 }}>
                         <AdminDashboardFilterBar
                             classes={classes}
                             modules={modules}
@@ -232,18 +233,18 @@ export default function AdminDashboard() {
                         ) : null}
                     </Box>
 
-                    {/* BODY: Loading */}
+                    {/* BODY: Loading (chỉ khi chưa có overview) */}
                     {!overview && dashLoading ? (
                         <Box
                             sx={{
-                                p: 3,
+                                p: 2.25,
                                 borderRadius: "18px",
                                 border: `1px solid ${COLORS.border}`,
                                 bgcolor: "#fff",
                                 boxShadow: "0px 18px 45px rgba(15, 23, 42, 0.06)",
                             }}
                         >
-                            <Stack direction="row" spacing={1.5} alignItems="center">
+                            <Stack direction="row" spacing={1.25} alignItems="center">
                                 <CircularProgress size={18} sx={{ color: COLORS.primaryBlue }} />
                                 <Typography sx={{ color: COLORS.textSecondary, fontWeight: 800 }}>
                                     Đang tải thống kê...
@@ -252,8 +253,8 @@ export default function AdminDashboard() {
                         </Box>
                     ) : null}
 
-                    {/* ✅ 1) AI phân tích theo bộ lọc — NGAY DƯỚI FILTER */}
-                    <Box sx={{ mt: 2, minWidth: 0 }}>
+                    {/* 1) AI phân tích theo bộ lọc */}
+                    <Box sx={{ mt: { xs: 1.5, md: 2 }, minWidth: 0 }}>
                         <AdminDashboardAiInsightPanel
                             overview={overview}
                             insight={aiInsight}
@@ -263,27 +264,34 @@ export default function AdminDashboard() {
                         />
                     </Box>
 
-                    {/* ✅ 2) Danh sách học viên đã làm bài — NGAY DƯỚI AI */}
-                    <Box sx={{ mt: 3, minWidth: 0 }} ref={studentsSectionRef}>
-                        <AdminDashboardAtRiskTable
-                            students={overview?.students || []}
-                            onSelect={onSelectStudent}
-                        />
+                    {/* 2) Danh sách học viên đã làm bài */}
+                    <Box sx={{ mt: { xs: 2, md: 3 }, minWidth: 0 }} ref={studentsSectionRef}>
+                        {/* ✅ wrapper chống tràn ngang nếu table/content rộng */}
+                        <Box sx={{ width: "100%", minWidth: 0, overflowX: "hidden" }}>
+                            <AdminDashboardAtRiskTable
+                                students={overview?.students || []}
+                                onSelect={onSelectStudent}
+                            />
+                        </Box>
                     </Box>
 
-                    {/* ✅ 3) KPI + Phân loại: đổi sang CSS grid để sidebar co giãn không vỡ */}
+                    {/* 3) KPI + Phân loại */}
                     <Box
                         sx={{
-                            mt: 3,
+                            mt: { xs: 2, md: 3 },
                             display: "grid",
                             gridTemplateColumns: { xs: "1fr", lg: "1.12fr 0.88fr" },
-                            gap: 3,
+                            gap: { xs: 2, md: 3 },
                             alignItems: "stretch",
                             minWidth: 0,
                         }}
                     >
                         <Box sx={{ minWidth: 0 }}>
-                            <AdminDashboardKpiCards overview={overview} metrics={metrics} onJumpAtRisk={onJumpStudents} />
+                            <AdminDashboardKpiCards
+                                overview={overview}
+                                metrics={metrics}
+                                onJumpAtRisk={onJumpStudents}
+                            />
                         </Box>
 
                         <Box sx={{ minWidth: 0 }}>
@@ -291,8 +299,8 @@ export default function AdminDashboard() {
                         </Box>
                     </Box>
 
-                    {/* Trends: vẫn giữ timeSeries, nhưng truyền thêm metrics để đồng bộ nếu muốn */}
-                    <Box sx={{ mt: 3, minWidth: 0 }}>
+                    {/* 4) Trends */}
+                    <Box sx={{ mt: { xs: 2, md: 3 }, minWidth: 0 }}>
                         <AdminDashboardTrends timeSeries={metrics.timeSeries} />
                     </Box>
 

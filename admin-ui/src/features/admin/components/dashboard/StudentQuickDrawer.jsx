@@ -7,10 +7,11 @@ import {
     Typography,
     Divider,
     IconButton,
-    Chip,
     Avatar,
     LinearProgress,
+    useMediaQuery,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import { CloseRounded } from "@mui/icons-material";
 
 import {
@@ -43,6 +44,9 @@ const Placeholder = ({ children }) => (
 );
 
 export default function StudentQuickDrawer({ open, onClose, student, filters }) {
+    const theme = useTheme();
+    const downSm = useMediaQuery(theme.breakpoints.down("sm"));
+
     // cache AI theo từng userId để đổi qua lại học viên không bị gọi lại
     const [aiCache, setAiCache] = useState({});
 
@@ -92,8 +96,8 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
             {/* Header (gradient) */}
             <Box
                 sx={{
-                    px: 2.5,
-                    py: 2.25,
+                    px: { xs: 2, sm: 2.5 },
+                    py: { xs: 1.75, sm: 2.25 },
                     color: "#fff",
                     background: `linear-gradient(135deg, ${COLORS.navy} 0%, ${COLORS.navyLight} 100%)`,
                     borderBottom: `1px solid ${COLORS.border}`,
@@ -124,7 +128,7 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
             </Box>
 
             {/* Body */}
-            <Box sx={{ p: 2.5, overflowY: "auto" }}>
+            <Box sx={{ p: { xs: 2, sm: 2.5 }, overflowY: "auto" }}>
                 {!student ? (
                     <Placeholder>Chọn 1 học viên trong bảng để xem chi tiết.</Placeholder>
                 ) : (
@@ -146,7 +150,7 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                                 <Typography sx={{ fontWeight: 950, color: COLORS.textPrimary, fontSize: 16, lineHeight: 1.2 }}>
                                     {student.fullName || "(Chưa có tên)"}
                                 </Typography>
-                                <Typography sx={{ color: COLORS.textSecondary, fontWeight: 750, mt: 0.3 }}>
+                                <Typography sx={{ color: COLORS.textSecondary, fontWeight: 750, mt: 0.3 }} noWrap>
                                     {student.email || "-"}
                                 </Typography>
                             </Box>
@@ -270,7 +274,7 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
 
                         <Divider sx={{ borderColor: COLORS.border }} />
 
-                        {/* AI Feedback: summary + reasons + actions nằm trong panel (giữ logic hiện có) */}
+                        {/* AI Feedback */}
                         <AdminDashboardAiInsightPanel
                             student={student}
                             filters={filters}
@@ -279,6 +283,7 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                                 if (!studentKey) return;
                                 setAiCache((prev) => ({ ...prev, [studentKey]: next }));
                             }}
+                            dense={downSm}
                         />
                     </Stack>
                 )}

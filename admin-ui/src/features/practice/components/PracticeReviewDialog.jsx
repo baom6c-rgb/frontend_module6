@@ -11,7 +11,6 @@ import {
     Chip,
     Stack,
     Button,
-    Paper,
 } from "@mui/material";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 
@@ -32,8 +31,6 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
         if (!onlyWrong) return itemsWithNo;
         return itemsWithNo.filter((x) => x?.isCorrect === false);
     }, [itemsWithNo, onlyWrong]);
-
-    const aiFeedback = useMemo(() => String(review?.aiFeedback ?? "").trim(), [review]);
 
     return (
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
@@ -59,7 +56,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                         onClick={() => setOnlyWrong((v) => !v)}
                         sx={{ fontWeight: 900 }}
                     >
-                        {onlyWrong ? "Đang lọc câu sai" : "Chỉ xem câu sai"}
+                        {onlyWrong ? "Xem toàn bộ câu" : "Chỉ xem câu sai"}
                     </Button>
                 </Stack>
 
@@ -149,8 +146,13 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
 
                                                     <Box sx={{ flex: 1 }} />
 
-                                                    {isCorrect && <Chip size="small" label="Đáp án đúng" sx={{ fontWeight: 900 }} />}
-                                                    {isSelected && <Chip size="small" label="Bạn chọn" sx={{ fontWeight: 900 }} />}
+                                                    {/* ✅ yêu cầu mới:
+                                                        - câu đúng: bỏ "Đáp án đúng" + "Bạn chọn" -> chỉ "ĐÚNG"
+                                                        - câu sai: bỏ "Bạn chọn" (vẫn giữ hiển thị đúng/sai qua border + chip phía trên)
+                                                    */}
+                                                    {isCorrect ? (
+                                                        <Chip size="small" label="ĐÚNG" sx={{ fontWeight: 900 }} />
+                                                    ) : null}
                                                 </Box>
                                             );
                                         })}
@@ -177,9 +179,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                 {/* feedback chung per-question */}
                                 {q.feedback ? (
                                     <Box sx={{ mt: 1.5 }}>
-                                        <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
-                                            Giải thích / Gợi ý học lại
-                                        </Typography>
+                                        <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>Giải thích / Gợi ý học lại</Typography>
                                         <Typography sx={{ mt: 0.5, color: "#716f6f", fontWeight: 700, whiteSpace: "pre-wrap" }}>
                                             {q.feedback}
                                         </Typography>
