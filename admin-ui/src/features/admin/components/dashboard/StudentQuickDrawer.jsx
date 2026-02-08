@@ -58,13 +58,27 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
 
         const attemptsCount = safeNumber(student?.attemptsCount, safeNumber(student?.attempts, 0));
         const avgScore = safeNumber(student?.avgScore, 0);
-        const passRate = safeNumber(student?.passRate, 0);
+
+        // BE đã có failRate (0..1). passRate có thể null.
+        const failRate = safeNumber(student?.failRate, 0);
+        const passRate = safeNumber(student?.passRate, Math.max(0, Math.min(1, 1 - failRate)));
+
+        // ✅ FE-only counts (ước lượng theo rate)
+        const failedCount = attemptsCount > 0 ? Math.round(attemptsCount * failRate) : 0;
+        const passedCount = Math.max(0, attemptsCount - failedCount);
 
         const { label, tone } = mapRiskLevel(student?.riskLevel);
         const chip = toneToChipStyle(tone, COLORS);
 
-        return { attemptsCount, avgScore, passRate, label, chip, tone };
+        return { attemptsCount, avgScore, passRate, failRate, passedCount, failedCount, label, chip, tone };
     }, [student]);
+
+    const kpiCardBaseSx = {
+        p: 1.5,
+        borderRadius: 2,
+        border: `1px solid ${COLORS.border}`,
+        textAlign: "center",
+    };
 
     return (
         <Drawer
@@ -142,21 +156,13 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                             </Box>
                         </Stack>
 
-                        {/* KPI grid responsive */}
-                        <Box
-                            sx={{
-                                display: "grid",
-                                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
-                                gap: 1.25,
-                            }}
-                        >
+                        {/* KPI grid 2 cột, thêm 2 ô ĐẠT/TRƯỢT ngay dưới */}
+                        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.25 }}>
+                            {/* Tổng bài làm */}
                             <Box
                                 sx={{
-                                    p: 1.5,
-                                    borderRadius: 2,
+                                    ...kpiCardBaseSx,
                                     bgcolor: COLORS.bg,
-                                    border: `1px solid ${COLORS.border}`,
-                                    textAlign: "center",
                                 }}
                             >
                                 <Typography sx={{ fontWeight: 950, fontSize: 22, color: COLORS.textPrimary }}>
@@ -167,13 +173,11 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                                 </Typography>
                             </Box>
 
+                            {/* Điểm TB */}
                             <Box
                                 sx={{
-                                    p: 1.5,
-                                    borderRadius: 2,
+                                    ...kpiCardBaseSx,
                                     bgcolor: COLORS.bg,
-                                    border: `1px solid ${COLORS.border}`,
-                                    textAlign: "center",
                                 }}
                             >
                                 <Typography sx={{ fontWeight: 950, fontSize: 22, color: COLORS.textPrimary }}>
@@ -184,6 +188,37 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                                 </Typography>
                             </Box>
 
+                            {/* ✅ Số bài đạt (xanh) */}
+                            <Box
+                                sx={{
+                                    ...kpiCardBaseSx,
+                                    bgcolor: COLORS.bg,
+                                }}
+                            >
+                                <Typography sx={{ fontWeight: 950, fontSize: 22, color: COLORS.success }}>
+                                    {fmtInt(summary?.passedCount ?? 0)}
+                                </Typography>
+                                <Typography sx={{ fontWeight: 900, fontSize: 11, color: COLORS.textSecondary, letterSpacing: 0.4 }}>
+                                    ĐÃ ĐẠT
+                                </Typography>
+                            </Box>
+
+                            {/* ✅ Số bài trượt (đỏ) */}
+                            <Box
+                                sx={{
+                                    ...kpiCardBaseSx,
+                                    bgcolor: COLORS.bg,
+                                }}
+                            >
+                                <Typography sx={{ fontWeight: 950, fontSize: 22, color: COLORS.danger }}>
+                                    {fmtInt(summary?.failedCount ?? 0)}
+                                </Typography>
+                                <Typography sx={{ fontWeight: 900, fontSize: 11, color: COLORS.textSecondary, letterSpacing: 0.4 }}>
+                                    ĐÃ TRƯỢT
+                                </Typography>
+                            </Box>
+
+                            {/* Tiến độ */}
                             <Box
                                 sx={{
                                     p: 1.5,
@@ -218,6 +253,7 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                                 </Stack>
                             </Box>
 
+                            {/* Mức độ */}
                             <Box
                                 sx={{
                                     p: 1.5,
