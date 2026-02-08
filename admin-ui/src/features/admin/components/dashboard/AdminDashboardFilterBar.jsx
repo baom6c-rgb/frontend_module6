@@ -23,6 +23,8 @@ import { getAllModulesApi } from "../../../../api/moduleApi";
  * - TỰ FETCH options giống AdminUserList
  * - Hiển thị theo className / moduleName
  * - value vẫn là id → không gãy filter logic
+ *
+ * ✅ UI: preset = custom => xổ date range xuống DƯỚI (Collapse riêng)
  */
 export default function AdminDashboardFilterBar({
                                                     filters,
@@ -45,12 +47,8 @@ export default function AdminDashboardFilterBar({
     );
 
     // ===== OPTIONS STATE (GIỐNG ADMIN USER LIST) =====
-    const [classOptions, setClassOptions] = useState([
-        { value: "", label: "Tất cả lớp" },
-    ]);
-    const [moduleOptions, setModuleOptions] = useState([
-        { value: "", label: "Tất cả module" },
-    ]);
+    const [classOptions, setClassOptions] = useState([{ value: "", label: "Tất cả lớp" }]);
+    const [moduleOptions, setModuleOptions] = useState([{ value: "", label: "Tất cả module" }]);
 
     // ===== FETCH OPTIONS =====
     useEffect(() => {
@@ -70,38 +68,22 @@ export default function AdminDashboardFilterBar({
                 const classOpts = classList
                     .map((c) => ({
                         value: String(c.id),
-                        label:
-                            c.className ??
-                            c.name ??
-                            c.class?.name ??
-                            c.class?.className ??
-                            "",
+                        label: c.className ?? c.name ?? c.class?.name ?? c.class?.className ?? "",
                     }))
                     .filter((o) => o.label);
 
-                setClassOptions([
-                    { value: "", label: "Tất cả lớp" },
-                    ...classOpts,
-                ]);
+                setClassOptions([{ value: "", label: "Tất cả lớp" }, ...classOpts]);
 
                 // ---- modules ----
                 const moduleList = modulesRes?.data ?? modulesRes ?? [];
                 const moduleOpts = moduleList
                     .map((m) => ({
                         value: String(m.id),
-                        label:
-                            m.moduleName ??
-                            m.name ??
-                            m.module?.name ??
-                            m.module?.moduleName ??
-                            "",
+                        label: m.moduleName ?? m.name ?? m.module?.name ?? m.module?.moduleName ?? "",
                     }))
                     .filter((o) => o.label);
 
-                setModuleOptions([
-                    { value: "", label: "Tất cả module" },
-                    ...moduleOpts,
-                ]);
+                setModuleOptions([{ value: "", label: "Tất cả module" }, ...moduleOpts]);
             } catch {
                 // ignore – giữ default "Tất cả"
             }
@@ -143,6 +125,8 @@ export default function AdminDashboardFilterBar({
 
     // ===== UI ONLY =====
     const FIELD_HEIGHT = "45px";
+    const isCustom = (filters?.preset ?? "7d") === "custom";
+    const safeDate = (s) => (s ? String(s).slice(0, 10) : "");
 
     const glassSx = {
         borderRadius: 3,
@@ -216,9 +200,7 @@ export default function AdminDashboardFilterBar({
 
     const renderAutocomplete = (label, options, value, onChangeValue) => {
         const selected =
-            options.find((o) => String(o.value) === String(value)) ||
-            options[0] ||
-            null;
+            options.find((o) => String(o.value) === String(value)) || options[0] || null;
 
         return (
             <Autocomplete
@@ -227,16 +209,10 @@ export default function AdminDashboardFilterBar({
                 disableClearable
                 autoHighlight
                 getOptionLabel={(o) => o.label}
-                isOptionEqualToValue={(o, v) =>
-                    String(o.value) === String(v.value)
-                }
-                onChange={(e, nv) =>
-                    onChangeValue(nv?.value ?? "")
-                }
+                isOptionEqualToValue={(o, v) => String(o.value) === String(v.value)}
+                onChange={(e, nv) => onChangeValue(nv?.value ?? "")}
                 sx={{ width: "100%" }}
-                renderInput={(params) => (
-                    <TextField {...params} label={label} sx={inputSx} />
-                )}
+                renderInput={(params) => <TextField {...params} label={label} sx={inputSx} />}
             />
         );
     };
@@ -282,11 +258,7 @@ export default function AdminDashboardFilterBar({
                     </Button>
 
                     <Tooltip title="Đặt lại bộ lọc">
-                        <IconButton
-                            onClick={onReset}
-                            disabled={loading}
-                            sx={resetIconSx}
-                        >
+                        <IconButton onClick={onReset} disabled={loading} sx={resetIconSx}>
                             <RestartAltRounded />
                         </IconButton>
                     </Tooltip>
@@ -295,13 +267,11 @@ export default function AdminDashboardFilterBar({
 
             {/* FILTERS */}
             <Collapse in={open} sx={{ mt: 2 }}>
+                {/* Hàng 1: 3 cột giữ nguyên */}
                 <Box
                     sx={{
                         display: "grid",
-                        gridTemplateColumns: {
-                            xs: "1fr",
-                            md: "repeat(3, 1fr)",
-                        },
+                        gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" },
                         gap: 2,
                     }}
                 >
@@ -309,9 +279,7 @@ export default function AdminDashboardFilterBar({
                         select
                         label="Khoảng thời gian"
                         value={filters.preset ?? "7d"}
-                        onChange={(e) =>
-                            onPresetChange(e.target.value)
-                        }
+                        onChange={(e) => onPresetChange(e.target.value)}
                         sx={inputSx}
                     >
                         {presetOptions.map((p) => (
@@ -321,20 +289,43 @@ export default function AdminDashboardFilterBar({
                         ))}
                     </TextField>
 
-                    {renderAutocomplete(
-                        "Lớp",
-                        classOptions,
-                        filters.classId ?? "",
-                        (v) => patch({ classId: v })
+                    {renderAutocomplete("Lớp", classOptions, filters.classId ?? "", (v) =>
+                        patch({ classId: v })
                     )}
 
-                    {renderAutocomplete(
-                        "Module",
-                        moduleOptions,
-                        filters.moduleId ?? "",
-                        (v) => patch({ moduleId: v })
+                    {renderAutocomplete("Module", moduleOptions, filters.moduleId ?? "", (v) =>
+                        patch({ moduleId: v })
                     )}
                 </Box>
+
+                {/* Hàng 2: xổ xuống dưới khi custom */}
+                <Collapse in={isCustom} timeout={180} unmountOnExit>
+                    <Box
+                        sx={{
+                            mt: 2,
+                            display: "grid",
+                            gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
+                            gap: 2,
+                        }}
+                    >
+                        <TextField
+                            type="date"
+                            label="Từ ngày"
+                            value={safeDate(filters.fromDate)}
+                            onChange={(e) => patch({ fromDate: e.target.value })}
+                            sx={inputSx}
+                            InputLabelProps={{ shrink: true }}
+                        />
+                        <TextField
+                            type="date"
+                            label="Đến ngày"
+                            value={safeDate(filters.toDate)}
+                            onChange={(e) => patch({ toDate: e.target.value })}
+                            sx={inputSx}
+                            InputLabelProps={{ shrink: true }}
+                        />
+                    </Box>
+                </Collapse>
             </Collapse>
         </Box>
     );
