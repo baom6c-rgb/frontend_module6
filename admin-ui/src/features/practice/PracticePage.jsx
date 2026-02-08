@@ -199,6 +199,20 @@ export default function PracticePage() {
 
     const [assistantMode, setAssistantMode] = useState(ASSISTANT_MODE.GENERATE);
 
+    // ✅ Tab rules:
+    // - DOING => ẩn "Tạo đề" + chặn không cho switch về GENERATE
+    // - GENERATE => ẩn "Hỏi khái niệm"
+    const lockGenerate = mode === MODE.DOING;
+    const hideStudyWhenGenerate = assistantMode === ASSISTANT_MODE.GENERATE;
+
+    const setAssistantModeSafe = useCallback(
+        (next) => {
+            if (lockGenerate && next === ASSISTANT_MODE.GENERATE) return;
+            setAssistantMode(next);
+        },
+        [lockGenerate]
+    );
+
     const [messages, setMessages] = useState([
         {
             id: uid("a"),
@@ -626,7 +640,11 @@ export default function PracticePage() {
             console.error(e);
             const status = e?.response?.status;
             const serverMsg =
-                e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Generate failed";
+                e?.response?.data?.message ||
+                e?.response?.data?.error ||
+                e?.response?.data ||
+                e?.message ||
+                "Generate failed";
             showToast(`Không tạo được đề${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
             appendMessage({ role: "assistant", text: "Lỗi tạo đề (AI/Server). Thử gửi lại hoặc đổi học liệu." });
             return { ok: false };
@@ -668,8 +686,8 @@ export default function PracticePage() {
             setMode(MODE.DOING);
             setIsCanvasOpen(true);
 
-            // ✅ AUTO SWITCH (KHÔNG reset chat)
-            setAssistantMode(ASSISTANT_MODE.STUDY);
+            // ✅ AUTO SWITCH sang STUDY (và DOING sẽ ẩn "Tạo đề")
+            setAssistantModeSafe(ASSISTANT_MODE.STUDY);
 
             saveActiveSession({
                 mode: MODE.DOING,
@@ -701,7 +719,7 @@ export default function PracticePage() {
         } finally {
             setLoading(false);
         }
-    }, [appendMessage, durationMinutes, materialId, questionCount, saveActiveSession, sessionToken, showToast]);
+    }, [appendMessage, durationMinutes, materialId, questionCount, saveActiveSession, sessionToken, showToast, setAssistantModeSafe]);
 
     const submitSessionV2 = useCallback(
         async (answersArray, meta = {}) => {
@@ -834,8 +852,8 @@ export default function PracticePage() {
                 setMode(MODE.DOING);
                 setIsCanvasOpen(true);
 
-                // ✅ AUTO SWITCH (KHÔNG reset chat)
-                setAssistantMode(ASSISTANT_MODE.STUDY);
+                // ✅ AUTO SWITCH sang STUDY (và DOING sẽ ẩn "Tạo đề")
+                setAssistantModeSafe(ASSISTANT_MODE.STUDY);
 
                 saveActiveSession({
                     mode: MODE.DOING,
@@ -861,7 +879,7 @@ export default function PracticePage() {
                 setLoading(false);
             }
         },
-        [appendMessage, clearPersistedResult, durationMinutes, materialId, questionCount, saveActiveSession, showToast]
+        [appendMessage, clearPersistedResult, durationMinutes, materialId, questionCount, saveActiveSession, showToast, setAssistantModeSafe]
     );
 
     useEffect(() => {
@@ -935,8 +953,8 @@ export default function PracticePage() {
                         setMode(MODE.DOING);
                         setIsCanvasOpen(true);
 
-                        // ✅ AUTO SWITCH khi resume DOING
-                        setAssistantMode(ASSISTANT_MODE.STUDY);
+                        // ✅ AUTO SWITCH sang STUDY khi resume DOING
+                        setAssistantModeSafe(ASSISTANT_MODE.STUDY);
 
                         appendMessage({
                             role: "assistant",
@@ -991,7 +1009,7 @@ export default function PracticePage() {
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [appendMessage, questionCount, saveActiveSession, setAssistantModeSafe]);
 
     const attemptStartTs = useMemo(() => {
         if (startedAtIso) {
@@ -1235,18 +1253,25 @@ export default function PracticePage() {
                                         </Stack>
 
                                         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
-                                            <Chip
-                                                label="Tạo đề"
-                                                clickable
-                                                color={assistantMode === ASSISTANT_MODE.GENERATE ? "primary" : "default"}
-                                                onClick={() => setAssistantMode(ASSISTANT_MODE.GENERATE)}
-                                            />
-                                            <Chip
-                                                label="Hỏi khái niệm"
-                                                clickable
-                                                color={assistantMode === ASSISTANT_MODE.STUDY ? "primary" : "default"}
-                                                onClick={() => setAssistantMode(ASSISTANT_MODE.STUDY)}
-                                            />
+                                            {/* ✅ DOING => ẨN "Tạo đề" */}
+                                            {!lockGenerate && (
+                                                <Chip
+                                                    label="Tạo đề"
+                                                    clickable
+                                                    color={assistantMode === ASSISTANT_MODE.GENERATE ? "primary" : "default"}
+                                                    onClick={() => setAssistantModeSafe(ASSISTANT_MODE.GENERATE)}
+                                                />
+                                            )}
+
+                                            {/* ✅ GENERATE => ẨN "Hỏi khái niệm" */}
+                                            {!hideStudyWhenGenerate && (
+                                                <Chip
+                                                    label="Hỏi khái niệm"
+                                                    clickable
+                                                    color={assistantMode === ASSISTANT_MODE.STUDY ? "primary" : "default"}
+                                                    onClick={() => setAssistantModeSafe(ASSISTANT_MODE.STUDY)}
+                                                />
+                                            )}
                                         </Stack>
                                     </Stack>
 

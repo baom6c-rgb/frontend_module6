@@ -14,23 +14,16 @@ import {
     TableContainer,
     Chip,
     Button,
+    useMediaQuery,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import { WarningAmberRounded } from "@mui/icons-material";
 
-import {
-    ReportProblemRounded,
-    InfoRounded,
-    CheckCircleRounded,
-} from "@mui/icons-material";
+import { ReportProblemRounded, InfoRounded, CheckCircleRounded } from "@mui/icons-material";
 
 import AppPagination from "../../../../components/common/AppPagination";
 
-import {
-    DASHBOARD_COLORS as COLORS,
-    safeNumber,
-    fmtInt,
-    mapRiskLevel,
-} from "./dashboard.helpers";
+import { DASHBOARD_COLORS as COLORS, safeNumber, fmtInt, mapRiskLevel } from "./dashboard.helpers";
 
 const CardShell = ({ children, sx }) => (
     <Paper
@@ -68,7 +61,7 @@ const riskLevelRank = (riskLevel) => {
 /**
  * ✅ Chuẩn hoá mức độ từ dữ liệu BE/FE:
  * - Ưu tiên riskLevel (TOT/TRUNG_BINH/YEU) nếu có
- * - Nếu không có, fallback theo tone từ helper (red/amber/green hoặc danger/warning/safe)
+ * - Nếu không có, fallback theo tone từ helper
  */
 const resolveSeverity = (riskLevel, helperTone) => {
     const lv = String(riskLevel || "").trim().toUpperCase();
@@ -95,9 +88,6 @@ const severityIcon = (sev, sx) => {
     return <CheckCircleRounded sx={sx} />;
 };
 
-/**
- * ✅ Màu sắc đồng bộ progress + badge (ưu tiên dùng COLORS nếu có)
- */
 const paletteBySeverity = (sev) => {
     const red = COLORS.red || "#dc2626";
     const amber = COLORS.amber || "#d97706";
@@ -113,6 +103,9 @@ const paletteBySeverity = (sev) => {
 };
 
 export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
+    const theme = useTheme();
+    const downSm = useMediaQuery(theme.breakpoints.down("sm"));
+
     // ✅ Pagination state (1-based)
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
@@ -132,23 +125,14 @@ export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
             const bAvg = safeNumber(b?.avgScore, 0);
             if (aAvg !== bAvg) return aAvg - bAvg;
 
-            const aPass = safeNumber(
-                a?.passRate,
-                a?.failRate != null ? 1 - safeNumber(a?.failRate, 0) : 0
-            );
-            const bPass = safeNumber(
-                b?.passRate,
-                b?.failRate != null ? 1 - safeNumber(b?.failRate, 0) : 0
-            );
+            const aPass = safeNumber(a?.passRate, a?.failRate != null ? 1 - safeNumber(a?.failRate, 0) : 0);
+            const bPass = safeNumber(b?.passRate, b?.failRate != null ? 1 - safeNumber(b?.failRate, 0) : 0);
             return aPass - bPass;
         });
         return arr;
     }, [students]);
 
-    // ✅ Reset page khi data thay đổi (filter đổi)
-    useEffect(() => {
-        setPage(1);
-    }, [students]);
+    useEffect(() => setPage(1), [students]);
 
     const total = rows.length;
 
@@ -165,13 +149,31 @@ export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
     const pagedRows = useMemo(() => {
         const ps = Math.max(1, Number(pageSize) || 10);
         const start = (safePage - 1) * ps;
-        const end = start + ps;
-        return rows.slice(start, end);
+        return rows.slice(start, start + ps);
     }, [rows, safePage, pageSize]);
+
+    const renderSeverityBadge = (sev, pal) => (
+        <Box
+            sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 0.7,
+                px: 1.15,
+                py: 0.5,
+                borderRadius: 999,
+                bgcolor: pal.bg,
+                border: `1px solid ${COLORS.border}`,
+            }}
+        >
+            {severityIcon(sev, { fontSize: 18, color: pal.c })}
+            <Typography sx={{ fontWeight: 950, color: pal.c, fontSize: 13 }}>{severityLabelVi(sev)}</Typography>
+        </Box>
+    );
 
     return (
         <CardShell>
-            <Box sx={{ px: 2.75, py: 2.25 }}>
+            {/* Header */}
+            <Box sx={{ px: { xs: 2, md: 2.75 }, py: { xs: 1.75, md: 2.25 } }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
                     <Box sx={{ minWidth: 0 }}>
                         <Typography sx={{ fontWeight: 950, color: COLORS.textPrimary, fontSize: 16 }}>
@@ -198,76 +200,155 @@ export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
 
             <Divider sx={{ borderColor: COLORS.border }} />
 
-            <Box sx={{ p: 2.5, pt: 2.25 }}>
-                <TableContainer>
-                    <Table size="small">
-                        <TableHead>
-                            <TableRow>
-                                <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 60 }}>
-                                    STT
-                                </TableCell>
+            {/* Body */}
+            <Box sx={{ p: { xs: 1.5, md: 2.5 }, pt: { xs: 1.5, md: 2.25 } }}>
+                {total === 0 ? (
+                    <Typography sx={{ color: COLORS.textSecondary, fontWeight: 800 }}>Chưa có dữ liệu.</Typography>
+                ) : downSm ? (
+                    /* ✅ MOBILE: Card list */
+                    <Stack spacing={1.25}>
+                        {pagedRows.map((u, idx) => {
+                            const globalIndex = (safePage - 1) * pageSize + idx + 1;
+                            const { tone: helperTone } = mapRiskLevel(u?.riskLevel);
 
-                                <TableCell sx={{ fontWeight: 950, color: COLORS.textSecondary }}>
-                                    Học viên
-                                </TableCell>
+                            const sev = resolveSeverity(u?.riskLevel, helperTone);
+                            const pal = paletteBySeverity(sev);
 
-                                <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 120 }}>
-                                    Bài làm
-                                </TableCell>
+                            const attemptsCount = safeNumber(u?.attemptsCount, safeNumber(u?.attempts, 0));
+                            const avgScore = safeNumber(u?.avgScore, 0);
 
-                                <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 120 }}>
-                                    Điểm TB
-                                </TableCell>
+                            const passRate = safeNumber(u?.passRate, u?.failRate != null ? 1 - safeNumber(u?.failRate, 0) : 0);
+                            const progressPct = Math.max(0, Math.min(100, Math.round(passRate * 100)));
 
-                                <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 140 }}>
-                                    Tiến độ
-                                </TableCell>
+                            return (
+                                <Paper
+                                    key={u.userId ?? `${u.email ?? "row"}_${globalIndex}`}
+                                    elevation={0}
+                                    sx={{
+                                        border: `1px solid ${COLORS.border}`,
+                                        bgcolor: "#fff",
+                                        p: 1.5,
+                                    }}
+                                >
+                                    <Stack spacing={1.1}>
+                                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                                            <Box sx={{ minWidth: 0 }}>
+                                                <Typography sx={{ fontWeight: 950, color: COLORS.textPrimary, lineHeight: 1.2 }}>
+                                                    {globalIndex}. {u.fullName || "(Chưa có tên)"}
+                                                </Typography>
+                                                <Typography sx={{ fontWeight: 700, color: COLORS.textSecondary, fontSize: 12, mt: 0.2 }} noWrap>
+                                                    {u.email || "-"}
+                                                </Typography>
+                                            </Box>
 
-                                <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 170 }}>
-                                    Mức độ
-                                </TableCell>
+                                            {renderSeverityBadge(sev, pal)}
+                                        </Stack>
 
-                                <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 140 }}>
-                                    Chi tiết
-                                </TableCell>
-                            </TableRow>
-                        </TableHead>
+                                        <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ "& > *": { mr: 1, mb: 0.6 } }}>
+                                            <Chip size="small" label={`Bài làm: ${fmtInt(attemptsCount)}`} sx={{ fontWeight: 900 }} />
+                                            <Chip size="small" label={`Điểm TB: ${avgScore.toFixed(1)}`} sx={{ fontWeight: 900 }} />
+                                            <Chip size="small" label={`Tiến độ: ${progressPct}%`} sx={{ fontWeight: 900 }} />
+                                        </Stack>
 
-                        <TableBody>
-                            {total === 0 ? (
+                                        {/* progress bar */}
+                                        <Box
+                                            sx={{
+                                                width: "100%",
+                                                height: 9,
+                                                borderRadius: 999,
+                                                bgcolor: `${COLORS.border}90`,
+                                                overflow: "hidden",
+                                            }}
+                                        >
+                                            <Box
+                                                sx={{
+                                                    height: "100%",
+                                                    width: `${progressPct}%`,
+                                                    bgcolor: pal.c,
+                                                    borderRadius: 999,
+                                                    transition: "width .25s ease",
+                                                }}
+                                            />
+                                        </Box>
+
+                                        <Button
+                                            fullWidth
+                                            size="small"
+                                            variant="outlined"
+                                            sx={{
+                                                mt: 0.2,
+                                                borderRadius: "12px",
+                                                borderColor: COLORS.border,
+                                                color: COLORS.textPrimary,
+                                                fontWeight: 950,
+                                                textTransform: "none",
+                                                bgcolor: COLORS.white,
+                                            }}
+                                            onClick={() => onSelect?.(u)}
+                                        >
+                                            Xem chi tiết
+                                        </Button>
+                                    </Stack>
+                                </Paper>
+                            );
+                        })}
+                    </Stack>
+                ) : (
+                    /* ✅ DESKTOP/TABLET: Table + horizontal-safe */
+                    <TableContainer
+                        sx={{
+                            width: "100%",
+                            overflowX: "auto",
+                            "&::-webkit-scrollbar": { height: 8 },
+                        }}
+                    >
+                        <Table size="small" sx={{ minWidth: 980 }}>
+                            <TableHead>
                                 <TableRow>
-                                    <TableCell colSpan={7} sx={{ color: COLORS.textSecondary, fontWeight: 800 }}>
-                                        Chưa có dữ liệu.
+                                    <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 60 }}>
+                                        STT
+                                    </TableCell>
+
+                                    <TableCell sx={{ fontWeight: 950, color: COLORS.textSecondary }}>Học viên</TableCell>
+
+                                    <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 120 }}>
+                                        Bài làm
+                                    </TableCell>
+
+                                    <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 120 }}>
+                                        Điểm TB
+                                    </TableCell>
+
+                                    <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 140 }}>
+                                        Tiến độ
+                                    </TableCell>
+
+                                    <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 170 }}>
+                                        Mức độ
+                                    </TableCell>
+
+                                    <TableCell align="center" sx={{ fontWeight: 950, color: COLORS.textSecondary, width: 140 }}>
+                                        Chi tiết
                                     </TableCell>
                                 </TableRow>
-                            ) : (
-                                pagedRows.map((u, idx) => {
+                            </TableHead>
+
+                            <TableBody>
+                                {pagedRows.map((u, idx) => {
                                     const globalIndex = (safePage - 1) * pageSize + idx + 1;
 
-                                    // helper (để không đụng business logic cũ)
                                     const { tone: helperTone } = mapRiskLevel(u?.riskLevel);
-
-                                    // ✅ severity chuẩn hoá (fix lỗi “nguy hiểm mà hiện đạt”)
                                     const sev = resolveSeverity(u?.riskLevel, helperTone);
                                     const pal = paletteBySeverity(sev);
 
-                                    // ✅ Tiến độ = passRate (fallback = 1 - failRate)
                                     const attemptsCount = safeNumber(u?.attemptsCount, safeNumber(u?.attempts, 0));
                                     const avgScore = safeNumber(u?.avgScore, 0);
 
-                                    const passRate = safeNumber(
-                                        u?.passRate,
-                                        u?.failRate != null ? 1 - safeNumber(u?.failRate, 0) : 0
-                                    );
-
+                                    const passRate = safeNumber(u?.passRate, u?.failRate != null ? 1 - safeNumber(u?.failRate, 0) : 0);
                                     const progressPct = Math.max(0, Math.min(100, Math.round(passRate * 100)));
 
                                     return (
-                                        <TableRow
-                                            key={u.userId ?? `${u.email ?? "row"}_${globalIndex}`}
-                                            hover
-                                            sx={{ cursor: "default" }}
-                                        >
+                                        <TableRow key={u.userId ?? `${u.email ?? "row"}_${globalIndex}`} hover sx={{ cursor: "default" }}>
                                             <TableCell align="center" sx={{ fontWeight: 900 }}>
                                                 {globalIndex}
                                             </TableCell>
@@ -291,7 +372,6 @@ export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
                                                 {avgScore.toFixed(1)}
                                             </TableCell>
 
-                                            {/* ✅ TIẾN ĐỘ: progress bar + % (màu theo mức độ) */}
                                             <TableCell align="center">
                                                 <Box sx={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
                                                     <Box
@@ -319,28 +399,7 @@ export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
                                                 </Box>
                                             </TableCell>
 
-                                            {/* ✅ MỨC ĐỘ: badge mới đúng mockup (icon + nền nhạt + chữ đậm) */}
-                                            <TableCell align="center">
-                                                <Box sx={{ display: "flex", justifyContent: "center" }}>
-                                                    <Box
-                                                        sx={{
-                                                            display: "inline-flex",
-                                                            alignItems: "center",
-                                                            gap: 0.7,
-                                                            px: 1.25,
-                                                            py: 0.55,
-                                                            borderRadius: 999,
-                                                            bgcolor: pal.bg,
-                                                            border: `1px solid ${COLORS.border}`,
-                                                        }}
-                                                    >
-                                                        {severityIcon(sev, { fontSize: 18, color: pal.c })}
-                                                        <Typography sx={{ fontWeight: 950, color: pal.c, fontSize: 13 }}>
-                                                            {severityLabelVi(sev)}
-                                                        </Typography>
-                                                    </Box>
-                                                </Box>
-                                            </TableCell>
+                                            <TableCell align="center">{renderSeverityBadge(sev, pal)}</TableCell>
 
                                             <TableCell align="center">
                                                 <Button
@@ -364,13 +423,13 @@ export default function AdminDashboardAtRiskTable({ students = [], onSelect }) {
                                             </TableCell>
                                         </TableRow>
                                     );
-                                })
-                            )}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
+                                })}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                )}
 
-                {/* ✅ Pagination footer */}
+                {/* Pagination footer */}
                 {total > 0 ? (
                     <Box sx={{ mt: 2 }}>
                         <Divider sx={{ borderColor: COLORS.border, mb: 1.5 }} />

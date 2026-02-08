@@ -1,6 +1,6 @@
 // src/features/admin/components/dashboard/AdminDashboardKpiCards.jsx
 import React, { useMemo } from "react";
-import { Box, Paper, Typography } from "@mui/material";
+import { Box, Paper, Typography, Button, Stack } from "@mui/material";
 import {
     TrendingUpRounded,
     PeopleAltRounded,
@@ -31,7 +31,7 @@ const KpiCard = ({ variant = "blue", label, value, meta, icon }) => {
                 background: "#fafafa",
                 border: "1px solid #f0f0f0",
                 borderRadius: "16px",
-                padding: { xs: "18px", md: "20px" },
+                padding: { xs: "16px", md: "20px" },
                 display: "flex",
                 alignItems: "flex-start",
                 justifyContent: "space-between",
@@ -53,7 +53,7 @@ const KpiCard = ({ variant = "blue", label, value, meta, icon }) => {
 
                 <Typography
                     sx={{
-                        fontSize: { xs: "34px", md: "38px" },
+                        fontSize: { xs: "32px", md: "38px" },
                         fontWeight: 700,
                         color: "#1a1a1a",
                         lineHeight: 1,
@@ -75,11 +75,10 @@ const KpiCard = ({ variant = "blue", label, value, meta, icon }) => {
                 </Typography>
             </Box>
 
-            {/* Icon Badge */}
             <Box
                 sx={{
-                    width: { xs: 52, md: 60 },
-                    height: { xs: 52, md: 60 },
+                    width: { xs: 50, md: 60 },
+                    height: { xs: 50, md: 60 },
                     borderRadius: "14px",
                     display: "flex",
                     alignItems: "center",
@@ -96,18 +95,15 @@ const KpiCard = ({ variant = "blue", label, value, meta, icon }) => {
 };
 
 /** ===== Main (GIỮ LOGIC + FLOW) ===== */
-export default function AdminDashboardKpiCards({ overview, metrics }) {
-    // ✅ ưu tiên metrics từ parent để đồng bộ
+export default function AdminDashboardKpiCards({ overview, metrics, onJumpAtRisk }) {
     const totalAttempts = metrics?.totalAttempts ?? safeNumber(overview?.totalAttempts, 0);
     const totalStudents = metrics?.totalStudents ?? safeNumber(overview?.totalStudents, 0);
 
     const passRate = metrics?.passRate ?? safeNumber(overview?.passRate, 0);
     const failRate = metrics?.failRate ?? safeNumber(overview?.failRate, 0);
 
-    const passCount =
-        metrics?.passCount ?? Math.round(safeNumber(totalAttempts, 0) * safeNumber(passRate, 0));
-    const failCount =
-        metrics?.failCount ?? Math.round(safeNumber(totalAttempts, 0) * safeNumber(failRate, 0));
+    const passCount = metrics?.passCount ?? Math.round(safeNumber(totalAttempts, 0) * safeNumber(passRate, 0));
+    const failCount = metrics?.failCount ?? Math.round(safeNumber(totalAttempts, 0) * safeNumber(failRate, 0));
 
     return (
         <Paper
@@ -119,7 +115,22 @@ export default function AdminDashboardKpiCards({ overview, metrics }) {
                 background: "#fff",
             }}
         >
-            {/* KPI Grid */}
+            {/* Header nhỏ gọn */}
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }} spacing={1}>
+                <Typography sx={{ fontWeight: 950, color: "#1B2559" }}>Tổng quan nhanh</Typography>
+
+                {typeof onJumpAtRisk === "function" ? (
+                    <Button
+                        size="small"
+                        variant="text"
+                        onClick={onJumpAtRisk}
+                        sx={{ textTransform: "none", fontWeight: 900 }}
+                    >
+                        Xem học viên
+                    </Button>
+                ) : null}
+            </Stack>
+
             <Box
                 sx={{
                     display: "grid",

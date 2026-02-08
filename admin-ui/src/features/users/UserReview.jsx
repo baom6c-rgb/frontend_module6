@@ -77,11 +77,12 @@ function normalizeAttempt(raw) {
 
     const type = String(raw?.type || raw?.examType || "").toUpperCase();
 
+    // ✅ ưu tiên examTitle/title nếu có (để ăn AI title)
     const name =
-        raw?.name ??
-        raw?.examName ??
         raw?.examTitle ??
         raw?.title ??
+        raw?.name ??
+        raw?.examName ??
         (type.includes("PRACTICE") ? "Bài thi PRACTICE" : "Bài test");
 
     const module =
@@ -247,7 +248,7 @@ const adaptToPracticeReview = (rawReview, selectedTest) => {
         ? rawReview.correctCount
         : items.filter((x) => x.isCorrect).length;
 
-    const score = safeNum(rawReview?.score, safeNum(selectedTest?.scorePct, 0)); // /100
+    const score = safeNum(rawReview?.score, safeNum(selectedTest?.scorePct, 0));
 
     return {
         score,
@@ -406,7 +407,6 @@ export default function UserReview() {
         setSelectedTest(test);
         setDetailDialogOpen(true);
 
-        // reset trạng thái review cho lần xem mới
         setOpenReview(false);
         setReviewData(null);
         setReviewError(null);
@@ -421,7 +421,6 @@ export default function UserReview() {
             return;
         }
 
-        // nếu đã có data rồi -> mở luôn
         if (reviewData && (reviewData?.items?.length ?? 0) > 0) {
             setOpenReview(true);
             return;
@@ -448,7 +447,6 @@ export default function UserReview() {
         setDetailDialogOpen(false);
         setSelectedTest(null);
 
-        // reset review
         setOpenReview(false);
         setReviewData(null);
         setReviewError(null);
@@ -486,7 +484,7 @@ export default function UserReview() {
                     return centerCell(pageOffset + idx + 1);
                 },
             },
-            { field: "name", headerName: "Tên bài test", flex: 1.5, minWidth: 200, renderCell: (p) => p.value },
+            { field: "name", headerName: "Tên bài thi", flex: 1.5, minWidth: 200, renderCell: (p) => p.value },
             { field: "module", headerName: "Module", flex: 1, minWidth: 150, headerAlign: "center", align: "center" },
             { field: "className", headerName: "Lớp học", flex: 1, minWidth: 150, headerAlign: "center", align: "center" },
             {
@@ -613,7 +611,7 @@ export default function UserReview() {
                 </Grid>
 
                 <FilterPanel
-                    search={{ placeholder: "Tìm kiếm theo tên bài test, module, lớp...", value: searchText, onChange: setSearchText }}
+                    search={{ placeholder: "Tìm kiếm theo tên bài thi, module, lớp...", value: searchText, onChange: setSearchText }}
                     showFilters={showFilters}
                     onToggleFilters={() => setShowFilters(!showFilters)}
                     onReset={handleResetFilters}
@@ -667,10 +665,16 @@ export default function UserReview() {
                     </Box>
                 </Paper>
 
-                {/* ✅ Dialog tổng quan: CHỈ HIỂN THỊ NÚT, không auto mở review */}
-                <Dialog open={detailDialogOpen} onClose={handleCloseDetail} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: "16px" } }}>
+                {/* ✅ Dialog tổng quan: actions đặt chuẩn ở footer */}
+                <Dialog
+                    open={detailDialogOpen}
+                    onClose={handleCloseDetail}
+                    maxWidth="md"
+                    fullWidth
+                    PaperProps={{ sx: { borderRadius: "16px" } }}
+                >
                     <DialogTitle>
-                        <Typography sx={{ fontWeight: 900 }}>Chi tiết bài test</Typography>
+                        <Typography sx={{ fontWeight: 900 }}>Chi tiết bài thi</Typography>
                     </DialogTitle>
 
                     <DialogContent>
@@ -749,25 +753,62 @@ export default function UserReview() {
                                     </Alert>
                                 )}
 
-                                <Stack direction="row" spacing={1} justifyContent="flex-end">
-                                    <Button
-                                        variant="contained"
-                                        onClick={handleOpenReview}
-                                        disabled={reviewLoading}
-                                        sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 800 }}
-                                    >
-                                        {reviewLoading ? "Đang tải..." : "Xem lại đáp án"}
-                                    </Button>
-                                </Stack>
+                                {reviewLoading && (
+                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                                        <CircularProgress size={18} />
+                                        <Typography sx={{ fontSize: 13, color: "text.secondary", fontWeight: 700 }}>
+                                            Đang tải dữ liệu xem lại...
+                                        </Typography>
+                                    </Stack>
+                                )}
                             </Box>
                         )}
                     </DialogContent>
 
-                    <DialogActions sx={{ p: 2 }}>
-                        <Button onClick={handleCloseDetail} variant="contained" sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700 }}>
+                    {/* ✅ Footer actions: trái Đóng (outlined), phải Xem lại đáp án (contained) */}
+                    <DialogActions
+                        sx={{
+                            p: 2,
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: 1,
+                        }}
+                    >
+                        {/* ✅ Trái: Xem lại đáp án (primary) */}
+                        <Button
+                            variant="contained"
+                            onClick={handleOpenReview}
+                            disabled={reviewLoading}
+                            sx={{
+                                borderRadius: "12px",
+                                textTransform: "none",
+                                fontWeight: 900,
+                                px: 2.2,
+                            }}
+                        >
+                            {reviewLoading ? "Đang tải..." : "Xem lại đáp án"}
+                        </Button>
+
+                        {/* ✅ Phải: Đóng (neutral, khác màu) */}
+                        <Button
+                            onClick={handleCloseDetail}
+                            variant="outlined"
+                            sx={{
+                                borderRadius: "12px",
+                                textTransform: "none",
+                                fontWeight: 800,
+                                color: COLORS.textPrimary,
+                                borderColor: COLORS.borderLight,
+                                "&:hover": {
+                                    borderColor: "#C9D2E3",
+                                    bgcolor: "#F3F6FB",
+                                },
+                            }}
+                        >
                             Đóng
                         </Button>
                     </DialogActions>
+
                 </Dialog>
 
                 {/* ✅ dialog review chỉ mở khi bấm nút */}
