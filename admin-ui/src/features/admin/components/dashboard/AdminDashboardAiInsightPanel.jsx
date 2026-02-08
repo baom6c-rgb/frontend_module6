@@ -9,13 +9,16 @@ import {
     Button,
     Chip,
     Alert,
-    Tooltip,
     IconButton,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
 } from "@mui/material";
 
-import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 
@@ -86,17 +89,48 @@ export default function AdminDashboardAiInsightPanel(props) {
         };
     }, [filters]);
 
+    // ✅ normalize để dùng chung cho GLOBAL + STUDENT
+    // ✅ FIX: student endpoint có thể trả wrapper dạng { ... , students:[{ strengths/weakTopics/... }] }
     const normalizeInsight = (raw) => {
         if (!raw || typeof raw !== "object") return null;
+
+        const s0 = Array.isArray(raw.students) && raw.students.length > 0 ? raw.students[0] : null;
+
+        // GLOBAL: summary / keyProblems / atRiskPatterns / recommendedActions
+        // STUDENT: insightSummary / weakTopics / recommendedNextSteps / strengths (thường nằm trong students[0])
+        const summaryText = String(raw.summary || raw.insightSummary || s0?.insightSummary || "").trim();
+
+        const recommended = Array.isArray(raw.recommendedActions)
+            ? raw.recommendedActions
+            : Array.isArray(raw.recommendedNextSteps)
+                ? raw.recommendedNextSteps
+                : Array.isArray(s0?.recommendedNextSteps)
+                    ? s0.recommendedNextSteps
+                    : [];
+
+        const strengths = Array.isArray(raw.strengths)
+            ? raw.strengths
+            : Array.isArray(s0?.strengths)
+                ? s0.strengths
+                : [];
+
+        const weaknesses = Array.isArray(raw.weakTopics)
+            ? raw.weakTopics
+            : Array.isArray(raw.weaknesses)
+                ? raw.weaknesses
+                : Array.isArray(s0?.weakTopics)
+                    ? s0.weakTopics
+                    : [];
+
         return {
-            summary: String(raw.summary || "").trim(),
+            summary: summaryText,
             keyProblems: Array.isArray(raw.keyProblems) ? raw.keyProblems : [],
             atRiskPatterns: Array.isArray(raw.atRiskPatterns) ? raw.atRiskPatterns : [],
-            recommendedActions: Array.isArray(raw.recommendedActions) ? raw.recommendedActions : [],
+            recommendedActions: recommended,
             confidence: raw.confidence || "",
             generatedAt: raw.generatedAt || "",
-            strengths: Array.isArray(raw.strengths) ? raw.strengths : [],
-            weaknesses: Array.isArray(raw.weaknesses) ? raw.weaknesses : [],
+            strengths,
+            weaknesses,
         };
     };
 
@@ -160,25 +194,143 @@ export default function AdminDashboardAiInsightPanel(props) {
         if (overview?.totalStudents != null) out.push({ label: `👥 ${overview.totalStudents} học viên` });
         if (overview?.totalAttempts != null) out.push({ label: `📝 ${overview.totalAttempts} bài làm` });
         return out;
-    }, [overview?.totalStudents, overview?.totalAttempts, normalized?.confidence]);
+    }, [overview?.totalStudents, overview?.totalAttempts]);
 
     const sectionTitleSx = {
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: 950,
         color: "#2E2D84",
         textTransform: "uppercase",
-        letterSpacing: 0.5,
+        letterSpacing: 0.6,
         display: "flex",
         alignItems: "center",
         gap: 1,
         mb: 1.25,
     };
 
+    const weaknessItems = useMemo(() => {
+        // STUDENT: ưu tiên weakTopics
+        const w = Array.isArray(normalized?.weaknesses) ? normalized.weaknesses : [];
+        if (resolvedMode === "STUDENT") return w.filter(Boolean);
+
+        // GLOBAL: dùng keyProblems + atRiskPatterns
+        const kp = Array.isArray(normalized?.keyProblems) ? normalized.keyProblems : [];
+        const ap = Array.isArray(normalized?.atRiskPatterns) ? normalized.atRiskPatterns : [];
+        return [...kp, ...ap].filter(Boolean);
+    }, [normalized, resolvedMode]);
+
+    const strengthItems = useMemo(() => {
+        const s = Array.isArray(normalized?.strengths) ? normalized.strengths : [];
+        return s.filter(Boolean);
+    }, [normalized]);
+
+    const topPassed = useMemo(() => {
+        const list = overview?.topPassedStudents;
+        return Array.isArray(list) ? list.slice(0, 5) : [];
+    }, [overview?.topPassedStudents]);
+
+    const topFailed = useMemo(() => {
+        const list = overview?.topFailedStudents;
+        return Array.isArray(list) ? list.slice(0, 5) : [];
+    }, [overview?.topFailedStudents]);
+
+    const fmtPct = (v) => {
+        if (v == null || Number.isNaN(Number(v))) return "-";
+        return `${Math.round(Number(v) * 100)}%`;
+    };
+
+    const fmtScore = (v) => {
+        if (v == null || Number.isNaN(Number(v))) return "-";
+        return Number(v).toFixed(1);
+    };
+
+    const MiniTable = ({ title, tone, rows, mode }) => {
+        const isPass = tone === "PASS";
+        const border = isPass ? "#dcfce7" : "#fee2e2";
+        const left = isPass ? "#16a34a" : "#dc2626";
+        const bg = isPass ? "rgba(22,163,74,0.04)" : "rgba(220,38,38,0.04)";
+        const chipBg = isPass ? "rgba(22,163,74,0.10)" : "rgba(220,38,38,0.10)";
+        const chipColor = isPass ? "#166534" : "#991b1b";
+
+        return (
+            <Box
+                sx={{
+                    borderRadius: 2,
+                    border: `2px solid ${border}`,
+                    borderLeft: `5px solid ${left}`,
+                    bgcolor: "#fff",
+                    overflow: "hidden",
+                }}
+            >
+                <Box sx={{ px: 1.75, py: 1.25, bgcolor: bg }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Typography sx={{ fontWeight: 950, color: "#1e293b", fontSize: 14.5 }}>
+                            {title}
+                        </Typography>
+                        <Chip
+                            size="small"
+                            label={`${rows.length}/5`}
+                            sx={{
+                                fontWeight: 950,
+                                bgcolor: chipBg,
+                                color: chipColor,
+                                border: "1px solid rgba(0,0,0,0.06)",
+                            }}
+                        />
+                    </Stack>
+                </Box>
+
+                <TableContainer>
+                    <Table size="small" sx={{ "& td, & th": { borderColor: "rgba(226,232,240,0.9)" } }}>
+                        <TableHead>
+                            <TableRow>
+                                <TableCell sx={{ fontWeight: 950, color: "#334155", fontSize: 12.5 }}>Học viên</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: 950, color: "#334155", fontSize: 12.5 }}>Bài</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: 950, color: "#334155", fontSize: 12.5 }}>Điểm</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: 950, color: "#334155", fontSize: 12.5 }}>
+                                    {mode === "PASS" ? "Đạt" : "Trượt"}
+                                </TableCell>
+                            </TableRow>
+                        </TableHead>
+
+                        <TableBody>
+                            {rows.map((r) => (
+                                <TableRow key={r?.userId ?? Math.random()}>
+                                    <TableCell sx={{ fontWeight: 800, color: "#0f172a", fontSize: 13 }}>
+                                        {r?.fullName || r?.email || "—"}
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 850, color: "#0f172a", fontSize: 13 }}>
+                                        {r?.attemptsCount ?? 0}
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 850, color: "#0f172a", fontSize: 13 }}>
+                                        {fmtScore(r?.avgScore)}
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 950, color: "#0f172a", fontSize: 13 }}>
+                                        {mode === "PASS" ? fmtPct(r?.passRate) : fmtPct(r?.failRate)}
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+
+                            {!rows.length ? (
+                                <TableRow>
+                                    <TableCell colSpan={4} sx={{ py: 2 }}>
+                                        <Typography sx={{ color: "#64748b", fontWeight: 800, fontSize: 13 }}>
+                                            (Chưa có dữ liệu.)
+                                        </Typography>
+                                    </TableCell>
+                                </TableRow>
+                            ) : null}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            </Box>
+        );
+    };
+
     return (
         <>
             <GlobalLoading open={loading} message="Đang phân tích dữ liệu hệ thống..." />
 
-            {/* ✅ Gradient header cũ được chuyển xuống đây */}
             <Paper
                 elevation={0}
                 sx={{
@@ -189,7 +341,6 @@ export default function AdminDashboardAiInsightPanel(props) {
                     boxShadow: "0px 18px 45px rgba(15, 23, 42, 0.10)",
                 }}
             >
-                {/* Glass content */}
                 <Box sx={{ p: { xs: 1.5, md: 2 } }}>
                     <Paper
                         elevation={0}
@@ -201,15 +352,12 @@ export default function AdminDashboardAiInsightPanel(props) {
                             backdropFilter: "blur(10px)",
                         }}
                     >
-                        {/* Header row */}
                         <Box sx={{ px: 2, py: 1.75 }}>
                             <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
                                 <Box sx={{ minWidth: 0 }}>
-                                    <Stack direction="row" alignItems="center" spacing={1}>
-                                        <Typography sx={{ fontWeight: 950, color: "#1B2559", fontSize: 15 }}>
-                                            {headerTitle}
-                                        </Typography>
-                                    </Stack>
+                                    <Typography sx={{ fontWeight: 950, color: "#1B2559", fontSize: 15 }}>
+                                        {headerTitle}
+                                    </Typography>
 
                                     {resolvedMode === "STUDENT" ? (
                                         <Typography sx={{ mt: 0.4, color: "#6C757D", fontWeight: 800, fontSize: 12.5 }}>
@@ -255,7 +403,7 @@ export default function AdminDashboardAiInsightPanel(props) {
 
                             {!isValidInsight ? (
                                 <Typography sx={{ color: "#6C757D", fontWeight: 800 }}>
-                                    Bấm “Phân tích (AI)” để xem đánh giá chi tiết các học viên.
+                                    Bấm “Phân tích (AI)” để xem đánh giá chi tiết.
                                 </Typography>
                             ) : (
                                 <Box sx={{ borderRadius: 2, border: "1px solid #E3E8EF", overflow: "hidden", bgcolor: "#fff" }}>
@@ -319,7 +467,7 @@ export default function AdminDashboardAiInsightPanel(props) {
 
                                     {normalized?.summary ? (
                                         <Box sx={{ px: 2, py: 2 }}>
-                                            <Typography sx={{ color: "#6C757D", fontWeight: 750, lineHeight: 1.6 }}>
+                                            <Typography sx={{ color: "#6C757D", fontWeight: 800, lineHeight: 1.7, fontSize: 14.5 }}>
                                                 {normalized.summary}
                                             </Typography>
                                         </Box>
@@ -331,32 +479,29 @@ export default function AdminDashboardAiInsightPanel(props) {
                 </Box>
             </Paper>
 
-            {/* Modal giữ nguyên (đang dùng AppModal) */}
             <AppModal
                 open={feedbackOpen}
                 onClose={() => setFeedbackOpen(false)}
                 hideActions
-                maxWidth={850}
+                maxWidth={900}
                 title={
                     <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
-                        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
-                            <Box sx={{ minWidth: 0 }}>
-                                <Typography sx={{ fontWeight: 950, color: "#fff", fontSize: 16 }}>
-                                    Báo cáo phân tích chi tiết
-                                </Typography>
-                                <Typography sx={{ color: "rgba(255,255,255,0.80)", fontWeight: 800, fontSize: 12.5 }}>
-                                    {resolvedMode === "STUDENT"
-                                        ? "Phân tích theo học viên (theo bộ lọc đang áp dụng)"
-                                        : "Phân tích theo bộ lọc đang áp dụng"}
-                                </Typography>
-                            </Box>
-                        </Stack>
+                        <Box sx={{ minWidth: 0 }}>
+                            <Typography sx={{ fontWeight: 950, color: "#fff", fontSize: 19 }}>
+                                Báo cáo phân tích chi tiết
+                            </Typography>
+                            <Typography sx={{ color: "rgba(255,255,255,0.85)", fontWeight: 850, fontSize: 13.5 }}>
+                                {resolvedMode === "STUDENT"
+                                    ? "Phân tích theo học viên (theo bộ lọc đang áp dụng)"
+                                    : "Phân tích theo bộ lọc đang áp dụng"}
+                            </Typography>
+                        </Box>
 
                         <IconButton
                             onClick={() => setFeedbackOpen(false)}
                             sx={{
-                                width: 36,
-                                height: 36,
+                                width: 38,
+                                height: 38,
                                 bgcolor: "rgba(255,255,255,0.16)",
                                 "&:hover": { bgcolor: "rgba(255,255,255,0.24)" },
                             }}
@@ -372,14 +517,14 @@ export default function AdminDashboardAiInsightPanel(props) {
                     </Typography>
                 ) : (
                     <Box>
-                        <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 2}}>
+                        <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 2 }}>
                             {metaChips.map((c, idx) => (
                                 <Chip
                                     key={idx}
                                     size="small"
                                     label={c.label}
                                     sx={{
-                                        fontWeight: 900,
+                                        fontWeight: 950,
                                         bgcolor: "rgba(46,45,132,0.08)",
                                         color: "#2E2D84",
                                     }}
@@ -397,47 +542,135 @@ export default function AdminDashboardAiInsightPanel(props) {
                                     background: "linear-gradient(135deg, #f0f0ff 0%, #fff5f0 100%)",
                                 }}
                             >
-                                <Typography sx={{ color: "#1e293b", fontWeight: 750, lineHeight: 1.85 }}>
+                                <Typography sx={{ color: "#1e293b", fontWeight: 850, lineHeight: 1.85, fontSize: 15.5 }}>
                                     {normalized.summary || "(Không có đánh giá tổng quan.)"}
                                 </Typography>
                             </Box>
                         </Box>
 
-                        <Box sx={{ mb: 3 }}>
-                            <Typography sx={sectionTitleSx}>⚖️ Điểm yếu học viên cần cải thiện</Typography>
+                        {/* ✅ GLOBAL: show 2 mini tables Top 5 */}
+                        {resolvedMode === "GLOBAL" ? (
+                            <Box sx={{ mb: 3 }}>
+                                <Typography sx={sectionTitleSx}>🏆 Top 5 đạt & Top 5 trượt</Typography>
 
-                            <Box sx={{ display: "grid", gap: 2, width: "100%" }}>
+                                <Box
+                                    sx={{
+                                        display: "grid",
+                                        gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                                        gap: 2,
+                                    }}
+                                >
+                                    <MiniTable title="Top 5 Đạt" tone="PASS" rows={topPassed} mode="PASS" />
+                                    <MiniTable title="Top 5 Trượt" tone="FAIL" rows={topFailed} mode="FAIL" />
+                                </Box>
+
+                                {!topPassed.length && !topFailed.length ? (
+                                    <Typography sx={{ mt: 1.25, color: "#64748b", fontWeight: 800, fontSize: 13.5 }}>
+                                        (Chưa có dữ liệu Top 5. Kiểm tra overview đã trả topPassedStudents/topFailedStudents chưa.)
+                                    </Typography>
+                                ) : null}
+                            </Box>
+                        ) : null}
+
+                        {/* ✅ STUDENT: show strengths + weaknesses; GLOBAL: ONLY weaknesses */}
+                        {resolvedMode === "STUDENT" ? (
+                            <Box sx={{ mb: 3 }}>
+                                <Typography sx={sectionTitleSx}>⚖️ Điểm mạnh & Điểm yếu</Typography>
+
+                                <Box
+                                    sx={{
+                                        display: "grid",
+                                        gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                                        gap: 2,
+                                        width: "100%",
+                                    }}
+                                >
+                                    {/* Strengths */}
+                                    <Box
+                                        sx={{
+                                            p: 2,
+                                            borderRadius: 2,
+                                            bgcolor: "#fff",
+                                            border: "2px solid #ecfdf5",
+                                            borderLeft: "5px solid #16a34a",
+                                        }}
+                                    >
+                                        <Typography sx={{ fontWeight: 950, color: "#1e293b", mb: 1, fontSize: 14.5 }}>
+                                            ✅ Điểm mạnh
+                                        </Typography>
+                                        <Stack spacing={0.75}>
+                                            {strengthItems.slice(0, 12).map((t, idx) => (
+                                                <Typography key={idx} sx={{ color: "#1e293b", fontWeight: 850, fontSize: 14 }}>
+                                                    • {t}
+                                                </Typography>
+                                            ))}
+                                            {!strengthItems.length ? (
+                                                <Typography sx={{ color: "#64748b", fontWeight: 850, fontSize: 14 }}>
+                                                    (Chưa có dữ liệu điểm mạnh.)
+                                                </Typography>
+                                            ) : null}
+                                        </Stack>
+                                    </Box>
+
+                                    {/* Weaknesses */}
+                                    <Box
+                                        sx={{
+                                            p: 2,
+                                            borderRadius: 2,
+                                            bgcolor: "#fff",
+                                            border: "2px solid #fef2f2",
+                                            borderLeft: "5px solid #dc2626",
+                                        }}
+                                    >
+                                        <Typography sx={{ fontWeight: 950, color: "#1e293b", mb: 1, fontSize: 14.5 }}>
+                                            ⚠️ Điểm yếu
+                                        </Typography>
+                                        <Stack spacing={0.75}>
+                                            {weaknessItems.slice(0, 12).map((t, idx) => (
+                                                <Typography key={idx} sx={{ color: "#1e293b", fontWeight: 850, fontSize: 14 }}>
+                                                    • {t}
+                                                </Typography>
+                                            ))}
+                                            {!weaknessItems.length ? (
+                                                <Typography sx={{ color: "#64748b", fontWeight: 850, fontSize: 14 }}>
+                                                    (Chưa có dữ liệu điểm yếu.)
+                                                </Typography>
+                                            ) : null}
+                                        </Stack>
+                                    </Box>
+                                </Box>
+                            </Box>
+                        ) : (
+                            <Box sx={{ mb: 3 }}>
+                                <Typography sx={sectionTitleSx}>⚖️ Nhận định học tập tổng quan</Typography>
 
                                 <Box
                                     sx={{
                                         p: 2,
                                         borderRadius: 2,
                                         bgcolor: "#fff",
-                                        border: "2px solid #fef2f2",
-                                        borderLeft: "4px solid #dc2626",
+                                        border: "2px solid #FFFBEB",
+                                        borderLeft: "5px solid #F59E0B",
                                     }}
                                 >
-                                    <Typography sx={{ fontWeight: 950, color: "#1e293b", mb: 1 }}>
-                                        ⚠️ Điểm yếu
+                                    <Typography sx={{ fontWeight: 950, color: "#1e293b", mb: 1, fontSize: 14.5 }}>
+                                        ⚠️ Điểm cần lưu ý
                                     </Typography>
                                     <Stack spacing={0.75}>
-                                        {[...normalized.keyProblems, ...normalized.atRiskPatterns]
-                                            .filter(Boolean)
-                                            .slice(0, 12)
-                                            .map((t, idx) => (
-                                                <Typography key={idx} sx={{ color: "#1e293b", fontWeight: 750 }}>
-                                                    • {t}
-                                                </Typography>
-                                            ))}
-                                        {!normalized.keyProblems.length && !normalized.atRiskPatterns.length ? (
-                                            <Typography sx={{ color: "#64748b", fontWeight: 750 }}>
+                                        {weaknessItems.slice(0, 12).map((t, idx) => (
+                                            <Typography key={idx} sx={{ color: "#1e293b", fontWeight: 850, fontSize: 14 }}>
+                                                • {t}
+                                            </Typography>
+                                        ))}
+                                        {!weaknessItems.length ? (
+                                            <Typography sx={{ color: "#64748b", fontWeight: 850, fontSize: 14 }}>
                                                 (Chưa có dữ liệu điểm yếu.)
                                             </Typography>
                                         ) : null}
                                     </Stack>
                                 </Box>
                             </Box>
-                        </Box>
+                        )}
 
                         <Box sx={{ mb: 3 }}>
                             <Typography sx={sectionTitleSx}>💡 Đề xuất cải thiện</Typography>
@@ -464,7 +697,6 @@ export default function AdminDashboardAiInsightPanel(props) {
                                                     width: 34,
                                                     height: 34,
                                                     borderRadius: 2,
-                                                    background: "linear-gradient(135deg)",
                                                     display: "flex",
                                                     alignItems: "center",
                                                     justifyContent: "center",
@@ -474,15 +706,11 @@ export default function AdminDashboardAiInsightPanel(props) {
                                                 <Box
                                                     component="img"
                                                     src="/images/AI_logo.png"
-                                                    alt="Mô tả ảnh"
-                                                    sx={{
-                                                        width: '100%',
-                                                        height: '100%',
-                                                        objectFit: 'cover',
-                                                    }}
+                                                    alt="AI"
+                                                    sx={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 2 }}
                                                 />
                                             </Box>
-                                            <Typography sx={{ color: "#1e293b", fontWeight: 800, lineHeight: 1.65 }}>
+                                            <Typography sx={{ color: "#1e293b", fontWeight: 900, lineHeight: 1.65, fontSize: 14.5 }}>
                                                 {t}
                                             </Typography>
                                         </Stack>
@@ -490,7 +718,7 @@ export default function AdminDashboardAiInsightPanel(props) {
                                 ))}
 
                                 {!normalized.recommendedActions.length ? (
-                                    <Typography sx={{ color: "#64748b", fontWeight: 750 }}>
+                                    <Typography sx={{ color: "#64748b", fontWeight: 850, fontSize: 14 }}>
                                         (Chưa có đề xuất cải thiện.)
                                     </Typography>
                                 ) : null}
@@ -505,7 +733,7 @@ export default function AdminDashboardAiInsightPanel(props) {
                                 sx={{
                                     borderRadius: 999,
                                     px: 2.5,
-                                    fontWeight: 900,
+                                    fontWeight: 950,
                                     color: "#2E2D84",
                                     borderColor: "rgba(46,45,132,0.35)",
                                     "&:hover": { borderColor: "#2E2D84" },
