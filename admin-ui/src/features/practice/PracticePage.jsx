@@ -11,6 +11,7 @@ import {
     Tooltip,
     Chip,
     Divider,
+    TextField,
     keyframes,
 } from "@mui/material";
 
@@ -24,7 +25,10 @@ import { practiceApi } from "../../api/practiceApi";
 import { materialApi } from "../../api/materialApi";
 import { chatApi } from "../../api/chatApi";
 
+import axiosPrivate from "../../api/axiosPrivate";
+
 import GlobalLoading from "../../components/common/GlobalLoading";
+import AppConfirm from "../../components/common/AppConfirm";
 import { useToast } from "../../components/common/AppToast";
 import CountdownTimer from "../../components/common/CountdownTimer";
 
@@ -84,6 +88,11 @@ const ASSISTANT_MODE = {
 
 const ACTIVE_SESSION_KEY = "practice_active_session_v2";
 const RESULT_PERSIST_KEY = "practice_result_v2";
+
+// ✅ Duration estimate (mirror BE rule)
+const DEFAULT_MINUTES_PER_QUESTION = 2.0;
+const DURATION_MIN_MINUTES = 5;
+const DURATION_MAX_MINUTES = 120;
 
 const unwrap = (res) => (res && typeof res === "object" && "data" in res ? res.data : res);
 
@@ -174,6 +183,10 @@ export default function PracticePage() {
     const [questionCount, setQuestionCount] = useState(10);
     const [durationMinutes, setDurationMinutes] = useState(0);
 
+    // ✅ from BE SystemSettings (fallback = default)
+    const [minutesPerQuestion, setMinutesPerQuestion] = useState(DEFAULT_MINUTES_PER_QUESTION);
+    const minutesPerQuestionRef = useRef(DEFAULT_MINUTES_PER_QUESTION);
+
     const [materialId, setMaterialId] = useState(null);
     const materialIdRef = useRef(null);
 
@@ -194,6 +207,20 @@ export default function PracticePage() {
     const [result, setResult] = useState(null);
     const [reviewOpen, setReviewOpen] = useState(false);
     const [reviewData, setReviewData] = useState(null);
+
+    // ✅ Confirm dialogs (required after created quiz - MODE.READY)
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [confirmType, setConfirmType] = useState(null); // "START" | "RESET"
+
+    const openConfirm = useCallback((type) => {
+        setConfirmType(type);
+        setConfirmOpen(true);
+    }, []);
+
+    const closeConfirm = useCallback(() => {
+        setConfirmOpen(false);
+        setConfirmType(null);
+    }, []);
 
     const playerRef = useRef(null);
 
@@ -255,6 +282,19 @@ export default function PracticePage() {
         return Number.isFinite(n) && n >= 1;
     }, [questionCount]);
 
+    const estimateDurationMinutes = useCallback((qc) => {
+        const n = Number(qc);
+        if (!Number.isFinite(n) || n <= 0) return 0;
+
+        const mpq = Number(minutesPerQuestionRef.current);
+        const used = Number.isFinite(mpq) && mpq > 0 ? mpq : DEFAULT_MINUTES_PER_QUESTION;
+
+        let mins = Math.round(n * used);
+        if (!Number.isFinite(mins)) mins = 0;
+        mins = Math.max(DURATION_MIN_MINUTES, Math.min(DURATION_MAX_MINUTES, mins));
+        return mins;
+    }, []);
+
     const saveActiveSession = useCallback((next) => {
         try {
             localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(next));
@@ -289,6 +329,62 @@ export default function PracticePage() {
                 text: "Nhập từ khóa liên quan bài học. Mình chỉ gợi ý khái niệm tổng quát, không đưa đáp án.",
             },
         ]);
+    }, []);
+
+    // ✅ Fetch settings once to mirror BE rule (minutesPerQuestion).
+    // Try multiple endpoints (some projects restrict /api/admin/** to ADMIN).
+    useEffect(() => {
+        let mounted = true;
+
+        const pickMpq = (data) => {
+            const mpq =
+                data?.minutesPerQuestion ??
+                data?.minutes_per_question ??
+                data?.settings?.minutesPerQuestion ??
+                null;
+            const n = Number(mpq);
+            return Number.isFinite(n) && n > 0 ? n : null;
+        };
+
+        const tryGet = async (url) => {
+            try {
+                const res = await axiosPrivate.get(url);
+                const d = unwrap(res);
+                return d;
+            } catch {
+                return null;
+            }
+        };
+
+        (async () => {
+            // ordered by most likely in your BE
+            const urls = [
+                "/api/admin/settings", // may be 403 for STUDENT
+                "/api/settings",
+                "/api/system-settings",
+                "/api/public/settings",
+            ];
+
+            for (const url of urls) {
+                const d = await tryGet(url);
+                if (!mounted || !d) continue;
+                const v = pickMpq(d);
+                if (v != null) {
+                    minutesPerQuestionRef.current = v;
+                    setMinutesPerQuestion(v);
+                    return;
+                }
+            }
+
+            // fallback default (still matches BE default)
+            minutesPerQuestionRef.current = DEFAULT_MINUTES_PER_QUESTION;
+            setMinutesPerQuestion(DEFAULT_MINUTES_PER_QUESTION);
+        })();
+
+        return () => {
+            mounted = false;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const resetPracticeState = useCallback(
@@ -710,7 +806,11 @@ export default function PracticePage() {
             console.error(e);
             const status = e?.response?.status;
             const msg =
-                e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Start failed";
+                e?.response?.data?.message ||
+                e?.response?.data?.error ||
+                e?.response?.data ||
+                e?.message ||
+                "Start failed";
             showToast(`Không bắt đầu được${status ? ` (${status})` : ""}: ${String(msg)}`, "error");
             appendMessage({
                 role: "assistant",
@@ -777,7 +877,11 @@ export default function PracticePage() {
                 console.error(e);
                 const status = e?.response?.status;
                 const serverMsg =
-                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Submit failed";
+                    e?.response?.data?.message ||
+                    e?.response?.data?.error ||
+                    e?.response?.data ||
+                    e?.message ||
+                    "Submit failed";
                 showToast(`Nộp bài thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
                 appendMessage({ role: "assistant", text: "Không nộp bài được. Thử lại nhé." });
             } finally {
@@ -812,7 +916,11 @@ export default function PracticePage() {
             console.error(e);
             const status = e?.response?.status;
             const serverMsg =
-                e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Review failed";
+                e?.response?.data?.message ||
+                e?.response?.data?.error ||
+                e?.response?.data ||
+                e?.message ||
+                "Review failed";
             showToast(`Không tải được review${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
         }
     }, [result?.attemptId, showToast]);
@@ -873,7 +981,11 @@ export default function PracticePage() {
                 console.error(e);
                 const status = e?.response?.status;
                 const msg =
-                    e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Retest failed";
+                    e?.response?.data?.message ||
+                    e?.response?.data?.error ||
+                    e?.response?.data ||
+                    e?.message ||
+                    "Retest failed";
                 showToast(`Không tạo được bài thi lại${status ? ` (${status})` : ""}: ${String(msg)}`, "error");
             } finally {
                 setLoading(false);
@@ -1023,6 +1135,34 @@ export default function PracticePage() {
         }
         return null;
     }, [deadlineIso, durationMinutes, startedAtIso]);
+
+    // ✅ Auto-fill duration in "Sẵn sàng tạo đề" (MODE.IDLE) based on BE rule.
+    useEffect(() => {
+        const matId = materialIdRef.current ?? materialId;
+        const shouldEstimate =
+            mode === MODE.IDLE &&
+            Boolean(matId) &&
+            !sessionTokenRef.current &&
+            !sessionToken &&
+            !attemptDetail &&
+            !result;
+
+        if (!shouldEstimate) return;
+
+        const est = estimateDurationMinutes(questionCount);
+        if (est > 0 && est !== Number(durationMinutes)) {
+            setDurationMinutes(est);
+        }
+    }, [
+        attemptDetail,
+        durationMinutes,
+        estimateDurationMinutes,
+        materialId,
+        mode,
+        questionCount,
+        result,
+        sessionToken,
+    ]);
 
     const isSplit = Boolean(materialId || sessionToken || attemptDetail || result);
 
@@ -1228,6 +1368,7 @@ export default function PracticePage() {
                                 attemptId={mode === MODE.DOING ? doingAttemptId : null}
                                 attemptStartTs={null}
                                 onTimeExpired={null}
+                                hideConfig
                             />
 
                             <Box sx={{ mt: 1.5, px: 0.5 }}>
@@ -1253,7 +1394,6 @@ export default function PracticePage() {
                                         </Stack>
 
                                         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
-                                            {/* ✅ DOING => ẨN "Tạo đề" */}
                                             {!lockGenerate && (
                                                 <Chip
                                                     label="Tạo đề"
@@ -1263,7 +1403,6 @@ export default function PracticePage() {
                                                 />
                                             )}
 
-                                            {/* ✅ GENERATE => ẨN "Hỏi khái niệm" */}
                                             {!hideStudyWhenGenerate && (
                                                 <Chip
                                                     label="Hỏi khái niệm"
@@ -1360,17 +1499,46 @@ export default function PracticePage() {
                                 gap: 1,
                             }}
                         >
-                            <Tooltip title="Đổi học liệu">
-                                <Button
-                                    onClick={() => resetPracticeState({ keepMessages: true })}
-                                    variant="outlined"
-                                    size="small"
-                                    startIcon={<RestartAltRoundedIcon />}
-                                    sx={{ borderRadius: 3, fontWeight: 900 }}
-                                >
-                                    Đổi học liệu
-                                </Button>
-                            </Tooltip>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <Tooltip title="Đổi học liệu">
+                                    <Button
+                                        onClick={() => {
+                                            if (mode === MODE.READY) {
+                                                openConfirm("RESET");
+                                                return;
+                                            }
+                                            resetPracticeState({ keepMessages: true });
+                                        }}
+                                        variant="outlined"
+                                        size="small"
+                                        startIcon={<RestartAltRoundedIcon />}
+                                        sx={{ borderRadius: 3, fontWeight: 900 }}
+                                    >
+                                        Đổi học liệu
+                                    </Button>
+                                </Tooltip>
+
+                                {/* ✅ Badge summary after "Tạo đề ngay" */}
+                                {mode !== MODE.IDLE && (
+                                    <Paper
+                                        elevation={0}
+                                        sx={{
+                                            px: 1.25,
+                                            py: 0.6,
+                                            borderRadius: 999,
+                                            border: `1px solid ${COLORS.border}`,
+                                            bgcolor: "#F7F9FC",
+                                            display: "flex",
+                                            alignItems: "center",
+                                        }}
+                                    >
+                                        <Typography sx={{ fontSize: 12.5, color: COLORS.textSecondary }}>
+                                            Số câu: <b>{mode === MODE.RESULT ? Number(resultQuestionCount) : Number(questionCount)}</b>{" "}
+                                            · Thời gian: <b>{Number(durationMinutes) > 0 ? `${Number(durationMinutes)} phút` : "—"}</b>
+                                        </Typography>
+                                    </Paper>
+                                )}
+                            </Stack>
                         </Box>
 
                         <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 2.5 }}>
@@ -1380,8 +1548,90 @@ export default function PracticePage() {
                                         Sẵn sàng tạo đề
                                     </Typography>
                                     <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 2 }}>
-                                        Upload/paste học liệu xong, bấm <b>Gửi</b> để Fly AI tạo đề.
+                                        Upload/paste học liệu xong, chỉnh số câu (nếu cần) rồi bấm <b>Tạo đề ngay</b>.
                                     </Typography>
+
+                                    {(materialIdRef.current ?? materialId) && (
+                                        <Paper
+                                            elevation={0}
+                                            sx={{
+                                                p: 1.5,
+                                                borderRadius: 3,
+                                                border: `1px solid ${COLORS.border}`,
+                                                bgcolor: "#fff",
+                                                mb: 2,
+                                            }}
+                                        >
+                                            <Stack
+                                                direction={{ xs: "column", sm: "row" }}
+                                                spacing={1.25}
+                                                alignItems={{ sm: "center" }}
+                                            >
+                                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                    <Typography
+                                                        sx={{
+                                                            fontSize: 12,
+                                                            fontWeight: 900,
+                                                            color: COLORS.textSecondary,
+                                                            mb: 0.5,
+                                                        }}
+                                                    >
+                                                        Số câu
+                                                    </Typography>
+                                                    <TextField
+                                                        size="small"
+                                                        type="number"
+                                                        value={Number(questionCount) || ""}
+                                                        onChange={(e) => setQuestionCount(Number(e.target.value))}
+                                                        inputProps={{ min: 1, max: 100 }}
+                                                        sx={{
+                                                            width: { xs: "100%", sm: 140 },
+                                                            "& .MuiOutlinedInput-root": {
+                                                                borderRadius: 3,
+                                                                "& fieldset": { borderColor: COLORS.border },
+                                                                "&:hover fieldset": { borderColor: "#BFC7D5" },
+                                                                "&.Mui-focused fieldset": { borderColor: "#2E2D84" },
+                                                            },
+                                                            "& .MuiInputBase-input": {
+                                                                fontWeight: 900,
+                                                            },
+                                                        }}
+                                                    />
+                                                </Box>
+
+                                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                    <Typography
+                                                        sx={{
+                                                            fontSize: 12,
+                                                            fontWeight: 900,
+                                                            color: COLORS.textSecondary,
+                                                            mb: 0.5,
+                                                        }}
+                                                    >
+                                                        Thời gian
+                                                    </Typography>
+                                                    <Paper
+                                                        elevation={0}
+                                                        sx={{
+                                                            height: 40,
+                                                            px: 1.5,
+                                                            borderRadius: 3,
+                                                            border: `1px solid ${COLORS.border}`,
+                                                            bgcolor: "#F7F9FC",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                        }}
+                                                    >
+                                                        <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary }}>
+                                                            {Number(durationMinutes) > 0
+                                                                ? `${Number(durationMinutes)} phút`
+                                                                : "Tự động theo đề (không chỉnh)"}
+                                                        </Typography>
+                                                    </Paper>
+                                                </Box>
+                                            </Stack>
+                                        </Paper>
+                                    )}
 
                                     <Button
                                         fullWidth
@@ -1411,10 +1661,6 @@ export default function PracticePage() {
                                     <Typography sx={{ fontWeight: 900, color: COLORS.textPrimary, mb: 0.5, fontSize: 18 }}>
                                         Đã tạo đề xong
                                     </Typography>
-                                    <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 1.5 }}>
-                                        Số câu: <b>{Number(questionCount)}</b> • Thời gian:{" "}
-                                        <b>{Number(durationMinutes) || "—"} phút</b>
-                                    </Typography>
                                     <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mb: 2 }}>
                                         Bấm “Bắt đầu làm bài” để làm bài ngay. Nếu muốn đổi học liệu thì bấm “Đổi học liệu”.
                                     </Typography>
@@ -1423,7 +1669,7 @@ export default function PracticePage() {
                                         <Button
                                             fullWidth
                                             variant="contained"
-                                            onClick={startSessionV2}
+                                            onClick={() => openConfirm("START")}
                                             disabled={loading}
                                             sx={{
                                                 borderRadius: 3,
@@ -1438,7 +1684,7 @@ export default function PracticePage() {
                                         <Button
                                             fullWidth
                                             variant="outlined"
-                                            onClick={() => resetPracticeState({ keepMessages: true })}
+                                            onClick={() => openConfirm("RESET")}
                                             disabled={loading}
                                             sx={{ borderRadius: 3, fontWeight: 900 }}
                                         >
@@ -1531,6 +1777,30 @@ export default function PracticePage() {
                     </Tooltip>
                 </Box>
             )}
+
+            <AppConfirm
+                open={confirmOpen}
+                title={confirmType === "START" ? "Xác nhận bắt đầu" : "Xác nhận đổi học liệu"}
+                message={
+                    confirmType === "START"
+                        ? "Bạn sắp bắt đầu làm bài. Khi đã bắt đầu, bạn không thể thay đổi cấu hình đề. Tiếp tục?"
+                        : "Bạn muốn đổi học liệu? Đề vừa tạo sẽ bị hủy. Tiếp tục?"
+                }
+                confirmText={confirmType === "START" ? "Bắt đầu" : "Đổi học liệu"}
+                cancelText="Hủy"
+                variant={confirmType === "RESET" ? "danger" : "default"}
+                onClose={closeConfirm}
+                onConfirm={async () => {
+                    if (confirmType === "START") {
+                        await startSessionV2();
+                        closeConfirm();
+                        return;
+                    }
+                    // RESET
+                    resetPracticeState({ keepMessages: true });
+                    closeConfirm();
+                }}
+            />
 
             <PracticeReviewDialog open={reviewOpen} onClose={() => setReviewOpen(false)} review={reviewData} />
             <GlobalLoading open={loading} message={loadingMessage} />

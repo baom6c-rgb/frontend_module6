@@ -9,6 +9,7 @@ export default function PracticeHeaderConfig({
                                                  durationMinutes,
                                                  onChangeQuestionCount,
                                                  attemptId,
+                                                 hideConfig = false,
                                              }) {
     const isDoing = Boolean(attemptId);
 
@@ -53,7 +54,7 @@ export default function PracticeHeaderConfig({
                         sx={{
                             width: 24,
                             height: 24,
-                            borderRadius: "50%" // Đảm bảo ảnh bo tròn nếu cần
+                            borderRadius: "50%", // Đảm bảo ảnh bo tròn nếu cần
                         }}
                     />
                     <Typography
@@ -69,61 +70,63 @@ export default function PracticeHeaderConfig({
                 </Box>
 
                 {/* RIGHT: compact config */}
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexShrink: 0 }}>
-                    <Typography sx={{ fontSize: 13, fontWeight: 800, color: "#2e2d84" }}>
-                        Số câu
-                    </Typography>
-
-                    <TextField
-                        size="small"
-                        type="number"
-                        value={qc || ""}
-                        onChange={(e) => onChangeQuestionCount?.(e.target.value)}
-                        disabled={isDoing}
-                        inputProps={{ min: 1, max: 100 }}
-                        sx={{
-                            width: 65,
-                            "& .MuiOutlinedInput-root": {
-                                borderRadius: 2,
-                                height: 38,
-                                "& fieldset": { borderColor: "#E3E8EF" },
-                                "&:hover fieldset": { borderColor: "#BFC7D5" },
-                                "&.Mui-focused fieldset": { borderColor: "#2E2D84" },
-                            },
-                            "& .MuiInputBase-input": {
-                                textAlign: "center",
-                                fontWeight: 900,
-                                color: "#070707",
-                                fontSize: 14,
-                                py: 0,
-                            },
-                        }}
-                    />
-
-                    <EastRoundedIcon sx={{ color: "#A0AEC0", fontSize: 18 }} />
-
-                    <Typography sx={{ fontSize: 13, fontWeight: 800, color: "#2e2d84" }}>
-                        Thời gian
-                    </Typography>
-
-                    <Box
-                        sx={{
-                            height: 38,
-                            px: 1,
-                            minWidth: 66,
-                            borderRadius: 2,
-                            border: "1px solid #E3E8EF",
-                            bgcolor: "#F7F9FC",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                        }}
-                    >
-                        <Typography sx={{ fontSize: 13, fontWeight: 900, color: "#020202" }}>
-                            {displayMinutes} phút
+                {!hideConfig && (
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexShrink: 0 }}>
+                        <Typography sx={{ fontSize: 13, fontWeight: 800, color: "#2e2d84" }}>
+                            Số câu
                         </Typography>
+
+                        <TextField
+                            size="small"
+                            type="number"
+                            value={qc || ""}
+                            onChange={(e) => onChangeQuestionCount?.(e.target.value)}
+                            disabled={isDoing}
+                            inputProps={{ min: 1, max: 100 }}
+                            sx={{
+                                width: 65,
+                                "& .MuiOutlinedInput-root": {
+                                    borderRadius: 2,
+                                    height: 38,
+                                    "& fieldset": { borderColor: "#E3E8EF" },
+                                    "&:hover fieldset": { borderColor: "#BFC7D5" },
+                                    "&.Mui-focused fieldset": { borderColor: "#2E2D84" },
+                                },
+                                "& .MuiInputBase-input": {
+                                    textAlign: "center",
+                                    fontWeight: 900,
+                                    color: "#070707",
+                                    fontSize: 14,
+                                    py: 0,
+                                },
+                            }}
+                        />
+
+                        <EastRoundedIcon sx={{ color: "#A0AEC0", fontSize: 18 }} />
+
+                        <Typography sx={{ fontSize: 13, fontWeight: 800, color: "#2e2d84" }}>
+                            Thời gian
+                        </Typography>
+
+                        <Box
+                            sx={{
+                                height: 38,
+                                px: 1,
+                                minWidth: 66,
+                                borderRadius: 2,
+                                border: "1px solid #E3E8EF",
+                                bgcolor: "#F7F9FC",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                            }}
+                        >
+                            <Typography sx={{ fontSize: 13, fontWeight: 900, color: "#020202" }}>
+                                {displayMinutes} phút
+                            </Typography>
+                        </Box>
                     </Box>
-                </Box>
+                )}
             </Box>
         </Paper>
     );
