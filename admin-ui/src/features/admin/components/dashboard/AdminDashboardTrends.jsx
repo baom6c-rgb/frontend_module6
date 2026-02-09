@@ -8,8 +8,8 @@ export default function AdminDashboardTrends({ timeSeries = [] }) {
     return (
         <Stack
             direction={{ xs: "column", md: "row" }}
-            spacing={3}
-            sx={{ width: "100%" }}
+            spacing={{ xs: 2, sm: 2.5, md: 3 }}
+            sx={{ width: "100%", minWidth: 0 }}
         >
             <Box sx={{ flex: 1, minWidth: 0 }}>
                 <AdminDashboardAttemptsChart timeSeries={timeSeries} />
