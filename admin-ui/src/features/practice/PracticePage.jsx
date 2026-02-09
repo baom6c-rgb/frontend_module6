@@ -201,16 +201,19 @@ export default function PracticePage() {
 
     const [attemptDetail, setAttemptDetail] = useState(null);
 
-    // ✅ NEW: số câu thực tế của attempt (đóng băng) để hiển thị ở RESULT
+    // ✅ số câu thực tế của attempt (đóng băng) để hiển thị ở RESULT
     const [attemptQuestionCount, setAttemptQuestionCount] = useState(null);
 
     const [result, setResult] = useState(null);
     const [reviewOpen, setReviewOpen] = useState(false);
     const [reviewData, setReviewData] = useState(null);
 
-    // ✅ Confirm dialogs (required after created quiz - MODE.READY)
+    // ✅ Confirm dialogs
     const [confirmOpen, setConfirmOpen] = useState(false);
-    const [confirmType, setConfirmType] = useState(null); // "START" | "RESET"
+    const [confirmType, setConfirmType] = useState(null); // "START" | "RESET" | "SUBMIT"
+
+    // ✅ pending submit payload for confirm submit
+    const pendingSubmitRef = useRef({ answersArray: null, meta: null });
 
     const openConfirm = useCallback((type) => {
         setConfirmType(type);
@@ -220,6 +223,8 @@ export default function PracticePage() {
     const closeConfirm = useCallback(() => {
         setConfirmOpen(false);
         setConfirmType(null);
+        // clear pending submit when closing submit confirm
+        pendingSubmitRef.current = { answersArray: null, meta: null };
     }, []);
 
     const playerRef = useRef(null);
@@ -357,13 +362,7 @@ export default function PracticePage() {
         };
 
         (async () => {
-            // ordered by most likely in your BE
-            const urls = [
-                "/api/admin/settings", // may be 403 for STUDENT
-                "/api/settings",
-                "/api/system-settings",
-                "/api/public/settings",
-            ];
+            const urls = ["/api/admin/settings", "/api/settings", "/api/system-settings", "/api/public/settings"];
 
             for (const url of urls) {
                 const d = await tryGet(url);
@@ -376,7 +375,6 @@ export default function PracticePage() {
                 }
             }
 
-            // fallback default (still matches BE default)
             minutesPerQuestionRef.current = DEFAULT_MINUTES_PER_QUESTION;
             setMinutesPerQuestion(DEFAULT_MINUTES_PER_QUESTION);
         })();
@@ -402,7 +400,7 @@ export default function PracticePage() {
             setDeadlineIso(null);
 
             setAttemptDetail(null);
-            setAttemptQuestionCount(null); // ✅ reset frozen count
+            setAttemptQuestionCount(null);
 
             setResult(null);
             setReviewOpen(false);
@@ -413,7 +411,7 @@ export default function PracticePage() {
             setIsCanvasOpen(true);
 
             setAssistantMode(ASSISTANT_MODE.GENERATE);
-            resetStudyChat(); // ✅ chỉ reset khi đổi học liệu
+            resetStudyChat();
 
             if (opts?.keepMessages) {
                 appendMessage({
@@ -490,7 +488,7 @@ export default function PracticePage() {
                 setDurationMinutes(0);
                 clearActiveSession();
 
-                resetStudyChat(); // ✅ đổi học liệu => reset chat
+                resetStudyChat();
 
                 const extracted = await waitForExtractedTextOrReady(id);
 
@@ -555,7 +553,7 @@ export default function PracticePage() {
                 setDurationMinutes(0);
                 clearActiveSession();
 
-                resetStudyChat(); // ✅ đổi học liệu => reset chat
+                resetStudyChat();
 
                 const extracted = await waitForExtractedTextOrReady(id);
 
@@ -902,6 +900,21 @@ export default function PracticePage() {
         ]
     );
 
+    // ✅ Wrapper: confirm submit when user manually submits.
+    // - If timedOut => auto submit (no confirm)
+    const handleSubmitWithConfirm = useCallback(
+        (answersArray, meta = {}) => {
+            if (meta?.timedOut) {
+                submitSessionV2(answersArray, meta);
+                return;
+            }
+            // only confirm for user action
+            pendingSubmitRef.current = { answersArray, meta };
+            openConfirm("SUBMIT");
+        },
+        [openConfirm, submitSessionV2]
+    );
+
     const openReview = useCallback(async () => {
         const attemptId = result?.attemptId;
         if (!attemptId) {
@@ -1153,16 +1166,7 @@ export default function PracticePage() {
         if (est > 0 && est !== Number(durationMinutes)) {
             setDurationMinutes(est);
         }
-    }, [
-        attemptDetail,
-        durationMinutes,
-        estimateDurationMinutes,
-        materialId,
-        mode,
-        questionCount,
-        result,
-        sessionToken,
-    ]);
+    }, [attemptDetail, durationMinutes, estimateDurationMinutes, materialId, mode, questionCount, result, sessionToken]);
 
     const isSplit = Boolean(materialId || sessionToken || attemptDetail || result);
 
@@ -1700,7 +1704,7 @@ export default function PracticePage() {
                                     attemptDetail={attemptDetail}
                                     attemptId={attemptDetail?.sessionToken || doingAttemptId}
                                     attemptStartTs={attemptStartTs}
-                                    onSubmit={(answersArray, meta) => submitSessionV2(answersArray, meta)}
+                                    onSubmit={(answersArray, meta) => handleSubmitWithConfirm(answersArray, meta)}
                                 />
                             )}
 
@@ -1778,15 +1782,24 @@ export default function PracticePage() {
                 </Box>
             )}
 
+            {/* ✅ 1 modal confirm dùng chung cho START / RESET / SUBMIT */}
             <AppConfirm
                 open={confirmOpen}
-                title={confirmType === "START" ? "Xác nhận bắt đầu" : "Xác nhận đổi học liệu"}
+                title={
+                    confirmType === "START"
+                        ? "Xác nhận bắt đầu"
+                        : confirmType === "RESET"
+                            ? "Xác nhận đổi học liệu"
+                            : "Xác nhận nộp bài"
+                }
                 message={
                     confirmType === "START"
                         ? "Bạn sắp bắt đầu làm bài. Khi đã bắt đầu, bạn không thể thay đổi cấu hình đề. Tiếp tục?"
-                        : "Bạn muốn đổi học liệu? Đề vừa tạo sẽ bị hủy. Tiếp tục?"
+                        : confirmType === "RESET"
+                            ? "Bạn muốn đổi học liệu? Đề vừa tạo sẽ bị hủy. Tiếp tục?"
+                            : "Bạn chắc chắn muốn nộp bài ngay bây giờ? Sau khi nộp, bạn sẽ xem kết quả và không thể chỉnh sửa đáp án."
                 }
-                confirmText={confirmType === "START" ? "Bắt đầu" : "Đổi học liệu"}
+                confirmText={confirmType === "START" ? "Bắt đầu" : confirmType === "RESET" ? "Đổi học liệu" : "Nộp bài"}
                 cancelText="Hủy"
                 variant={confirmType === "RESET" ? "danger" : "default"}
                 onClose={closeConfirm}
@@ -1796,9 +1809,15 @@ export default function PracticePage() {
                         closeConfirm();
                         return;
                     }
-                    // RESET
-                    resetPracticeState({ keepMessages: true });
-                    closeConfirm();
+                    if (confirmType === "RESET") {
+                        resetPracticeState({ keepMessages: true });
+                        closeConfirm();
+                        return;
+                    }
+                    // SUBMIT
+                    const { answersArray, meta } = pendingSubmitRef.current || {};
+                    closeConfirm(); // đóng trước để UI mượt
+                    await submitSessionV2(Array.isArray(answersArray) ? answersArray : [], meta || {});
                 }}
             />
 
