@@ -10,11 +10,11 @@ import {
 
 import { safeNumber } from "./dashboard.helpers";
 
-/** ===== Utils (GIỮ LOGIC) ===== */
+/** Utils */
 const fmtInt = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString() : "0");
 const pct0 = (ratio) => `${Math.round(safeNumber(ratio, 0) * 100)}%`;
 
-/** ===== UI VARIANTS (GIỮ NGUYÊN) ===== */
+/** UI VARIANTS */
 const VARIANTS = {
     blue: { iconBg: "#e0f2fe", accent: "#0284c7" },
     orange: { iconBg: "#fff7ed", accent: "#ea580c" },
@@ -30,8 +30,8 @@ const KpiCard = ({ variant = "blue", label, value, meta, icon }) => {
             sx={{
                 background: "#fafafa",
                 border: "1px solid #f0f0f0",
-                borderRadius: "16px",
-                padding: { xs: "16px", md: "20px" },
+                borderRadius: { xs: "14px", md: "16px" },
+                padding: { xs: "14px", sm: "16px", md: "20px" },
                 display: "flex",
                 alignItems: "flex-start",
                 justifyContent: "space-between",
@@ -41,9 +41,9 @@ const KpiCard = ({ variant = "blue", label, value, meta, icon }) => {
             <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography
                     sx={{
-                        fontSize: "15px",
+                        fontSize: { xs: "13px", sm: "14px", md: "15px" },
                         color: "#64748b",
-                        marginBottom: "12px",
+                        marginBottom: { xs: "10px", md: "12px" },
                         fontWeight: 500,
                         lineHeight: 1.4,
                     }}
@@ -53,11 +53,11 @@ const KpiCard = ({ variant = "blue", label, value, meta, icon }) => {
 
                 <Typography
                     sx={{
-                        fontSize: { xs: "32px", md: "38px" },
+                        fontSize: { xs: "28px", sm: "32px", md: "38px" },
                         fontWeight: 700,
                         color: "#1a1a1a",
                         lineHeight: 1,
-                        marginBottom: "10px",
+                        marginBottom: { xs: "8px", md: "10px" },
                     }}
                 >
                     {fmtInt(value)}
@@ -65,7 +65,7 @@ const KpiCard = ({ variant = "blue", label, value, meta, icon }) => {
 
                 <Typography
                     sx={{
-                        fontSize: "14px",
+                        fontSize: { xs: "12px", sm: "13px", md: "14px" },
                         fontWeight: 600,
                         padding: "4px 0",
                         color: v.accent,
@@ -77,14 +77,14 @@ const KpiCard = ({ variant = "blue", label, value, meta, icon }) => {
 
             <Box
                 sx={{
-                    width: { xs: 50, md: 60 },
-                    height: { xs: 50, md: 60 },
-                    borderRadius: "14px",
+                    width: { xs: 44, sm: 50, md: 60 },
+                    height: { xs: 44, sm: 50, md: 60 },
+                    borderRadius: { xs: "12px", md: "14px" },
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     flexShrink: 0,
-                    marginLeft: "14px",
+                    marginLeft: { xs: "10px", sm: "12px", md: "14px" },
                     background: v.iconBg,
                 }}
             >
@@ -94,7 +94,7 @@ const KpiCard = ({ variant = "blue", label, value, meta, icon }) => {
     );
 };
 
-/** ===== Main (GIỮ LOGIC + FLOW) ===== */
+/** Main */
 export default function AdminDashboardKpiCards({ overview, metrics, onJumpAtRisk }) {
     const totalAttempts = metrics?.totalAttempts ?? safeNumber(overview?.totalAttempts, 0);
     const totalStudents = metrics?.totalStudents ?? safeNumber(overview?.totalStudents, 0);
@@ -109,22 +109,41 @@ export default function AdminDashboardKpiCards({ overview, metrics, onJumpAtRisk
         <Paper
             elevation={0}
             sx={{
-                borderRadius: "18px",
+                borderRadius: { xs: "16px", md: "18px" },
                 border: "1px solid #f0f0f0",
-                padding: { xs: 2, md: 2.5 },
+                padding: { xs: 1.5, sm: 2, md: 2.5 },
                 background: "#fff",
             }}
         >
-            {/* Header nhỏ gọn */}
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }} spacing={1}>
-                <Typography sx={{ fontWeight: 950, color: "#1B2559" }}>Tổng quan nhanh</Typography>
+            {/* Header */}
+            <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                sx={{ mb: { xs: 1.25, md: 1.5 } }}
+                spacing={1}
+                flexWrap={{ xs: "wrap", sm: "nowrap" }}
+            >
+                <Typography
+                    sx={{
+                        fontWeight: 950,
+                        color: "#1B2559",
+                        fontSize: { xs: "15px", sm: "16px" },
+                    }}
+                >
+                    Tổng quan nhanh
+                </Typography>
 
                 {typeof onJumpAtRisk === "function" ? (
                     <Button
                         size="small"
                         variant="text"
                         onClick={onJumpAtRisk}
-                        sx={{ textTransform: "none", fontWeight: 900 }}
+                        sx={{
+                            textTransform: "none",
+                            fontWeight: 900,
+                            fontSize: { xs: "12px", sm: "13px" },
+                        }}
                     >
                         Xem học viên
                     </Button>
@@ -134,8 +153,8 @@ export default function AdminDashboardKpiCards({ overview, metrics, onJumpAtRisk
             <Box
                 sx={{
                     display: "grid",
-                    gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
-                    gap: { xs: "14px", md: "16px" },
+                    gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)" },
+                    gap: { xs: "12px", sm: "14px", md: "16px" },
                     minWidth: 0,
                 }}
             >
@@ -144,7 +163,7 @@ export default function AdminDashboardKpiCards({ overview, metrics, onJumpAtRisk
                     label="Tổng số bài làm"
                     value={totalAttempts}
                     meta="Total Exams"
-                    icon={<TrendingUpRounded sx={{ fontSize: 28, color: VARIANTS.blue.accent }} />}
+                    icon={<TrendingUpRounded sx={{ fontSize: { xs: 24, md: 28 }, color: VARIANTS.blue.accent }} />}
                 />
 
                 <KpiCard
@@ -152,7 +171,7 @@ export default function AdminDashboardKpiCards({ overview, metrics, onJumpAtRisk
                     label="Học viên hoạt động"
                     value={totalStudents}
                     meta="Students Activities"
-                    icon={<PeopleAltRounded sx={{ fontSize: 28, color: VARIANTS.orange.accent }} />}
+                    icon={<PeopleAltRounded sx={{ fontSize: { xs: 24, md: 28 }, color: VARIANTS.orange.accent }} />}
                 />
 
                 <KpiCard
@@ -160,7 +179,7 @@ export default function AdminDashboardKpiCards({ overview, metrics, onJumpAtRisk
                     label="Số bài Đạt"
                     value={passCount}
                     meta={pct0(passRate)}
-                    icon={<HowToRegRounded sx={{ fontSize: 28, color: VARIANTS.green.accent }} />}
+                    icon={<HowToRegRounded sx={{ fontSize: { xs: 24, md: 28 }, color: VARIANTS.green.accent }} />}
                 />
 
                 <KpiCard
@@ -168,7 +187,7 @@ export default function AdminDashboardKpiCards({ overview, metrics, onJumpAtRisk
                     label="Số bài Trượt"
                     value={failCount}
                     meta={pct0(failRate)}
-                    icon={<BlockRounded sx={{ fontSize: 28, color: VARIANTS.red.accent }} />}
+                    icon={<BlockRounded sx={{ fontSize: { xs: 24, md: 28 }, color: VARIANTS.red.accent }} />}
                 />
             </Box>
         </Paper>

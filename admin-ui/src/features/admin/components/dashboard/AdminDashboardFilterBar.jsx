@@ -17,15 +17,6 @@ import Autocomplete from "@mui/material/Autocomplete";
 import { getAllClassesApi } from "../../../../api/classApi";
 import { getAllModulesApi } from "../../../../api/moduleApi";
 
-/**
- * ✅ FIX DỨT ĐIỂM:
- * - KHÔNG nhận classes/modules từ props nữa
- * - TỰ FETCH options giống AdminUserList
- * - Hiển thị theo className / moduleName
- * - value vẫn là id → không gãy filter logic
- *
- * ✅ UI: preset = custom => xổ date range xuống DƯỚI (Collapse riêng)
- */
 export default function AdminDashboardFilterBar({
                                                     filters,
                                                     loading = false,
@@ -33,7 +24,6 @@ export default function AdminDashboardFilterBar({
                                                     onReset,
                                                     onAutoApply,
                                                 }) {
-    // ===== LOGIC (GIỮ NGUYÊN) =====
     const timerRef = useRef(null);
     const [open, setOpen] = useState(true);
 
@@ -46,11 +36,9 @@ export default function AdminDashboardFilterBar({
         []
     );
 
-    // ===== OPTIONS STATE (GIỐNG ADMIN USER LIST) =====
     const [classOptions, setClassOptions] = useState([{ value: "", label: "Tất cả lớp" }]);
     const [moduleOptions, setModuleOptions] = useState([{ value: "", label: "Tất cả module" }]);
 
-    // ===== FETCH OPTIONS =====
     useEffect(() => {
         let mounted = true;
 
@@ -63,7 +51,6 @@ export default function AdminDashboardFilterBar({
 
                 if (!mounted) return;
 
-                // ---- classes ----
                 const classList = classesRes?.data ?? classesRes ?? [];
                 const classOpts = classList
                     .map((c) => ({
@@ -74,7 +61,6 @@ export default function AdminDashboardFilterBar({
 
                 setClassOptions([{ value: "", label: "Tất cả lớp" }, ...classOpts]);
 
-                // ---- modules ----
                 const moduleList = modulesRes?.data ?? modulesRes ?? [];
                 const moduleOpts = moduleList
                     .map((m) => ({
@@ -85,7 +71,7 @@ export default function AdminDashboardFilterBar({
 
                 setModuleOptions([{ value: "", label: "Tất cả module" }, ...moduleOpts]);
             } catch {
-                // ignore – giữ default "Tất cả"
+                // ignore
             }
         })();
 
@@ -123,14 +109,13 @@ export default function AdminDashboardFilterBar({
         });
     };
 
-    // ===== UI ONLY =====
-    const FIELD_HEIGHT = "45px";
+    const FIELD_HEIGHT = { xs: "42px", sm: "45px" };
     const isCustom = (filters?.preset ?? "7d") === "custom";
     const safeDate = (s) => (s ? String(s).slice(0, 10) : "");
 
     const glassSx = {
-        borderRadius: 3,
-        p: { xs: 2, md: 2.5 },
+        borderRadius: { xs: 2.5, sm: 3 },
+        p: { xs: 1.5, sm: 2, md: 2.5 },
         background: "rgba(255,255,255,0.10)",
         border: "1px solid rgba(227,232,239,0.35)",
         backdropFilter: "blur(12px)",
@@ -159,6 +144,7 @@ export default function AdminDashboardFilterBar({
         "& .MuiInputLabel-root": {
             fontWeight: 500,
             color: "rgba(27,37,89,0.80)",
+            fontSize: { xs: "13px", sm: "14px" },
         },
         "& .MuiOutlinedInput-input": {
             paddingTop: 0,
@@ -169,6 +155,7 @@ export default function AdminDashboardFilterBar({
             boxSizing: "border-box",
             fontWeight: 500,
             color: "#1B2559",
+            fontSize: { xs: "13px", sm: "14px" },
         },
         "& .MuiSelect-select": {
             paddingTop: 0,
@@ -179,6 +166,7 @@ export default function AdminDashboardFilterBar({
             boxSizing: "border-box",
             fontWeight: 500,
             color: "#1B2559",
+            fontSize: { xs: "13px", sm: "14px" },
         },
     };
 
@@ -187,7 +175,9 @@ export default function AdminDashboardFilterBar({
         textTransform: "none",
         fontWeight: 900,
         height: FIELD_HEIGHT,
-        minWidth: 150,
+        minWidth: { xs: 100, sm: 130, md: 150 },
+        fontSize: { xs: "13px", sm: "14px" },
+        px: { xs: 1.5, sm: 2 },
     };
 
     const resetIconSx = {
@@ -219,12 +209,17 @@ export default function AdminDashboardFilterBar({
 
     return (
         <Box sx={glassSx}>
-            {/* ===== TITLE + ACTIONS ===== */}
-            <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
+            {/* TITLE + ACTIONS */}
+            <Stack
+                direction={{ xs: "column", sm: "row" }}
+                alignItems={{ xs: "flex-start", sm: "flex-start" }}
+                justifyContent="space-between"
+                spacing={{ xs: 1.5, sm: 2 }}
+            >
                 <Box sx={{ minWidth: 0 }}>
                     <Typography
                         sx={{
-                            fontSize: { xs: 24, md: 30 },
+                            fontSize: { xs: 20, sm: 24, md: 30 },
                             fontWeight: 950,
                             lineHeight: 1.12,
                             color: "#1B2559",
@@ -237,7 +232,7 @@ export default function AdminDashboardFilterBar({
                     <Typography
                         sx={{
                             mt: 0.45,
-                            fontSize: { xs: 13.5, md: 14.5 },
+                            fontSize: { xs: 12.5, sm: 13.5, md: 14.5 },
                             fontWeight: 700,
                             color: "rgba(108,117,125,0.95)",
                         }}
@@ -246,10 +241,10 @@ export default function AdminDashboardFilterBar({
                     </Typography>
                 </Box>
 
-                <Stack direction="row" spacing={1}>
+                <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
                     <Button
                         variant={open ? "contained" : "outlined"}
-                        startIcon={<FilterList />}
+                        startIcon={<FilterList sx={{ fontSize: { xs: 18, sm: 20 } }} />}
                         onClick={() => setOpen((v) => !v)}
                         disabled={loading}
                         sx={filterBtnSx}
@@ -259,7 +254,7 @@ export default function AdminDashboardFilterBar({
 
                     <Tooltip title="Đặt lại bộ lọc">
                         <IconButton onClick={onReset} disabled={loading} sx={resetIconSx}>
-                            <RestartAltRounded />
+                            <RestartAltRounded sx={{ fontSize: { xs: 20, sm: 22 } }} />
                         </IconButton>
                     </Tooltip>
                 </Stack>
@@ -267,12 +262,12 @@ export default function AdminDashboardFilterBar({
 
             {/* FILTERS */}
             <Collapse in={open} sx={{ mt: 2 }}>
-                {/* Hàng 1: 3 cột giữ nguyên */}
+                {/* Row 1: 3 filters */}
                 <Box
                     sx={{
                         display: "grid",
-                        gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" },
-                        gap: 2,
+                        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", md: "repeat(3, 1fr)" },
+                        gap: { xs: 1.5, sm: 2 },
                     }}
                 >
                     <TextField
@@ -298,14 +293,14 @@ export default function AdminDashboardFilterBar({
                     )}
                 </Box>
 
-                {/* Hàng 2: xổ xuống dưới khi custom */}
+                {/* Row 2: Date range (only when custom) */}
                 <Collapse in={isCustom} timeout={180} unmountOnExit>
                     <Box
                         sx={{
-                            mt: 2,
+                            mt: { xs: 1.5, sm: 2 },
                             display: "grid",
-                            gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
-                            gap: 2,
+                            gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)" },
+                            gap: { xs: 1.5, sm: 2 },
                         }}
                     >
                         <TextField

@@ -3,14 +3,16 @@ import {
     Box,
     Paper,
     Typography,
-    Grid,
     Stack,
     CircularProgress,
     Chip,
     Alert,
+    Button,
+    useMediaQuery,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import { DataGrid } from "@mui/x-data-grid";
-import { Search, FilterList, TrendingUpRounded } from "@mui/icons-material";
+import { TrendingUpRounded } from "@mui/icons-material";
 
 import axiosClient from "../../api/axiosConfig.js";
 import { getAllModulesApi } from "../../api/moduleApi.js";
@@ -50,6 +52,10 @@ function getRoleFromStorage() {
 }
 
 const AdminReview = () => {
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+
     const [attempts, setAttempts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -87,7 +93,6 @@ const AdminReview = () => {
         return c.name || c.title || c.className || null;
     };
 
-    // Try to detect possible id fields from DTO (safe, no BE change)
     const getModuleId = (row) =>
         row.moduleId ?? row.module_id ?? row.module?.id ?? row.module?.moduleId ?? null;
 
@@ -118,7 +123,6 @@ const AdminReview = () => {
         return "Bài thi";
     };
 
-    // ✅ Never show "N/A" for these chips; always show meaningfully for filtering/searching
     const getModuleLabel = (row) => {
         const direct = row.module || row.moduleName || row.moduleTitle || null;
         if (direct) return direct;
@@ -150,11 +154,6 @@ const AdminReview = () => {
         return COLORS.danger;
     };
 
-    const formatDateTime = (dateStr) => {
-        if (!dateStr) return "N/A";
-        return new Date(dateStr).toLocaleString("vi-VN");
-    };
-
     const formatDateTimeSplit = (dateStr) => {
         if (!dateStr) return { date: "—", time: "—" };
         const d = new Date(dateStr);
@@ -163,7 +162,6 @@ const AdminReview = () => {
         return { date, time };
     };
 
-    // ✅ Fix PRACTICE: score exists but correctAnswers is 0/absent
     const getCorrectAnswersLabel = (row) => {
         const score = Number(row.score);
         const totalScore = Number(row.totalScore);
@@ -176,7 +174,6 @@ const AdminReview = () => {
             row.correctAnswerCount ??
             null;
 
-        // If PRACTICE has score > 0 but correct = 0 => treat as unreliable -> estimate if possible
         const shouldIgnoreZero =
             isPractice(row) &&
             rawCorrect === 0 &&
@@ -237,7 +234,6 @@ const AdminReview = () => {
 
                 const authHeaders = { Authorization: `Bearer ${token}` };
 
-                // run in parallel
                 const [attemptRes, moduleRes, classRes] = await Promise.all([
                     axiosClient.get("/exam-attempts/admin/all-attempts", { headers: authHeaders }),
                     getAllModulesApi(),
@@ -249,7 +245,6 @@ const AdminReview = () => {
                 const attemptsData = Array.isArray(attemptRes.data) ? attemptRes.data : [];
                 setAttempts(attemptsData);
 
-                // build module map + dropdown options
                 const moduleListRaw = Array.isArray(moduleRes.data) ? moduleRes.data : [];
                 const moduleMap = {};
                 const moduleNames = [];
@@ -261,7 +256,6 @@ const AdminReview = () => {
                     if (id != null && name) moduleMap[id] = name;
                 });
 
-                // build class map + dropdown options
                 const classListRaw = Array.isArray(classRes.data) ? classRes.data : [];
                 const classMap = {};
                 const classNames = [];
@@ -276,15 +270,10 @@ const AdminReview = () => {
                 setModuleIdToName(moduleMap);
                 setClassIdToName(classMap);
 
-                // include "Chưa gắn ..." option for filtering PRACTICE missing metadata
                 setModules([ALL, ...Array.from(new Set(moduleNames)), "Chưa gắn module"]);
                 setClasses([ALL, ...Array.from(new Set(classNames)), "Chưa gắn lớp"]);
             } catch (err) {
                 if (!alive) return;
-
-                console.log("❌ status:", err?.response?.status);
-                console.log("❌ url:", err?.config?.url);
-                console.log("❌ method:", err?.config?.method);
 
                 if (err?.response?.status === 401) {
                     setError("Session expired. Redirecting to login...");
@@ -359,8 +348,6 @@ const AdminReview = () => {
         selectedStatus,
         startDate,
         endDate,
-        moduleIdToName,
-        classIdToName,
     ]);
 
     useEffect(() => {
@@ -386,11 +373,11 @@ const AdminReview = () => {
             </Box>
         );
 
-        return [
+        const baseColumns = [
             {
                 field: "stt",
                 headerName: "STT",
-                width: 80,
+                width: isMobile ? 60 : 80,
                 sortable: false,
                 filterable: false,
                 headerAlign: "center",
@@ -404,45 +391,27 @@ const AdminReview = () => {
                 field: "studentName",
                 headerName: "Tên học viên",
                 flex: 1.0,
-                minWidth: 140,
+                minWidth: isMobile ? 120 : 140,
                 renderCell: (params) => params.row.studentName || "N/A",
             },
             {
                 field: "studentEmail",
                 headerName: "Email",
                 flex: 1.2,
-                minWidth: 180,
+                minWidth: isMobile ? 150 : 180,
             },
             {
                 field: "examName",
                 headerName: "Tên bài thi",
                 flex: 1.3,
-                minWidth: 170,
+                minWidth: isMobile ? 140 : 170,
                 renderCell: (params) => getExamTitle(params.row),
-            },
-            {
-                field: "class",
-                headerName: "Lớp",
-                flex: 0.65,
-                minWidth: 100,
-                headerAlign: "center",
-                align: "center",
-                renderCell: (params) => getClassLabel(params.row),
-            },
-            {
-                field: "module",
-                headerName: "Module",
-                flex: 0.8,
-                minWidth: 110,
-                headerAlign: "center",
-                align: "center",
-                renderCell: (params) => getModuleLabel(params.row),
             },
             {
                 field: "date",
                 headerName: "Thời gian",
                 flex: 0.75,
-                minWidth: 100,
+                minWidth: isMobile ? 80 : 100,
                 headerAlign: "center",
                 align: "center",
                 renderCell: (params) => {
@@ -459,7 +428,7 @@ const AdminReview = () => {
                 field: "score",
                 headerName: "Kết quả",
                 flex: 0.8,
-                minWidth: 100,
+                minWidth: isMobile ? 90 : 100,
                 headerAlign: "center",
                 renderCell: (params) => {
                     const scorePercent = params.row.totalScore
@@ -485,7 +454,33 @@ const AdminReview = () => {
                 },
             },
         ];
-    }, [paginationModel.page, paginationModel.pageSize, getExamTitle, getModuleLabel, getClassLabel, getScoreColor, getCorrectAnswersLabel]);
+
+        // Add class and module columns only on larger screens
+        if (!isMobile) {
+            baseColumns.splice(4, 0,
+                {
+                    field: "class",
+                    headerName: "Lớp",
+                    flex: 0.65,
+                    minWidth: 100,
+                    headerAlign: "center",
+                    align: "center",
+                    renderCell: (params) => getClassLabel(params.row),
+                },
+                {
+                    field: "module",
+                    headerName: "Module",
+                    flex: 0.8,
+                    minWidth: 110,
+                    headerAlign: "center",
+                    align: "center",
+                    renderCell: (params) => getModuleLabel(params.row),
+                }
+            );
+        }
+
+        return baseColumns;
+    }, [paginationModel.page, paginationModel.pageSize, isMobile]);
 
     // ================= UI States =================
     if (loading) {
@@ -501,7 +496,7 @@ const AdminReview = () => {
 
     if (error) {
         return (
-            <Box sx={{ p: 3 }}>
+            <Box sx={{ p: { xs: 2, sm: 3 } }}>
                 <Alert severity="error" sx={{ mb: 2 }}>
                     <Typography variant="h6" gutterBottom>
                         Lỗi tải dữ liệu
@@ -516,9 +511,18 @@ const AdminReview = () => {
     }
 
     return (
-        <Box sx={{ bgcolor: COLORS.bgLight, minHeight: "100vh", p: 3 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-                <Typography variant="h4" sx={{ fontWeight: 800, color: COLORS.textPrimary }}>
+        <Box sx={{ bgcolor: COLORS.bgLight, minHeight: "100vh", p: { xs: 1.5, sm: 2, md: 3 } }}>
+            <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                justifyContent="space-between"
+                alignItems={{ xs: 'stretch', sm: 'center' }}
+                spacing={{ xs: 1.5, sm: 0 }}
+                sx={{ mb: { xs: 2, md: 3 } }}
+            >
+                <Typography
+                    variant={isMobile ? "h5" : "h4"}
+                    sx={{ fontWeight: 800, color: COLORS.textPrimary }}
+                >
                     Đánh giá học tập hệ thống
                 </Typography>
                 <Chip
@@ -533,7 +537,7 @@ const AdminReview = () => {
             {/* Filters */}
             <FilterPanel
                 search={{
-                    placeholder: "Tìm kiếm theo tên bài thi, module, lớp...",
+                    placeholder: isMobile ? "Tìm kiếm..." : "Tìm kiếm theo tên bài thi, module, lớp...",
                     value: searchText,
                     onChange: setSearchText,
                 }}
@@ -583,9 +587,9 @@ const AdminReview = () => {
                     },
                 }}
             />
-            <Box sx={{ my: 3 }} />
+            <Box sx={{ my: { xs: 2, md: 3 } }} />
 
-            <Typography sx={{ mb: 2, color: COLORS.textSecondary, fontWeight: 700 }}>
+            <Typography sx={{ mb: 2, color: COLORS.textSecondary, fontWeight: 700, fontSize: { xs: '0.875rem', sm: '1rem' } }}>
                 Hiển thị {filteredAttempts.length} kết quả
                 {filteredAttempts.length !== attempts.length && ` (từ ${attempts.length} bài thi)`}
             </Typography>
@@ -599,7 +603,7 @@ const AdminReview = () => {
                     borderColor: "divider",
                     display: "flex",
                     flexDirection: "column",
-                    minHeight: 420,
+                    minHeight: isMobile ? 350 : 420,
                 }}
             >
                 <Box sx={{ flex: 1, minHeight: 0 }}>
@@ -621,6 +625,10 @@ const AdminReview = () => {
                                 bgcolor: "background.paper",
                                 borderBottom: "1px solid",
                                 borderColor: "divider",
+                                fontSize: isMobile ? '0.75rem' : '0.875rem',
+                            },
+                            "& .MuiDataGrid-cell": {
+                                fontSize: isMobile ? '0.75rem' : '0.875rem',
                             },
                             "& .MuiDataGrid-row:nth-of-type(odd)": { bgcolor: "action.hover" },
                             "& .MuiDataGrid-cell:focus, & .MuiDataGrid-columnHeader:focus": { outline: "none" },
@@ -630,7 +638,7 @@ const AdminReview = () => {
 
                 <Box
                     sx={{
-                        px: 1.5,
+                        px: { xs: 1, sm: 1.5 },
                         py: 1,
                         borderTop: "1px solid",
                         borderColor: "divider",

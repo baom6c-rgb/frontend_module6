@@ -30,9 +30,10 @@ const PageShell = ({ children }) => (
             width: "100%",
             maxWidth: 1400,
             mx: "auto",
-            px: { xs: 1.5, sm: 2, md: 4, lg: 6 },
-            pb: { xs: 3, md: 4 },
-            minWidth: 0, // ✅ quan trọng khi sidebar co giãn
+            px: { xs: 2, sm: 2.5, md: 4, lg: 6 },
+            pb: { xs: 3, sm: 3.5, md: 4 },
+            minWidth: 0,
+            overflowX: "hidden", // ✅ Prevent horizontal scroll
         }}
     >
         {children}
@@ -160,7 +161,7 @@ export default function AdminDashboard() {
             const data = await adminAnalyticsApi.overview(body);
             setOverview(data);
 
-            // đổi filter => reset AI insight để tránh “AI cũ dính filter mới”
+            // Đổi filter => reset AI insight để tránh "AI cũ dính filter mới"
             setAiInsight(null);
             setAiError("");
         } catch (e) {
@@ -212,7 +213,7 @@ export default function AdminDashboard() {
 
     return (
         <Fade in timeout={350}>
-            <Box sx={{ background: COLORS.bg, minHeight: "calc(100vh - 120px)", width: "100%" }}>
+            <Box sx={{ background: COLORS.bg, minHeight: "calc(100vh - 120px)", width: "100%", overflowX: "hidden" }}>
                 <PageShell>
                     {/* HEADER: Filter */}
                     <Box sx={{ mt: { xs: 1.5, md: 2 }, mb: { xs: 1.5, md: 2 }, minWidth: 0 }}>
@@ -227,7 +228,7 @@ export default function AdminDashboard() {
                         />
 
                         {dashError ? (
-                            <Typography sx={{ mt: 1, color: "#dc2626", fontWeight: 900 }}>
+                            <Typography sx={{ mt: 1, color: "#dc2626", fontWeight: 900, fontSize: { xs: 13, sm: 14 } }}>
                                 {dashError}
                             </Typography>
                         ) : null}
@@ -237,7 +238,7 @@ export default function AdminDashboard() {
                     {!overview && dashLoading ? (
                         <Box
                             sx={{
-                                p: 2.25,
+                                p: { xs: 1.75, sm: 2.25 },
                                 borderRadius: "18px",
                                 border: `1px solid ${COLORS.border}`,
                                 bgcolor: "#fff",
@@ -246,7 +247,7 @@ export default function AdminDashboard() {
                         >
                             <Stack direction="row" spacing={1.25} alignItems="center">
                                 <CircularProgress size={18} sx={{ color: COLORS.primaryBlue }} />
-                                <Typography sx={{ color: COLORS.textSecondary, fontWeight: 800 }}>
+                                <Typography sx={{ color: COLORS.textSecondary, fontWeight: 800, fontSize: { xs: 13, sm: 14 } }}>
                                     Đang tải thống kê...
                                 </Typography>
                             </Stack>
@@ -266,7 +267,6 @@ export default function AdminDashboard() {
 
                     {/* 2) Danh sách học viên đã làm bài */}
                     <Box sx={{ mt: { xs: 2, md: 3 }, minWidth: 0 }} ref={studentsSectionRef}>
-                        {/* ✅ wrapper chống tràn ngang nếu table/content rộng */}
                         <Box sx={{ width: "100%", minWidth: 0, overflowX: "hidden" }}>
                             <AdminDashboardAtRiskTable
                                 students={overview?.students || []}

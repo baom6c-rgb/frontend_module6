@@ -4,7 +4,7 @@ import { Box, Chip, Paper, Stack, Typography } from "@mui/material";
 
 import { DASHBOARD_COLORS as COLORS, safeNumber } from "./dashboard.helpers";
 
-/** ===== Utils ===== */
+/** Utils */
 const fmtInt = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString() : "0");
 const pct0 = (ratio) => `${Math.round(safeNumber(ratio, 0) * 100)}%`;
 
@@ -13,25 +13,38 @@ const OverviewBoxShell = ({ title, subtitle, children }) => (
         elevation={0}
         sx={{
             background: "#fff",
-            borderRadius: "20px",
+            borderRadius: { xs: "16px", md: "20px" },
             boxShadow: "0 2px 8px rgba(0,0,0,.04)",
             width: "100%",
             border: "1px solid #f0f0f0",
-            px: { xs: "20px", md: "24px" },
-            py: "16px",
+            px: { xs: "16px", sm: "20px", md: "24px" },
+            py: { xs: "14px", sm: "16px" },
             height: "100%",
             display: "flex",
             flexDirection: "column",
             minWidth: 0,
         }}
     >
-        <Box sx={{ mb: "8px", flexShrink: 0 }}>
-            <Typography sx={{ fontSize: "22px", fontWeight: 700, color: "#1a1a1a", mb: "4px" }}>
+        <Box sx={{ mb: { xs: "6px", md: "8px" }, flexShrink: 0 }}>
+            <Typography
+                sx={{
+                    fontSize: { xs: "18px", sm: "20px", md: "22px" },
+                    fontWeight: 700,
+                    color: "#1a1a1a",
+                    mb: "4px",
+                }}
+            >
                 {title}
             </Typography>
 
             {subtitle ? (
-                <Typography sx={{ fontSize: "14px", color: "#64748b", fontWeight: 500 }}>
+                <Typography
+                    sx={{
+                        fontSize: { xs: "12px", sm: "13px", md: "14px" },
+                        color: "#64748b",
+                        fontWeight: 500,
+                    }}
+                >
                     {subtitle}
                 </Typography>
             ) : null}
@@ -46,13 +59,25 @@ const OverviewBoxShell = ({ title, subtitle, children }) => (
 const LegendRow = ({ color, label, value }) => (
     <Stack direction="row" alignItems="center" justifyContent="space-between">
         <Stack direction="row" spacing={1} alignItems="center">
-            <Box sx={{ width: 10, height: 10, borderRadius: "999px", bgcolor: color }} />
-            <Typography sx={{ fontSize: "14px", fontWeight: 600, color: "#1a1a1a" }}>
+            <Box sx={{ width: { xs: 8, md: 10 }, height: { xs: 8, md: 10 }, borderRadius: "999px", bgcolor: color }} />
+            <Typography
+                sx={{
+                    fontSize: { xs: "12px", sm: "13px", md: "14px" },
+                    fontWeight: 600,
+                    color: "#1a1a1a",
+                }}
+            >
                 {label}
             </Typography>
         </Stack>
 
-        <Typography sx={{ fontSize: "14px", fontWeight: 700, color: "#1a1a1a" }}>
+        <Typography
+            sx={{
+                fontSize: { xs: "12px", sm: "13px", md: "14px" },
+                fontWeight: 700,
+                color: "#1a1a1a",
+            }}
+        >
             {fmtInt(value)}
         </Typography>
     </Stack>
@@ -74,12 +99,17 @@ const ResultDonut = ({ total, pass, fail, passRate, failRate, other }) => {
   )`;
 
     return (
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={2.25} alignItems="center" sx={{ width: "100%" }}>
+        <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={{ xs: 2, sm: 2.25 }}
+            alignItems="center"
+            sx={{ width: "100%" }}
+        >
             {/* Donut */}
             <Box
                 sx={{
-                    width: 160,
-                    height: 160,
+                    width: { xs: 130, sm: 140, md: 160 },
+                    height: { xs: 130, sm: 140, md: 160 },
                     borderRadius: "999px",
                     background: ringBg,
                     display: "grid",
@@ -90,8 +120,8 @@ const ResultDonut = ({ total, pass, fail, passRate, failRate, other }) => {
             >
                 <Box
                     sx={{
-                        width: 110,
-                        height: 110,
+                        width: { xs: 90, sm: 98, md: 110 },
+                        height: { xs: 90, sm: 98, md: 110 },
                         borderRadius: "999px",
                         bgcolor: "#fff",
                         border: "1px solid #f0f0f0",
@@ -101,10 +131,24 @@ const ResultDonut = ({ total, pass, fail, passRate, failRate, other }) => {
                         px: 1,
                     }}
                 >
-                    <Typography sx={{ fontWeight: 700, color: "#1a1a1a", fontSize: 34, lineHeight: 1 }}>
+                    <Typography
+                        sx={{
+                            fontWeight: 700,
+                            color: "#1a1a1a",
+                            fontSize: { xs: 28, sm: 30, md: 34 },
+                            lineHeight: 1,
+                        }}
+                    >
                         {fmtInt(total)}
                     </Typography>
-                    <Typography sx={{ mt: 0.3, color: "#64748b", fontWeight: 500, fontSize: 11 }}>
+                    <Typography
+                        sx={{
+                            mt: 0.3,
+                            color: "#64748b",
+                            fontWeight: 500,
+                            fontSize: { xs: 10, md: 11 },
+                        }}
+                    >
                         Tổng số bài
                     </Typography>
                 </Box>
@@ -115,19 +159,19 @@ const ResultDonut = ({ total, pass, fail, passRate, failRate, other }) => {
                 sx={{
                     width: "100%",
                     flex: 1,
-                    borderRadius: "16px",
+                    borderRadius: { xs: "14px", md: "16px" },
                     bgcolor: "#fafafa",
                     border: "1px solid #f0f0f0",
-                    p: "16px",
+                    p: { xs: "14px", md: "16px" },
                     minWidth: 0,
                 }}
             >
-                <Stack spacing={1.2}>
+                <Stack spacing={{ xs: 1, md: 1.2 }}>
                     <LegendRow color={COLORS.success} label="Đạt" value={safePass} />
                     <LegendRow color={COLORS.danger} label="Trượt" value={safeFail} />
                 </Stack>
 
-                <Box sx={{ mt: 1.5 }}>
+                <Box sx={{ mt: { xs: 1.25, md: 1.5 } }}>
                     <Chip
                         size="small"
                         label={`Tỉ lệ đạt: ${pct0(passRate)} • Tỉ lệ trượt: ${pct0(failRate)}`}
@@ -137,6 +181,7 @@ const ResultDonut = ({ total, pass, fail, passRate, failRate, other }) => {
                             border: "1px solid #f0f0f0",
                             fontWeight: 700,
                             color: "#64748b",
+                            fontSize: { xs: "11px", sm: "12px" },
                         }}
                     />
                 </Box>
