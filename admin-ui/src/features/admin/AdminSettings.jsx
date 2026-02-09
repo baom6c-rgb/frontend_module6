@@ -17,6 +17,9 @@ import {
     Tab,
     Chip,
     alpha,
+    IconButton,
+    useTheme,
+    useMediaQuery,
 } from "@mui/material";
 import {
     Email as EmailIcon,
@@ -24,6 +27,12 @@ import {
     School as SchoolIcon,
     Schedule as ScheduleIcon,
     CheckCircle as CheckCircleIcon,
+    SmartToyRounded as SmartToyRoundedIcon,
+    VisibilityRounded as VisibilityRoundedIcon,
+    VisibilityOffRounded as VisibilityOffRoundedIcon,
+    KeyRounded as KeyRoundedIcon,
+    MemoryRounded as MemoryRoundedIcon,
+    ThermostatRounded as ThermostatRoundedIcon,
 } from "@mui/icons-material";
 
 import { adminSettingsApi } from "../../api/adminSettingsApi";
@@ -46,9 +55,10 @@ const formatYearMonthToMMYYYY = (ym) => {
     const m = ym.trim().match(/^(\d{4})-(\d{2})$/);
     if (!m) return ym;
     const year = m[1];
-    const month = m[2]; // đã là 2-digit
-    return `${month}/${year}`; // "02/2026"
+    const month = m[2];
+    return `${month}/${year}`;
 };
+
 const TIME_PRESETS = [
     "00:00",
     "06:00",
@@ -86,16 +96,29 @@ const TASKS = {
     PRACTICE: 0,
     EMAIL: 1,
     REPORT: 2,
+    MODEL_AI: 3,
 };
+
+// 🔒 UI policy: Model + Temperature locked (read-only)
+const LOCK_AI_MODEL = true;
+const LOCK_AI_TEMPERATURE = true;
+const LOCK_AI_PROVIDER = true;
+
+// Temperature bắt buộc 0.0 cho stability
+const FORCED_AI_TEMPERATURE = 0.0;
 
 export default function AdminSettings() {
     const { showToast } = useToast();
+
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
 
     const [activeTask, setActiveTask] = useState(TASKS.PRACTICE);
 
+    // ===== Base settings form =====
     const [form, setForm] = useState({
         passScore: "",
         minutesPerQuestion: "",
@@ -120,7 +143,22 @@ export default function AdminSettings() {
     const [updatedAt, setUpdatedAt] = useState(null);
     const [lastSentYearMonth, setLastSentYearMonth] = useState(null);
 
-    // ===== Load settings =====
+    // ===== AI settings =====
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiUpdatedAt, setAiUpdatedAt] = useState(null);
+    const [aiKeyMasked, setAiKeyMasked] = useState(null);
+
+    const [aiForm, setAiForm] = useState({
+        aiProvider: "GEMINI",
+        aiModel: "gemini-2.5-flash",
+        aiTemperature: FORCED_AI_TEMPERATURE,
+        aiEnabled: true,
+        aiApiKey: "",
+    });
+
+    const [showAiKey, setShowAiKey] = useState(false);
+
+    // ===== Load base settings =====
     useEffect(() => {
         let mounted = true;
         setLoading(true);
@@ -147,7 +185,6 @@ export default function AdminSettings() {
                     monthlyReportTimeZone: DEFAULT_TIMEZONE,
                 });
 
-                // sync chips from csv
                 setAdminEmailList(parseEmails(data.adminEmails));
 
                 setTimeMode(isPreset ? "preset" : "custom");
@@ -164,6 +201,37 @@ export default function AdminSettings() {
         };
     }, [showToast]);
 
+    // ===== Load AI settings on demand (tab open) =====
+    useEffect(() => {
+        let mounted = true;
+        if (activeTask !== TASKS.MODEL_AI) return;
+
+        setAiLoading(true);
+        adminSettingsApi
+            .getAi()
+            .then((data) => {
+                if (!mounted) return;
+
+                setAiForm((prev) => ({
+                    ...prev,
+                    aiProvider: data.aiProvider ?? "GEMINI",
+                    aiModel: data.aiModel ?? prev.aiModel ?? "gemini-2.5-flash",
+                    aiTemperature: FORCED_AI_TEMPERATURE,
+                    aiEnabled: data.aiEnabled !== false,
+                    aiApiKey: "",
+                }));
+
+                setAiKeyMasked(data.aiApiKeyMasked ?? null);
+                setAiUpdatedAt(data.updatedAt ?? null);
+            })
+            .catch(() => showToast("Không tải được Model AI Settings", "error"))
+            .finally(() => mounted && setAiLoading(false));
+
+        return () => {
+            mounted = false;
+        };
+    }, [activeTask, showToast]);
+
     const handleChange = (field) => (e) => {
         const value =
             field === "emailNotificationsEnabled" || field === "monthlyReportEnabled"
@@ -171,6 +239,16 @@ export default function AdminSettings() {
                 : e.target.value;
 
         setForm((prev) => ({ ...prev, [field]: value }));
+    };
+
+    const handleAiChange = (field) => (e) => {
+        const value = field === "aiEnabled" ? e.target.checked : e.target.value;
+
+        if (LOCK_AI_PROVIDER && field === "aiProvider") return;
+        if (LOCK_AI_MODEL && field === "aiModel") return;
+        if (LOCK_AI_TEMPERATURE && field === "aiTemperature") return;
+
+        setAiForm((prev) => ({ ...prev, [field]: value }));
     };
 
     const displaySecondsPerQuestion = useMemo(() => {
@@ -219,7 +297,9 @@ export default function AdminSettings() {
             setTimeMode("custom");
             setForm((prev) => ({
                 ...prev,
-                monthlyReportTime: isValidTimeHHmm(prev.monthlyReportTime) ? prev.monthlyReportTime : "23:59",
+                monthlyReportTime: isValidTimeHHmm(prev.monthlyReportTime)
+                    ? prev.monthlyReportTime
+                    : "23:59",
             }));
             return;
         }
@@ -253,8 +333,19 @@ export default function AdminSettings() {
             }
         }
 
+        if (activeTask === TASKS.MODEL_AI) {
+            const provider = String(aiForm.aiProvider || "").trim().toUpperCase();
+            const model = String(aiForm.aiModel || "").trim();
+
+            if (!provider) return "Provider không được rỗng";
+            if (provider !== "GEMINI") return "Hiện chỉ hỗ trợ provider: GEMINI";
+            if (!model) return "Model không được rỗng";
+
+            return null;
+        }
+
         return null;
-    }, [form, activeTask]);
+    }, [form, activeTask, aiForm]);
 
     const handleSave = async () => {
         const reason = saveDisabledReason;
@@ -265,46 +356,75 @@ export default function AdminSettings() {
 
         setSaving(true);
         try {
-            const payload = {
-                passScore: clampInt(form.passScore, 0, 100),
-                minutesPerQuestion: Number(form.minutesPerQuestion),
-                retestCooldownMinutes: clampInt(form.retestCooldownMinutes, 0, 1440),
+            // ===== SAVE BASE SETTINGS =====
+            if (activeTask !== TASKS.MODEL_AI) {
+                const payload = {
+                    passScore: clampInt(form.passScore, 0, 100),
+                    minutesPerQuestion: Number(form.minutesPerQuestion),
+                    retestCooldownMinutes: clampInt(form.retestCooldownMinutes, 0, 1440),
 
-                emailNotificationsEnabled: !!form.emailNotificationsEnabled,
-                adminEmails: toEmailCsv(adminEmailList),
+                    emailNotificationsEnabled: !!form.emailNotificationsEnabled,
+                    adminEmails: toEmailCsv(adminEmailList),
 
-                monthlyReportEnabled: !!form.monthlyReportEnabled,
-                monthlyReportDayOfMonth: clampInt(form.monthlyReportDayOfMonth, 0, 31),
-                monthlyReportTime: String(form.monthlyReportTime || "23:59").trim(),
-                monthlyReportTimeZone: String(form.monthlyReportTimeZone || DEFAULT_TIMEZONE).trim(),
+                    monthlyReportEnabled: !!form.monthlyReportEnabled,
+                    monthlyReportDayOfMonth: clampInt(form.monthlyReportDayOfMonth, 0, 31),
+                    monthlyReportTime: String(form.monthlyReportTime || "23:59").trim(),
+                    monthlyReportTimeZone: String(form.monthlyReportTimeZone || DEFAULT_TIMEZONE).trim(),
+                };
+
+                const updated = await adminSettingsApi.update(payload);
+
+                setUpdatedAt(updated.updatedAt ?? null);
+                setLastSentYearMonth(updated.monthlyReportLastSentYearMonth ?? lastSentYearMonth);
+
+                const monthlyTime = updated.monthlyReportTime ?? form.monthlyReportTime ?? "23:59";
+                const isPreset = TIME_PRESETS.includes(monthlyTime);
+                setTimeMode(isPreset ? "preset" : "custom");
+                setTimePresetValue(isPreset ? monthlyTime : timePresetValue);
+
+                setForm((prev) => ({
+                    ...prev,
+                    passScore: updated.passScore ?? prev.passScore,
+                    minutesPerQuestion: updated.minutesPerQuestion ?? prev.minutesPerQuestion,
+                    retestCooldownMinutes: updated.retestCooldownMinutes ?? prev.retestCooldownMinutes,
+
+                    emailNotificationsEnabled: !!updated.emailNotificationsEnabled,
+                    adminEmails: updated.adminEmails ?? prev.adminEmails,
+
+                    monthlyReportEnabled: !!updated.monthlyReportEnabled,
+                    monthlyReportDayOfMonth: updated.monthlyReportDayOfMonth ?? prev.monthlyReportDayOfMonth,
+                    monthlyReportTime: monthlyTime,
+                    monthlyReportTimeZone: updated.monthlyReportTimeZone ?? prev.monthlyReportTimeZone,
+                }));
+
+                showToast("Lưu cấu hình thành công!", "success");
+                return;
+            }
+
+            // ===== SAVE AI SETTINGS =====
+            const aiPayload = {
+                aiProvider: "GEMINI",
+                aiModel: String(aiForm.aiModel || "").trim(),
+                aiTemperature: FORCED_AI_TEMPERATURE,
+                aiEnabled: !!aiForm.aiEnabled,
+                aiApiKey: String(aiForm.aiApiKey || "").trim(),
             };
 
-            const updated = await adminSettingsApi.update(payload);
+            const updatedAi = await adminSettingsApi.updateAi(aiPayload);
 
-            setUpdatedAt(updated.updatedAt ?? null);
-            setLastSentYearMonth(updated.monthlyReportLastSentYearMonth ?? lastSentYearMonth);
+            setAiUpdatedAt(updatedAi.updatedAt ?? null);
+            setAiKeyMasked(updatedAi.aiApiKeyMasked ?? aiKeyMasked);
 
-            const monthlyTime = updated.monthlyReportTime ?? form.monthlyReportTime ?? "23:59";
-            const isPreset = TIME_PRESETS.includes(monthlyTime);
-            setTimeMode(isPreset ? "preset" : "custom");
-            setTimePresetValue(isPreset ? monthlyTime : timePresetValue);
-
-            setForm((prev) => ({
+            setAiForm((prev) => ({
                 ...prev,
-                passScore: updated.passScore ?? prev.passScore,
-                minutesPerQuestion: updated.minutesPerQuestion ?? prev.minutesPerQuestion,
-                retestCooldownMinutes: updated.retestCooldownMinutes ?? prev.retestCooldownMinutes,
-
-                emailNotificationsEnabled: !!updated.emailNotificationsEnabled,
-                adminEmails: updated.adminEmails ?? prev.adminEmails,
-
-                monthlyReportEnabled: !!updated.monthlyReportEnabled,
-                monthlyReportDayOfMonth: updated.monthlyReportDayOfMonth ?? prev.monthlyReportDayOfMonth,
-                monthlyReportTime: monthlyTime,
-                monthlyReportTimeZone: updated.monthlyReportTimeZone ?? prev.monthlyReportTimeZone,
+                aiProvider: updatedAi.aiProvider ?? prev.aiProvider,
+                aiModel: updatedAi.aiModel ?? prev.aiModel,
+                aiTemperature: FORCED_AI_TEMPERATURE,
+                aiEnabled: updatedAi.aiEnabled !== false,
+                aiApiKey: "",
             }));
 
-            showToast("Lưu cấu hình thành công!", "success");
+            showToast("Lưu Model AI thành công!", "success");
         } catch {
             showToast("Không lưu được cấu hình", "error");
         } finally {
@@ -314,7 +434,7 @@ export default function AdminSettings() {
 
     // ===== RENDER SECTIONS =====
     const sectionPaperSx = {
-        p: 2,
+        p: { xs: 1.5, sm: 2 },
         borderRadius: 2.5,
         border: "1px solid",
         borderColor: "divider",
@@ -338,11 +458,12 @@ export default function AdminSettings() {
 
     const renderPracticeTask = () => (
         <Paper sx={sectionPaperSx}>
-            <Stack spacing={2}>
-                <Box>
-                    <Stack direction="row" alignItems="center" spacing={1.5} mb={0.5}>
+            <Stack spacing={{ xs: 1.5, sm: 2 }}>
+                <Box sx={{ minWidth: 0 }}>
+                    <Stack direction="row" alignItems="center" spacing={1.5} mb={0.5} sx={{ minWidth: 0 }}>
                         <Box
                             sx={{
+                                flex: "0 0 auto",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
@@ -355,8 +476,8 @@ export default function AdminSettings() {
                         >
                             <SchoolIcon />
                         </Box>
-                        <Box>
-                            <Typography variant="h6" fontWeight={700}>
+                        <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="h6" fontWeight={700} noWrap>
                                 Cấu hình bài thi
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
@@ -379,11 +500,7 @@ export default function AdminSettings() {
                     InputProps={{
                         startAdornment: <InputAdornment position="start">🎯</InputAdornment>,
                     }}
-                    sx={{
-                        "& .MuiOutlinedInput-root": {
-                            borderRadius: 2,
-                        },
-                    }}
+                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
                 />
 
                 <TextField
@@ -397,11 +514,7 @@ export default function AdminSettings() {
                     InputProps={{
                         startAdornment: <InputAdornment position="start">⏱️</InputAdornment>,
                     }}
-                    sx={{
-                        "& .MuiOutlinedInput-root": {
-                            borderRadius: 2,
-                        },
-                    }}
+                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
                 />
 
                 <TextField
@@ -415,11 +528,7 @@ export default function AdminSettings() {
                     InputProps={{
                         startAdornment: <InputAdornment position="start">🔄</InputAdornment>,
                     }}
-                    sx={{
-                        "& .MuiOutlinedInput-root": {
-                            borderRadius: 2,
-                        },
-                    }}
+                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
                 />
             </Stack>
         </Paper>
@@ -427,11 +536,12 @@ export default function AdminSettings() {
 
     const renderEmailTask = () => (
         <Paper sx={sectionPaperSx}>
-            <Stack spacing={2}>
-                <Box>
-                    <Stack direction="row" alignItems="center" spacing={1.5} mb={0.5}>
+            <Stack spacing={{ xs: 1.5, sm: 2 }}>
+                <Box sx={{ minWidth: 0 }}>
+                    <Stack direction="row" alignItems="center" spacing={1.5} mb={0.5} sx={{ minWidth: 0 }}>
                         <Box
                             sx={{
+                                flex: "0 0 auto",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
@@ -444,8 +554,8 @@ export default function AdminSettings() {
                         >
                             <EmailIcon />
                         </Box>
-                        <Box>
-                            <Typography variant="h6" fontWeight={700}>
+                        <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="h6" fontWeight={700} noWrap>
                                 Cấu hình email
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
@@ -457,18 +567,19 @@ export default function AdminSettings() {
 
                 <Divider />
 
-                <Stack spacing={1.5}
-                       sx={{
-                           p: 2,
-                           borderRadius: 2,
-                           border: `1px solid ${alpha("#000", 0.08)}`,
-                           bgcolor: (theme) => alpha(theme.palette.background.paper, 0.5),
-                       }}
+                <Stack
+                    spacing={1.5}
+                    sx={{
+                        p: { xs: 1.25, sm: 2 },
+                        borderRadius: 2,
+                        border: `1px solid ${alpha("#000", 0.08)}`,
+                        bgcolor: (theme) => alpha(theme.palette.background.paper, 0.5),
+                    }}
                 >
                     <Stack
                         direction={{ xs: "column", sm: "row" }}
-                        spacing={1.5}
-                        alignItems={{ xs: "stretch", sm: "flex-start" }} // ✅ canh theo top input
+                        spacing={1.25}
+                        alignItems={{ xs: "stretch", sm: "flex-start" }}
                     >
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                             <TextField
@@ -483,14 +594,14 @@ export default function AdminSettings() {
                                 }}
                                 fullWidth
                                 placeholder="admin@email.com"
-                                // ✅ bỏ helperText để không đội chiều cao
                                 helperText={null}
-                                sx={{
-                                    "& .MuiOutlinedInput-root": { borderRadius: 2 },
-                                }}
+                                sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
                             />
-                            {/* ✅ helperText tách riêng */}
-                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5, ml: 0.5 }}>
+                            <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ display: "block", mt: 0.5, ml: 0.5 }}
+                            >
                                 Nhấn Enter hoặc bấm Thêm.
                             </Typography>
                         </Box>
@@ -503,14 +614,13 @@ export default function AdminSettings() {
                                 borderRadius: 2,
                                 px: 3,
                                 whiteSpace: "nowrap",
-                                // ✅ trên desktop canh đúng với input (để không dính helper)
-                                mt: { xs: 0, sm: "0px" },
                                 alignSelf: { xs: "stretch", sm: "flex-start" },
                             }}
                         >
                             Thêm
                         </Button>
                     </Stack>
+
                     <Box>
                         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                             Danh sách email sẽ nhận thông báo (di chuột lên từng email để hiện nút xoá).
@@ -533,9 +643,7 @@ export default function AdminSettings() {
                                                 opacity: 0,
                                                 transition: "opacity 120ms ease",
                                             },
-                                            "&:hover .MuiChip-deleteIcon": {
-                                                opacity: 1,
-                                            },
+                                            "&:hover .MuiChip-deleteIcon": { opacity: 1 },
                                         }}
                                     />
                                 ))
@@ -549,14 +657,15 @@ export default function AdminSettings() {
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
-                        p: 2,
+                        gap: 2,
+                        p: { xs: 1.25, sm: 2 },
                         borderRadius: 2,
                         bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
                         border: "1px solid",
                         borderColor: (theme) => alpha(theme.palette.primary.main, 0.2),
                     }}
                 >
-                    <Box>
+                    <Box sx={{ minWidth: 0 }}>
                         <Typography variant="subtitle1" fontWeight={600}>
                             Thông báo email
                         </Typography>
@@ -580,7 +689,7 @@ export default function AdminSettings() {
                 {form.emailNotificationsEnabled && (
                     <Box
                         sx={{
-                            p: 2,
+                            p: { xs: 1.25, sm: 2 },
                             borderRadius: 2,
                             bgcolor: (theme) => alpha(theme.palette.success.main, 0.1),
                             border: "1px solid",
@@ -589,7 +698,7 @@ export default function AdminSettings() {
                     >
                         <Stack direction="row" spacing={1} alignItems="center">
                             <CheckCircleIcon sx={{ color: "success.main", fontSize: 20 }} />
-                            <Typography variant="body2" color="success.main" fontWeight={500}>
+                            <Typography variant="body2" color="success.main" fontWeight={600}>
                                 Thông báo email đang được bật
                             </Typography>
                         </Stack>
@@ -601,16 +710,17 @@ export default function AdminSettings() {
 
     const renderReportTask = () => (
         <Paper sx={sectionPaperSx}>
-            <Stack spacing={2}>
-                <Box>
-                    <Stack direction="row" alignItems="center" spacing={1.5} mb={0.5}>
+            <Stack spacing={{ xs: 1.5, sm: 2 }}>
+                {/* Header */}
+                <Box sx={{ minWidth: 0 }}>
+                    <Stack direction="row" alignItems="center" spacing={1.5} mb={0.5} sx={{ minWidth: 0 }}>
                         <Box
                             sx={{
+                                flex: "0 0 auto",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
                                 width: 40,
-                                /* height: 40, */
                                 height: 40,
                                 borderRadius: 1.5,
                                 bgcolor: (theme) => alpha(theme.palette.success.main, 0.1),
@@ -619,184 +729,591 @@ export default function AdminSettings() {
                         >
                             <AssessmentIcon />
                         </Box>
-                        <Box>
-                            <Typography variant="h6" fontWeight={700}>
-                                Báo cáo tháng tự động
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                Lên lịch gửi báo cáo định kỳ
-                            </Typography>
+
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Stack
+                                direction={{ xs: "column", sm: "row" }}
+                                alignItems={{ xs: "flex-start", sm: "center" }}
+                                justifyContent="space-between"
+                                spacing={{ xs: 0.75, sm: 2 }}
+                            >
+                                <Box sx={{ minWidth: 0 }}>
+                                    <Typography variant="h6" fontWeight={700} noWrap>
+                                        Báo cáo tháng tự động
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Lên lịch gửi báo cáo định kỳ theo ngày và giờ đã cấu hình.
+                                    </Typography>
+                                </Box>
+
+                                <Chip
+                                    size="small"
+                                    label={form.monthlyReportEnabled ? "REPORT: Bật" : "REPORT: Tắt"}
+                                    color={form.monthlyReportEnabled ? "success" : "default"}
+                                    sx={{ fontWeight: 800, alignSelf: { xs: "flex-start", sm: "center" } }}
+                                />
+                            </Stack>
                         </Box>
                     </Stack>
                 </Box>
 
                 <Divider />
 
+                {/* Summary cards */}
                 <Box
                     sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        p: 2,
-                        borderRadius: 2,
-                        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
-                        border: "1px solid",
-                        borderColor: (theme) => alpha(theme.palette.primary.main, 0.2),
+                        display: "grid",
+                        gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                        gap: { xs: 1, sm: 1.25 },
                     }}
                 >
-                    <Box>
-                        <Typography variant="subtitle1" fontWeight={600}>
-                            Gửi báo cáo tự động
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Kích hoạt để tự động gửi báo cáo hàng tháng
-                        </Typography>
-                    </Box>
-                    <FormControlLabel
-                        control={
-                            <Switch
-                                checked={form.monthlyReportEnabled}
-                                onChange={handleChange("monthlyReportEnabled")}
-                                color="primary"
-                            />
-                        }
-                        label=""
-                        sx={{ m: 0 }}
-                    />
-                </Box>
-
-                <Collapse in={form.monthlyReportEnabled}>
-                    <Stack spacing={2}>
-                        <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                            <TextField
-                                select
-                                label="Ngày gửi"
-                                value={form.monthlyReportDayOfMonth}
-                                onChange={handleChange("monthlyReportDayOfMonth")}
-                                fullWidth
-                                helperText="0 = ngày cuối tháng (khuyến nghị)"
-                                InputProps={{
-                                    startAdornment: <InputAdornment position="start">📅</InputAdornment>,
-                                }}
-                                sx={{
-                                    "& .MuiOutlinedInput-root": {
-                                        borderRadius: 2,
-                                    },
-                                }}
-                            >
-                                <MenuItem value={0}>Ngày cuối tháng (0)</MenuItem>
-                                {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                                    <MenuItem key={d} value={d}>
-                                        Ngày {d}
-                                    </MenuItem>
-                                ))}
-                            </TextField>
-
-                            <TextField
-                                select
-                                label="Giờ gửi"
-                                value={timeMode === "preset" ? timePresetValue : "__CUSTOM__"}
-                                onChange={handleTimePresetChange}
-                                fullWidth
-                                helperText="Có thể tùy chỉnh"
-                                InputProps={{
-                                    startAdornment: <InputAdornment position="start">🕐</InputAdornment>,
-                                }}
-                                sx={{
-                                    "& .MuiOutlinedInput-root": {
-                                        borderRadius: 2,
-                                    },
-                                }}
-                            >
-                                {TIME_PRESETS.map((t) => (
-                                    <MenuItem key={t} value={t}>
-                                        {t}
-                                    </MenuItem>
-                                ))}
-                                <Divider sx={{ my: 1 }} />
-                                <MenuItem value="__CUSTOM__">✏️ Tùy chỉnh giờ…</MenuItem>
-                            </TextField>
-                        </Stack>
-
-                        <Collapse in={timeMode === "custom"} unmountOnExit>
-                            <TextField
-                                label="Giờ gửi (tùy chỉnh)"
-                                type="time"
-                                value={form.monthlyReportTime}
-                                onChange={handleChange("monthlyReportTime")}
-                                fullWidth
-                                inputProps={{ step: 60 }}
-                                helperText="Định dạng HH:mm"
-                                InputProps={{
-                                    startAdornment: <InputAdornment position="start">⏰</InputAdornment>,
-                                }}
-                                sx={{
-                                    "& .MuiOutlinedInput-root": {
-                                        borderRadius: 2,
-                                    },
-                                }}
-                            />
-                        </Collapse>
-
-                        <TextField
-                            label="Timezone"
-                            value={DEFAULT_TIMEZONE}
-                            fullWidth
-                            helperText="Múi giờ hệ thống cố định"
-                            disabled
-                            InputProps={{
-                                startAdornment: <InputAdornment position="start">🌏</InputAdornment>,
-                            }}
-                            sx={{
-                                "& .MuiOutlinedInput-root": {
-                                    borderRadius: 2,
-                                },
-                            }}
-                        />
-
-                        {lastSentYearMonth && (
-                            <Box
-                                sx={{
-                                    p: 2,
-                                    borderRadius: 2,
-                                    bgcolor: (theme) => alpha(theme.palette.info.main, 0.1),
-                                    border: "1px solid",
-                                    borderColor: (theme) => alpha(theme.palette.info.main, 0.3),
-                                }}
-                            >
-                                <Typography variant="body2" color="info.main">
-                                    📊 Đã gửi gần nhất: {formatYearMonthToMMYYYY(lastSentYearMonth)}
+                    {/* Enable */}
+                    <Box
+                        sx={{
+                            p: { xs: 1.5, sm: 2 },
+                            borderRadius: 2,
+                            border: "1px solid",
+                            borderColor: (theme) => alpha(theme.palette.primary.main, 0.18),
+                            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
+                        }}
+                    >
+                        <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
+                            <Box sx={{ minWidth: 0 }}>
+                                <Typography variant="subtitle2" color="text.secondary">
+                                    Trạng thái báo cáo
+                                </Typography>
+                                <Typography variant="h6" fontWeight={900} sx={{ mt: 0.25 }}>
+                                    {form.monthlyReportEnabled ? "Đang bật" : "Đang tắt"}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                    Bật để hệ thống tự động gửi báo cáo hàng tháng cho admin.
                                 </Typography>
                             </Box>
-                        )}
+
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        checked={!!form.monthlyReportEnabled}
+                                        onChange={handleChange("monthlyReportEnabled")}
+                                        color="primary"
+                                    />
+                                }
+                                label=""
+                                sx={{ m: 0 }}
+                            />
+                        </Stack>
+                    </Box>
+
+                    {/* System info */}
+                    <Box
+                        sx={{
+                            p: { xs: 1.5, sm: 2 },
+                            borderRadius: 2,
+                            border: "1px solid",
+                            borderColor: (theme) => alpha(theme.palette.info.main, 0.18),
+                            bgcolor: (theme) => alpha(theme.palette.info.main, 0.06),
+                        }}
+                    >
+                        <Stack spacing={0.75}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <ScheduleIcon fontSize="small" color="info" />
+                                <Typography variant="subtitle2" color="text.secondary">
+                                    Thông tin hệ thống
+                                </Typography>
+                            </Stack>
+
+                            <Typography variant="body2" color="text.secondary">
+                                Timezone
+                            </Typography>
+                            <Typography variant="h6" fontWeight={900} sx={{ mt: -0.25 }}>
+                                {DEFAULT_TIMEZONE}
+                            </Typography>
+
+                            <Divider sx={{ my: 0.75, opacity: 0.6 }} />
+
+                            <Typography variant="body2" color="text.secondary">
+                                Đã gửi gần nhất
+                            </Typography>
+                            <Typography variant="subtitle1" fontWeight={800}>
+                                {lastSentYearMonth ? formatYearMonthToMMYYYY(lastSentYearMonth) : "Chưa có"}
+                            </Typography>
+                        </Stack>
+                    </Box>
+                </Box>
+
+                {/* Schedule config */}
+                <Box
+                    sx={{
+                        p: { xs: 1.5, sm: 2 },
+                        borderRadius: 2,
+                        border: "1px solid",
+                        borderColor: "divider",
+                        bgcolor: (theme) =>
+                            theme.palette.mode === "dark"
+                                ? alpha(theme.palette.background.paper, 0.55)
+                                : alpha(theme.palette.background.paper, 0.85),
+                    }}
+                >
+                    <Stack spacing={1.5}>
+                        <Stack
+                            direction={{ xs: "column", sm: "row" }}
+                            spacing={1}
+                            alignItems={{ xs: "flex-start", sm: "center" }}
+                        >
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <AssessmentIcon fontSize="small" color="primary" />
+                                <Typography variant="subtitle1" fontWeight={900}>
+                                    Lịch gửi báo cáo
+                                </Typography>
+                            </Stack>
+
+                            {!form.monthlyReportEnabled && (
+                                <Chip
+                                    size="small"
+                                    label="Bật báo cáo để cấu hình lịch"
+                                    variant="outlined"
+                                    sx={{ fontWeight: 700 }}
+                                />
+                            )}
+                        </Stack>
+
+                        <Typography variant="body2" color="text.secondary">
+                            Chọn ngày trong tháng và giờ gửi. Khuyến nghị dùng “ngày cuối tháng (0)” để tránh lỗi tháng thiếu ngày.
+                        </Typography>
+
+                        <Collapse in={form.monthlyReportEnabled}>
+                            <Stack spacing={2} sx={{ mt: 0.5 }}>
+                                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                                    <TextField
+                                        select
+                                        label="Ngày gửi"
+                                        value={form.monthlyReportDayOfMonth}
+                                        onChange={handleChange("monthlyReportDayOfMonth")}
+                                        fullWidth
+                                        helperText="0 = ngày cuối tháng (khuyến nghị)"
+                                        InputProps={{
+                                            startAdornment: (
+                                                <InputAdornment position="start">
+                                                    📅
+                                                </InputAdornment>
+                                            ),
+                                        }}
+                                        sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                                    >
+                                        <MenuItem value={0}>Ngày cuối tháng (0)</MenuItem>
+                                        {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                                            <MenuItem key={d} value={d}>
+                                                Ngày {d}
+                                            </MenuItem>
+                                        ))}
+                                    </TextField>
+
+                                    <TextField
+                                        select
+                                        label="Giờ gửi"
+                                        value={timeMode === "preset" ? timePresetValue : "__CUSTOM__"}
+                                        onChange={handleTimePresetChange}
+                                        fullWidth
+                                        helperText="Chọn preset hoặc chuyển sang tùy chỉnh"
+                                        InputProps={{
+                                            startAdornment: (
+                                                <InputAdornment position="start">
+                                                    🕐
+                                                </InputAdornment>
+                                            ),
+                                        }}
+                                        sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                                    >
+                                        {TIME_PRESETS.map((t) => (
+                                            <MenuItem key={t} value={t}>
+                                                {t}
+                                            </MenuItem>
+                                        ))}
+                                        <Divider sx={{ my: 1 }} />
+                                        <MenuItem value="__CUSTOM__">✏️ Tùy chỉnh giờ…</MenuItem>
+                                    </TextField>
+                                </Stack>
+
+                                <Collapse in={timeMode === "custom"} unmountOnExit>
+                                    <TextField
+                                        label="Giờ gửi (tùy chỉnh)"
+                                        type="time"
+                                        value={form.monthlyReportTime}
+                                        onChange={handleChange("monthlyReportTime")}
+                                        fullWidth
+                                        inputProps={{ step: 60 }}
+                                        helperText="Định dạng HH:mm"
+                                        InputProps={{
+                                            startAdornment: (
+                                                <InputAdornment position="start">
+                                                    ⏰
+                                                </InputAdornment>
+                                            ),
+                                        }}
+                                        sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                                    />
+                                </Collapse>
+
+                                <TextField
+                                    label="Timezone"
+                                    value={DEFAULT_TIMEZONE}
+                                    fullWidth
+                                    helperText="Múi giờ hệ thống (read-only)"
+                                    disabled
+                                    InputProps={{
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                🌏
+                                            </InputAdornment>
+                                        ),
+                                        readOnly: true,
+                                    }}
+                                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                                />
+
+                                <Box
+                                    sx={{
+                                        p: 1.25,
+                                        borderRadius: 2,
+                                        border: "1px solid",
+                                        borderColor: (theme) => alpha(theme.palette.success.main, 0.22),
+                                        bgcolor: (theme) => alpha(theme.palette.success.main, 0.08),
+                                    }}
+                                >
+                                    <Typography variant="body2" sx={{ fontWeight: 900, color: "success.main" }}>
+                                        Lịch hiện tại:{" "}
+                                        {Number(form.monthlyReportDayOfMonth) === 0
+                                            ? "Ngày cuối tháng"
+                                            : `Ngày ${Number(form.monthlyReportDayOfMonth)}`}{" "}
+                                        · {String(form.monthlyReportTime || "").trim() || "23:59"} · {DEFAULT_TIMEZONE}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        (Thời gian hiển thị theo timezone hệ thống)
+                                    </Typography>
+                                </Box>
+                            </Stack>
+                        </Collapse>
                     </Stack>
-                </Collapse>
+                </Box>
+            </Stack>
+        </Paper>
+    );
+
+    const renderModelAiTask = () => (
+        <Paper sx={sectionPaperSx}>
+            <Stack spacing={{ xs: 1.5, sm: 2 }}>
+                {/* Header */}
+                <Box sx={{ minWidth: 0 }}>
+                    <Stack direction="row" alignItems="center" spacing={1.5} mb={0.5} sx={{ minWidth: 0 }}>
+                        <Box
+                            sx={{
+                                flex: "0 0 auto",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                width: 40,
+                                height: 40,
+                                borderRadius: 1.5,
+                                bgcolor: (theme) => alpha(theme.palette.warning.main, 0.12),
+                                color: "warning.main",
+                            }}
+                        >
+                            <SmartToyRoundedIcon />
+                        </Box>
+
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Stack
+                                direction={{ xs: "column", sm: "row" }}
+                                alignItems={{ xs: "flex-start", sm: "center" }}
+                                justifyContent="space-between"
+                                spacing={{ xs: 0.75, sm: 2 }}
+                            >
+                                <Box sx={{ minWidth: 0 }}>
+                                    <Typography variant="h6" fontWeight={700} noWrap>
+                                        Model AI
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Quản lý trạng thái AI và thay API Key.
+                                    </Typography>
+                                </Box>
+
+                                <Chip
+                                    size="small"
+                                    label={aiForm.aiEnabled ? "AI: Bật" : "AI: Tắt"}
+                                    color={aiForm.aiEnabled ? "success" : "default"}
+                                    sx={{ fontWeight: 800, alignSelf: { xs: "flex-start", sm: "center" } }}
+                                />
+                            </Stack>
+                        </Box>
+                    </Stack>
+                </Box>
+
+                <Divider />
+
+                {aiLoading ? (
+                    <Box sx={{ py: 1 }}>
+                        <Typography variant="body2" color="text.secondary">
+                            Đang tải cấu hình AI...
+                        </Typography>
+                    </Box>
+                ) : (
+                    <>
+                        {/* Summary cards */}
+                        <Box
+                            sx={{
+                                display: "grid",
+                                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                                gap: { xs: 1, sm: 1.25 },
+                            }}
+                        >
+                            {/* AI Enabled */}
+                            <Box
+                                sx={{
+                                    p: { xs: 1.5, sm: 2 },
+                                    borderRadius: 2,
+                                    border: "1px solid",
+                                    borderColor: (theme) => alpha(theme.palette.primary.main, 0.18),
+                                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
+                                }}
+                            >
+                                <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
+                                    <Box sx={{ minWidth: 0 }}>
+                                        <Typography variant="subtitle2" color="text.secondary">
+                                            Trạng thái AI
+                                        </Typography>
+                                        <Typography variant="h6" fontWeight={900} sx={{ mt: 0.25 }}>
+                                            {aiForm.aiEnabled ? "Đang bật" : "Đang tắt"}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                            Tắt để khoá toàn bộ tính năng AI trong hệ thống.
+                                        </Typography>
+                                    </Box>
+
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                checked={!!aiForm.aiEnabled}
+                                                onChange={handleAiChange("aiEnabled")}
+                                                color="primary"
+                                            />
+                                        }
+                                        label=""
+                                        sx={{ m: 0 }}
+                                    />
+                                </Stack>
+                            </Box>
+
+                            {/* Provider */}
+                            <Box
+                                sx={{
+                                    p: { xs: 1.5, sm: 2 },
+                                    borderRadius: 2,
+                                    border: "1px solid",
+                                    borderColor: (theme) => alpha(theme.palette.info.main, 0.18),
+                                    bgcolor: (theme) => alpha(theme.palette.info.main, 0.06),
+                                }}
+                            >
+                                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                                    <MemoryRoundedIcon fontSize="small" color="info" />
+                                    <Typography variant="subtitle2" color="text.secondary">
+                                        Provider
+                                    </Typography>
+                                </Stack>
+                                <Typography variant="h6" fontWeight={900}>
+                                    {String(aiForm.aiProvider || "GEMINI").toUpperCase()}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                    Hiện tại hệ thống chỉ hỗ trợ GEMINI.
+                                </Typography>
+                            </Box>
+
+                            {/* Model */}
+                            <Box
+                                sx={{
+                                    p: { xs: 1.5, sm: 2 },
+                                    borderRadius: 2,
+                                    border: "1px solid",
+                                    borderColor: (theme) => alpha(theme.palette.warning.main, 0.18),
+                                    bgcolor: (theme) => alpha(theme.palette.warning.main, 0.07),
+                                }}
+                            >
+                                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                                    <SmartToyRoundedIcon fontSize="small" sx={{ color: "warning.main" }} />
+                                    <Typography variant="subtitle2" color="text.secondary">
+                                        Mô hình
+                                    </Typography>
+                                </Stack>
+                                <Typography variant="h6" fontWeight={900}>
+                                    {aiForm.aiModel}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                    Mô hình AI đang được sử dụng để tạo nội dung.
+                                </Typography>
+                            </Box>
+
+                            {/* Temperature */}
+                            <Box
+                                sx={{
+                                    p: { xs: 1.5, sm: 2 },
+                                    borderRadius: 2,
+                                    border: "1px solid",
+                                    borderColor: (theme) => alpha(theme.palette.success.main, 0.18),
+                                    bgcolor: (theme) => alpha(theme.palette.success.main, 0.06),
+                                }}
+                            >
+                                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                                    <ThermostatRoundedIcon fontSize="small" sx={{ color: "success.main" }} />
+                                    <Typography variant="subtitle2" color="text.secondary">
+                                        Temperature
+                                    </Typography>
+                                </Stack>
+                                <Typography variant="h6" fontWeight={900}>
+                                    {String(FORCED_AI_TEMPERATURE)}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                    Đang cố định ở 0.0 để đảm bảo output ổn định.
+                                </Typography>
+                            </Box>
+                        </Box>
+
+                        {/* API Key */}
+                        <Box
+                            sx={{
+                                p: { xs: 1.5, sm: 2 },
+                                borderRadius: 2,
+                                border: "1px solid",
+                                borderColor: "divider",
+                                bgcolor: (theme) =>
+                                    theme.palette.mode === "dark"
+                                        ? alpha(theme.palette.background.paper, 0.55)
+                                        : alpha(theme.palette.background.paper, 0.85),
+                            }}
+                        >
+                            <Stack spacing={1.25}>
+                                <Stack
+                                    direction={{ xs: "column", sm: "row" }}
+                                    spacing={1}
+                                    alignItems={{ xs: "flex-start", sm: "center" }}
+                                >
+                                    <Stack direction="row" spacing={1} alignItems="center">
+                                        <KeyRoundedIcon fontSize="small" color="primary" />
+                                        <Typography variant="subtitle1" fontWeight={900}>
+                                            API Key
+                                        </Typography>
+                                    </Stack>
+
+                                    {aiKeyMasked ? (
+                                        <Chip
+                                            size="small"
+                                            label={`Đang có key: ${aiKeyMasked}`}
+                                            color="success"
+                                            variant="outlined"
+                                            sx={{ fontWeight: 800 }}
+                                        />
+                                    ) : (
+                                        <Chip
+                                            size="small"
+                                            label="Chưa có key"
+                                            color="warning"
+                                            variant="outlined"
+                                            sx={{ fontWeight: 800 }}
+                                        />
+                                    )}
+                                </Stack>
+
+                                <Typography variant="body2" color="text.secondary">
+                                    Nhập key mới rồi bấm <b>Lưu cấu hình</b>. Nếu để trống thì hệ thống giữ key cũ.
+                                </Typography>
+
+                                <TextField
+                                    label="Nhập API Key mới"
+                                    value={aiForm.aiApiKey}
+                                    onChange={handleAiChange("aiApiKey")}
+                                    fullWidth
+                                    type={showAiKey ? "text" : "password"}
+                                    placeholder={aiKeyMasked ? aiKeyMasked : "Chưa có key"}
+                                    InputProps={{
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <KeyRoundedIcon fontSize="small" />
+                                            </InputAdornment>
+                                        ),
+                                        endAdornment: (
+                                            <InputAdornment position="end">
+                                                <IconButton
+                                                    onClick={() => setShowAiKey((v) => !v)}
+                                                    edge="end"
+                                                    size="small"
+                                                >
+                                                    {showAiKey ? <VisibilityOffRoundedIcon /> : <VisibilityRoundedIcon />}
+                                                </IconButton>
+                                            </InputAdornment>
+                                        ),
+                                    }}
+                                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                                />
+
+                                {!aiKeyMasked && !String(aiForm.aiApiKey || "").trim() && (
+                                    <Box
+                                        sx={{
+                                            p: 1.25,
+                                            borderRadius: 2,
+                                            border: "1px solid",
+                                            borderColor: (theme) => alpha(theme.palette.warning.main, 0.35),
+                                            bgcolor: (theme) => alpha(theme.palette.warning.main, 0.1),
+                                        }}
+                                    >
+                                        <Typography variant="body2" sx={{ color: "warning.main", fontWeight: 900 }}>
+                                            ⚠️ Chưa có API Key — AI sẽ không hoạt động
+                                        </Typography>
+                                    </Box>
+                                )}
+                            </Stack>
+                        </Box>
+                    </>
+                )}
             </Stack>
         </Paper>
     );
 
     return (
         <>
-            <GlobalLoading open={loading || saving} message={saving ? "Đang lưu cấu hình..." : "Đang tải cấu hình..."} />
+            <GlobalLoading
+                open={loading || saving || aiLoading}
+                message={
+                    saving
+                        ? "Đang lưu cấu hình..."
+                        : aiLoading
+                            ? "Đang tải Model AI..."
+                            : "Đang tải cấu hình..."
+                }
+            />
 
             <Box
                 sx={{
                     maxWidth: 1100,
                     mx: "auto",
-                    ml: { xs: "auto", md: 2 },
-                    mr: { xs: "auto", md: "auto" },
-                    px: { xs: 1.5, sm: 2 },
-                    py: 2,
+                    px: { xs: 1.25, sm: 2, md: 3 },
+                    py: { xs: 1.5, sm: 2 },
                 }}
             >
                 {/* Header */}
-                <Box mb={2}>
-                    <Stack direction="row" alignItems="center" spacing={1.5}>
-                        <Box>
-                            <Typography variant="h4" fontWeight={700}>
+                <Box mb={{ xs: 1.5, sm: 2 }}>
+                    <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        alignItems={{ xs: "flex-start", sm: "center" }}
+                        spacing={{ xs: 0.5, sm: 1.5 }}
+                        sx={{ minWidth: 0 }}
+                    >
+                        <Box sx={{ minWidth: 0 }}>
+                            <Typography
+                                variant="h1"
+                                fontWeight={500}
+                                sx={{ fontSize: { xs: "1rem", sm: "1.5rem" } }}
+                            >
                                 Cài đặt hệ thống
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
                                 Quản lý cấu hình hệ thống
                             </Typography>
                         </Box>
@@ -820,39 +1337,28 @@ export default function AdminSettings() {
                     <Tabs
                         value={activeTask}
                         onChange={(_, v) => setActiveTask(v)}
-                        variant="fullWidth"
+                        variant={isMobile ? "scrollable" : "fullWidth"}
+                        allowScrollButtonsMobile
+                        scrollButtons={isMobile ? "on" : false}   // ✅ ép hiện mũi tên
+                        TabScrollButtonProps={{ sx: { width: 40 } }} // optional: rộng dễ bấm hơn
+                        centered={!isMobile}
                         sx={{
                             "& .MuiTab-root": {
                                 minHeight: 56,
-                                fontWeight: 600,
+                                fontWeight: 700,
                                 fontSize: "0.9rem",
-                                transition: "all 0.3s ease",
-                                "&:hover": {
-                                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
-                                },
+                                px: { xs: 1.25, sm: 2 },
+                                minWidth: isMobile ? 140 : 0,
                             },
-                            "& .Mui-selected": {
-                                color: "primary.main",
-                            },
-                            "& .MuiTabs-indicator": {
-                                height: 3,
-                                borderRadius: "3px 3px 0 0",
+                            "& .MuiTabs-flexContainer": {
+                                justifyContent: isMobile ? "flex-start" : "space-between",
                             },
                         }}
                     >
-                        <Tab
-                            icon={<SchoolIcon />}
-                            iconPosition="start"
-                            label="Cấu hình bài thi"
-                            value={TASKS.PRACTICE}
-                        />
+                    <Tab icon={<SchoolIcon />} iconPosition="start" label="Cấu hình bài thi" value={TASKS.PRACTICE} />
                         <Tab icon={<EmailIcon />} iconPosition="start" label="Email" value={TASKS.EMAIL} />
-                        <Tab
-                            icon={<AssessmentIcon />}
-                            iconPosition="start"
-                            label="Báo cáo tháng"
-                            value={TASKS.REPORT}
-                        />
+                        <Tab icon={<AssessmentIcon />} iconPosition="start" label="Báo cáo tháng" value={TASKS.REPORT} />
+                        <Tab icon={<SmartToyRoundedIcon />} iconPosition="start" label="Model AI" value={TASKS.MODEL_AI} />
                     </Tabs>
                 </Paper>
 
@@ -861,12 +1367,13 @@ export default function AdminSettings() {
                     {activeTask === TASKS.PRACTICE && renderPracticeTask()}
                     {activeTask === TASKS.EMAIL && renderEmailTask()}
                     {activeTask === TASKS.REPORT && renderReportTask()}
+                    {activeTask === TASKS.MODEL_AI && renderModelAiTask()}
                 </Box>
 
                 {/* Footer */}
                 <Paper
                     sx={{
-                        p: 2,
+                        p: { xs: 1.5, sm: 2 },
                         borderRadius: 2.5,
                         border: "1px solid",
                         borderColor: "divider",
@@ -882,12 +1389,26 @@ export default function AdminSettings() {
                 >
                     <Stack
                         direction={{ xs: "column", md: "row" }}
-                        spacing={2}
-                        alignItems={{ md: "center" }}
+                        spacing={{ xs: 1.25, md: 2 }}
+                        alignItems={{ xs: "stretch", md: "center" }}
                         justifyContent="space-between"
                     >
-                        <Box>
-                            {updatedAt ? (
+                        <Box sx={{ minWidth: 0 }}>
+                            {activeTask === TASKS.MODEL_AI ? (
+                                aiUpdatedAt ? (
+                                    <Stack direction="row" spacing={1} alignItems="center">
+                                        <ScheduleIcon sx={{ fontSize: 18, color: "text.secondary" }} />
+                                        <Typography variant="body2" color="text.secondary">
+                                            Cập nhật lần cuối:{" "}
+                                            <strong>{new Date(aiUpdatedAt).toLocaleString("vi-VN")}</strong>
+                                        </Typography>
+                                    </Stack>
+                                ) : (
+                                    <Typography variant="body2" color="text.secondary">
+                                        Chưa có cập nhật
+                                    </Typography>
+                                )
+                            ) : updatedAt ? (
                                 <Stack direction="row" spacing={1} alignItems="center">
                                     <ScheduleIcon sx={{ fontSize: 18, color: "text.secondary" }} />
                                     <Typography variant="body2" color="text.secondary">
@@ -906,7 +1427,7 @@ export default function AdminSettings() {
                                     label={saveDisabledReason}
                                     color="error"
                                     size="small"
-                                    sx={{ mt: 1, fontWeight: 500 }}
+                                    sx={{ mt: 1, fontWeight: 600 }}
                                 />
                             )}
                         </Box>
@@ -918,16 +1439,17 @@ export default function AdminSettings() {
                             disabled={!!saveDisabledReason || saving}
                             startIcon={<CheckCircleIcon />}
                             sx={{
-                                minWidth: 160,
+                                width: { xs: "100%", md: "auto" },
+                                minWidth: { xs: "100%", md: 160 },
                                 height: 44,
                                 borderRadius: 2,
-                                fontWeight: 600,
+                                fontWeight: 700,
                                 fontSize: "0.95rem",
                                 textTransform: "none",
                                 boxShadow: (theme) => `0 4px 14px ${alpha(theme.palette.primary.main, 0.4)}`,
                                 "&:hover": {
                                     boxShadow: (theme) => `0 6px 20px ${alpha(theme.palette.primary.main, 0.5)}`,
-                                    transform: "translateY(-2px)",
+                                    transform: { xs: "none", md: "translateY(-2px)" },
                                 },
                                 transition: "all 0.3s ease",
                             }}
