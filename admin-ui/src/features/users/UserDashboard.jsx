@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
+// src/features/users/UserDashboard.jsx
+import React, { useEffect, useMemo, useState } from "react";
 import {
     Box,
     Grid,
@@ -9,7 +10,10 @@ import {
     Alert,
     Avatar,
     Container,
+    Chip,
+    Divider,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import {
     Timer as TimerIcon,
     Assignment as AssignmentIcon,
@@ -20,18 +24,22 @@ import {
 } from "@mui/icons-material";
 import { useSelector } from "react-redux";
 import { getDashboardStatsApi } from "../../api/dashboardApi";
-
-// ✅ lấy profile giống UserProfile
 import { getMyProfileApi } from "../../api/userApi";
 
 const COLORS = {
-    primaryBlue: "#0B5ED7",
-    secondaryOrange: "#FF8C00",
-    bgWhite: "#FFFFFF",
-    bgLight: "#F7F9FC",
-    textPrimary: "#1B2559",
-    textSecondary: "#6C757D",
-    borderLight: "#E3E8EF",
+    primary: "#2E2D84",
+    primaryDeep: "#1E1D6F",
+    primaryLight: "#EEF2FF",
+
+    orange: "#EC5E32",
+    orangeDeep: "#D5522B",
+    orangeLight: "#FFF1EB",
+
+    bg: "#F7F9FC",
+    white: "#FFFFFF",
+    text: "#1B2559",
+    subtext: "#6C757D",
+    border: "#E3E8EF",
 };
 
 const safeParse = (key, fallback = null) => {
@@ -43,15 +51,144 @@ const safeParse = (key, fallback = null) => {
     }
 };
 
-const UserDashboard = () => {
+const fmtInt = (v, fallback = 0) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.round(n);
+};
+
+const fmtHours = (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n <= 0) return "0h";
+    const mins = Math.round(n * 60);
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if (h <= 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
+};
+
+const CardShell = ({ children, sx }) => (
+    <Paper
+        elevation={0}
+        sx={{
+            borderRadius: "20px",
+            border: `1px solid ${COLORS.border}`,
+            background: COLORS.white,
+            boxShadow: "0px 18px 45px rgba(15, 23, 42, 0.06)",
+            overflow: "hidden",
+            height: "100%",
+            width: "100%",
+            ...sx,
+        }}
+    >
+        {children}
+    </Paper>
+);
+
+const KpiCard = ({ icon, title, value, subtitle, tone = "primary" }) => {
+    const toneColor = tone === "orange" ? COLORS.orange : COLORS.primary;
+
+    return (
+        <CardShell
+            sx={{
+                p: 2.5,
+                display: "flex",
+                alignItems: "center",
+                height: 120,
+                width: "250px",
+                transition: "all 0.22s ease",
+                "&:hover": {
+                    transform: "translateY(-4px)",
+                    boxShadow: "0px 22px 55px rgba(15, 23, 42, 0.1)",
+                    borderColor: alpha(toneColor, 0.5),
+                },
+            }}
+        >
+            <Box sx={{ width: "100%", display: "flex", alignItems: "center", gap: 2 }}>
+                <Box
+                    sx={{
+                        width: 52,
+                        height: 52,
+                        borderRadius: "14px",
+                        display: "grid",
+                        placeItems: "center",
+                        bgcolor: alpha(toneColor, 0.1),
+                        color: toneColor,
+                        flex: "0 0 auto",
+                    }}
+                >
+                    {React.cloneElement(icon, { fontSize: "medium" })}
+                </Box>
+
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography
+                        variant="caption"
+                        sx={{
+                            color: COLORS.subtext,
+                            fontWeight: 900,
+                            letterSpacing: "0.6px",
+                            textTransform: "uppercase",
+                            display: "block",
+                            lineHeight: 1.2,
+                            mb: 0.5,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                        }}
+                    >
+                        {title}
+                    </Typography>
+
+                    <Box
+                        sx={{
+                            display: "flex",
+                            alignItems: "baseline",
+                            gap: 0.75,
+                            minWidth: 0,
+                            flexWrap: "nowrap",
+                        }}
+                    >
+                        <Typography
+                            variant="h4"
+                            sx={{
+                                fontWeight: 950,
+                                color: COLORS.text,
+                                lineHeight: 1,
+                                whiteSpace: "nowrap",
+                            }}
+                        >
+                            {value}
+                        </Typography>
+
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                color: alpha(COLORS.subtext, 0.95),
+                                fontWeight: 700,
+                                minWidth: 0,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                            }}
+                        >
+                            {subtitle || " "}
+                        </Typography>
+                    </Box>
+                </Box>
+            </Box>
+        </CardShell>
+    );
+};
+
+export default function UserDashboard() {
     const { user } = useSelector((state) => state.auth);
 
     const [stats, setStats] = useState(null);
+    const [profile, setProfile] = useState(null);
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-
-    // ✅ NEW: profile để lấy avatar giống UserProfile/UserLayout
-    const [profile, setProfile] = useState(null);
 
     useEffect(() => {
         let alive = true;
@@ -60,7 +197,6 @@ const UserDashboard = () => {
             try {
                 setLoading(true);
 
-                // chạy song song cho nhanh
                 const [statsRes, profileRes] = await Promise.allSettled([
                     getDashboardStatsApi(),
                     getMyProfileApi(),
@@ -80,10 +216,12 @@ const UserDashboard = () => {
                     const p = profileRes.value.data;
                     setProfile(p);
 
-                    // sync về localStorage để đồng bộ UI toàn app
                     if (p?.avatarUrl) {
                         const u = safeParse("userData", {});
-                        localStorage.setItem("userData", JSON.stringify({ ...(u || {}), avatarUrl: p.avatarUrl }));
+                        localStorage.setItem(
+                            "userData",
+                            JSON.stringify({ ...(u || {}), avatarUrl: p.avatarUrl })
+                        );
                     }
                 }
             } finally {
@@ -97,7 +235,6 @@ const UserDashboard = () => {
         };
     }, []);
 
-    // ===== Avatar data (ưu tiên profile) =====
     const userData = safeParse("userData", null);
 
     const displayName =
@@ -119,249 +256,481 @@ const UserDashboard = () => {
 
     const initials = useMemo(() => {
         const name = String(displayName || "U").trim();
+        const parts = name.split(/\s+/).filter(Boolean);
+        if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
         return name ? name.charAt(0).toUpperCase() : "U";
     }, [displayName]);
 
-    const StatCard = ({ icon, title, value, subtitle, color }) => (
-        <Paper
-            elevation={0}
-            sx={{
-                p: 3,
-                borderRadius: "24px",
-                border: `1px solid ${COLORS.borderLight}`,
-                height: "100%",
-                background: COLORS.bgWhite,
-                transition: "all 0.25s ease",
-                "&:hover": {
-                    transform: "translateY(-6px)",
-                    boxShadow: "0px 18px 40px rgba(0,0,0,0.06)",
-                    borderColor: color,
-                },
-            }}
-        >
-            <Box display="flex" alignItems="center">
-                <Box
-                    sx={{
-                        p: 2,
-                        borderRadius: "16px",
-                        bgcolor: `${color}15`,
-                        color,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        mr: 2.5,
-                    }}
-                >
-                    {React.cloneElement(icon, { fontSize: "large" })}
-                </Box>
-                <Box>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            color: COLORS.textSecondary,
-                            fontWeight: 800,
-                            letterSpacing: "0.6px",
-                        }}
-                    >
-                        {title}
-                    </Typography>
-
-                    <Typography variant="h4" fontWeight={900} sx={{ color: COLORS.textPrimary, my: 0.4 }}>
-                        {value}
-                    </Typography>
-
-                    <Typography variant="caption" sx={{ color: "#8A94A6", fontWeight: 600 }}>
-                        {subtitle}
-                    </Typography>
-                </Box>
-            </Box>
-        </Paper>
-    );
-
-    if (loading)
+    if (loading) {
         return (
-            <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" height="80vh">
-                <CircularProgress thickness={5} size={60} sx={{ color: COLORS.primaryBlue }} />
-                <Typography sx={{ mt: 2, color: "#8A94A6", fontWeight: 700 }}>
-                    Đang tải dữ liệu học tập...
-                </Typography>
+            <Box
+                sx={{
+                    minHeight: "72vh",
+                    display: "grid",
+                    placeItems: "center",
+                    px: 2,
+                    bgcolor: COLORS.bg,
+                }}
+            >
+                <Box sx={{ textAlign: "center" }}>
+                    <CircularProgress thickness={5} size={56} sx={{ color: COLORS.primary }} />
+                    <Typography sx={{ mt: 2, color: alpha(COLORS.subtext, 0.95), fontWeight: 800 }}>
+                        Đang tải dữ liệu học tập...
+                    </Typography>
+                </Box>
             </Box>
         );
+    }
 
-    if (error)
+    if (error) {
         return (
             <Container maxWidth="md" sx={{ mt: 10 }}>
-                <Alert severity="error" variant="filled" sx={{ borderRadius: "16px", fontWeight: 700 }}>
+                <Alert severity="error" variant="filled" sx={{ borderRadius: "16px", fontWeight: 800 }}>
                     {error}
                 </Alert>
             </Container>
         );
+    }
+
+    const completed = fmtInt(stats?.completedLessons, 0);
+    const onlineTimeText = fmtHours(stats?.onlineTime || 0);
+    const avgScore = fmtInt(stats?.averageScore, 0);
+    const rank = fmtInt(stats?.rank, 0);
+    const totalStudents = fmtInt(stats?.totalStudents, 0);
+
+    const greeting = stats?.greeting || `Chào mừng ${displayName}!`;
+    const suggestion =
+        stats?.suggestion || "Hãy làm bài kiểm tra để AI phân tích lộ trình phù hợp nhất cho bạn.";
+
+    const scorePct = Math.max(0, Math.min(100, avgScore));
 
     return (
-        <Fade in timeout={800}>
-            <Box sx={{ p: { xs: 2, md: 4 }, bgcolor: COLORS.bgLight, minHeight: "100vh" }}>
-                {/* Header */}
-                <Box
+        <Fade in timeout={650}>
+            <Box sx={{ bgcolor: COLORS.bg, minHeight: "100vh", py: { xs: 2.5, md: 4 } }}>
+                <Container
+                    maxWidth={false}
+                    disableGutters
                     sx={{
-                        mb: 5,
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        flexWrap: "wrap",
-                        gap: 2,
+                        width: "100%",
+                        px: { xs: 2, sm: 3, md: 4, lg: 5 },
                     }}
                 >
-                    <Box display="flex" alignItems="center">
-                        {/* ✅ Avatar hiển thị trong "Chào buổi sáng" */}
-                        <Avatar
-                            src={avatarUrl || undefined}
-                            imgProps={{ referrerPolicy: "no-referrer" }}
+                    <Box
+                        sx={{
+                            width: "100%",
+                            mx: "auto",
+                            maxWidth: { xs: "100%", lg: 1560, xl: 1720 },
+                        }}
+                    >
+                        {/* ===== HEADER HERO ===== */}
+                        <CardShell
                             sx={{
-                                width: 70,
-                                height: 70,
-                                border: "4px solid #fff",
-                                boxShadow: "0px 10px 20px rgba(0,0,0,0.10)",
-                                bgcolor: COLORS.primaryBlue,
-                                mr: 3,
-                                fontSize: "1.8rem",
-                                fontWeight: 900,
-                            }}
-                        >
-                            {initials}
-                        </Avatar>
-
-                        <Box>
-                            <Typography variant="h3" sx={{ fontWeight: 900, color: COLORS.textPrimary, mb: 0.5 }}>
-                                {stats?.greeting || `Chào mừng ${displayName}!`}
-                            </Typography>
-                            <Typography variant="h6" sx={{ color: COLORS.textSecondary, fontWeight: 600 }}>
-                                Hôm nay bạn muốn học gì nào? 📚
-                            </Typography>
-                        </Box>
-                    </Box>
-                </Box>
-
-                {/* Stats */}
-                <Grid container spacing={3} sx={{ mb: 5 }}>
-                    <Grid item xs={12} sm={6} lg={3}>
-                        <StatCard
-                            icon={<AssignmentIcon />}
-                            title="HOÀN THÀNH"
-                            value={stats?.completedLessons || 0}
-                            subtitle="Bài kiểm tra đã nộp"
-                            color={COLORS.primaryBlue}
-                        />
-                    </Grid>
-
-                    <Grid item xs={12} sm={6} lg={3}>
-                        <StatCard
-                            icon={<TimerIcon />}
-                            title="THỜI GIAN"
-                            value={`${stats?.onlineTime || 0}h`}
-                            subtitle="Tổng thời lượng học"
-                            color={COLORS.secondaryOrange}
-                        />
-                    </Grid>
-
-                    <Grid item xs={12} sm={6} lg={3}>
-                        <StatCard
-                            icon={<SchoolIcon />}
-                            title="ĐIỂM SỐ"
-                            value={stats?.averageScore || 0}
-                            subtitle="Trung bình các bài thi"
-                            color={COLORS.primaryBlue}
-                        />
-                    </Grid>
-
-                    <Grid item xs={12} sm={6} lg={3}>
-                        <StatCard
-                            icon={<TrendingIcon />}
-                            title="XẾP HẠNG"
-                            value={`#${stats?.rank || 0}`}
-                            subtitle={`Trong tổng ${stats?.totalStudents || 0} học viên`}
-                            color={COLORS.secondaryOrange}
-                        />
-                    </Grid>
-                </Grid>
-
-                {/* Suggestion + Summary */}
-                <Grid container spacing={3}>
-                    <Grid item xs={12} md={7}>
-                        <Paper
-                            sx={{
-                                p: 4,
-                                borderRadius: "24px",
-                                border: `1px solid ${COLORS.borderLight}`,
-                                background: `linear-gradient(135deg, ${COLORS.primaryBlue} 0%, ${COLORS.secondaryOrange} 100%)`,
+                                mb: 3,
+                                p: { xs: 2.5, md: 3.5 },
+                                background: `linear-gradient(135deg, ${COLORS.primaryDeep} 0%, ${COLORS.primary} 45%, ${COLORS.orange} 120%)`,
                                 color: "#fff",
                                 position: "relative",
-                                overflow: "hidden",
+                                minHeight: 170,
                             }}
                         >
-                            <Box sx={{ position: "relative", zIndex: 1 }}>
-                                <Box display="flex" alignItems="center" mb={2}>
-                                    <LightbulbIcon sx={{ color: "#fff", mr: 1, fontSize: "2rem", opacity: 0.95 }} />
-                                    <Typography variant="h5" fontWeight={900}>
-                                        Gợi ý lộ trình
-                                    </Typography>
-                                </Box>
-
-                                <Typography variant="body1" sx={{ lineHeight: 1.8, fontSize: "1.1rem", opacity: 0.95 }}>
-                                    {stats?.suggestion ||
-                                        "Hãy làm bài kiểm tra để AI phân tích lộ trình phù hợp nhất cho bạn."}
-                                </Typography>
-                            </Box>
-
-                            <ProgressIcon
+                            <Box
                                 sx={{
                                     position: "absolute",
-                                    right: -20,
-                                    bottom: -20,
-                                    fontSize: "150px",
-                                    opacity: 0.12,
-                                    color: "#fff",
+                                    inset: 0,
+                                    background:
+                                        "radial-gradient(circle at 15% 25%, rgba(255,255,255,0.16) 0, rgba(255,255,255,0.00) 42%), radial-gradient(circle at 80% 20%, rgba(255,255,255,0.12) 0, rgba(255,255,255,0.00) 45%)",
+                                    pointerEvents: "none",
                                 }}
                             />
-                        </Paper>
-                    </Grid>
 
-                    <Grid item xs={12} md={5}>
-                        <Paper
-                            sx={{
-                                p: 4,
-                                borderRadius: "24px",
-                                border: `1px solid ${COLORS.borderLight}`,
-                                height: "100%",
-                                bgcolor: COLORS.bgWhite,
-                            }}
-                        >
-                            <Typography variant="h6" fontWeight={900} sx={{ color: COLORS.textPrimary, mb: 3 }}>
-                                Tóm tắt mục tiêu
-                            </Typography>
+                            <Box
+                                sx={{
+                                    position: "relative",
+                                    zIndex: 1,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    gap: 2,
+                                    flexWrap: { xs: "wrap", md: "nowrap" },
+                                }}
+                            >
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 2,
+                                        minWidth: 0,
+                                        flex: 1,
+                                    }}
+                                >
+                                    <Avatar
+                                        src={avatarUrl || undefined}
+                                        imgProps={{ referrerPolicy: "no-referrer" }}
+                                        sx={{
+                                            width: 72,
+                                            height: 72,
+                                            border: "4px solid rgba(255,255,255,0.45)",
+                                            bgcolor: alpha("#000", 0.12),
+                                            fontWeight: 950,
+                                            fontSize: "1.6rem",
+                                            flex: "0 0 auto",
+                                        }}
+                                    >
+                                        {initials}
+                                    </Avatar>
 
-                            <Box sx={{ borderLeft: `4px solid ${COLORS.primaryBlue}`, pl: 2, mb: 3 }}>
-                                <Typography variant="subtitle2" sx={{ color: COLORS.textSecondary, fontWeight: 700 }}>
-                                    Điểm số hiện tại
-                                </Typography>
-                                <Typography variant="h5" fontWeight={900}>
-                                    {stats?.averageScore}/100
-                                </Typography>
+                                    <Box sx={{ minWidth: 0 }}>
+                                        <Typography
+                                            variant="h4"
+                                            sx={{
+                                                fontWeight: 950,
+                                                lineHeight: 1.1,
+                                                mb: 0.5,
+                                                whiteSpace: "nowrap",
+                                                overflow: "hidden",
+                                                textOverflow: "ellipsis",
+                                            }}
+                                        >
+                                            {greeting}
+                                        </Typography>
+
+                                        <Typography sx={{ opacity: 0.92, fontWeight: 700, mb: 1.5 }}>
+                                            Hôm nay bạn muốn học gì nào? 📚
+                                        </Typography>
+
+                                        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                                            <Chip
+                                                size="small"
+                                                label={`Điểm hiện tại: ${avgScore}/100`}
+                                                sx={{
+                                                    bgcolor: alpha("#fff", 0.16),
+                                                    color: "#fff",
+                                                    fontWeight: 900,
+                                                    borderRadius: "999px",
+                                                }}
+                                            />
+                                            <Chip
+                                                size="small"
+                                                label="Mục tiêu: Top 10"
+                                                sx={{
+                                                    bgcolor: alpha("#fff", 0.16),
+                                                    color: "#fff",
+                                                    fontWeight: 900,
+                                                    borderRadius: "999px",
+                                                }}
+                                            />
+                                            <Chip
+                                                size="small"
+                                                label={`Tiến độ: ${scorePct}%`}
+                                                sx={{
+                                                    bgcolor: alpha("#fff", 0.16),
+                                                    color: "#fff",
+                                                    fontWeight: 900,
+                                                    borderRadius: "999px",
+                                                }}
+                                            />
+                                        </Box>
+                                    </Box>
+                                </Box>
+
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 1.25,
+                                        color: alpha("#fff", 0.92),
+                                        flex: "0 0 auto",
+                                        minWidth: { xs: "100%", md: 240 },
+                                        justifyContent: { xs: "flex-start", md: "flex-end" },
+                                    }}
+                                >
+                                    <ProgressIcon sx={{ fontSize: 36 }} />
+                                    <Box>
+                                        <Typography variant="h5" sx={{ fontWeight: 950, lineHeight: 1 }}>
+                                            {rank ? `#${rank}` : "--"}
+                                        </Typography>
+                                        <Typography variant="caption" sx={{ fontWeight: 800, opacity: 0.9 }}>
+                                            {totalStudents ? `Trên ${totalStudents} học viên` : "Bảng xếp hạng"}
+                                        </Typography>
+                                    </Box>
+                                </Box>
                             </Box>
+                        </CardShell>
 
-                            <Box sx={{ borderLeft: `4px solid ${COLORS.secondaryOrange}`, pl: 2 }}>
-                                <Typography variant="subtitle2" sx={{ color: COLORS.textSecondary, fontWeight: 700 }}>
-                                    Mục tiêu tiếp theo
-                                </Typography>
-                                <Typography variant="h5" fontWeight={900}>
-                                    Top 10 Học viên
-                                </Typography>
-                            </Box>
-                        </Paper>
-                    </Grid>
-                </Grid>
+                        {/* ===== KPI GRID ===== */}
+                        <Grid container spacing={2.5} sx={{ mb: 3 }} alignItems="stretch">
+                            <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
+                                <KpiCard
+                                    icon={<AssignmentIcon />}
+                                    title="Hoàn thành"
+                                    value={completed}
+                                    subtitle="bài đã nộp"
+                                    tone="primary"
+                                />
+                            </Grid>
+                            <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
+                                <KpiCard
+                                    icon={<TimerIcon />}
+                                    title="Thời gian"
+                                    value={onlineTimeText}
+                                    subtitle="tổng học"
+                                    tone="orange"
+                                />
+                            </Grid>
+                            <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
+                                <KpiCard
+                                    icon={<SchoolIcon />}
+                                    title="Điểm trung bình"
+                                    value={avgScore}
+                                    subtitle="/100"
+                                    tone="primary"
+                                />
+                            </Grid>
+                            <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
+                                <KpiCard
+                                    icon={<TrendingIcon />}
+                                    title="Xếp hạng"
+                                    value={rank ? `#${rank}` : "--"}
+                                    subtitle={totalStudents ? `/${totalStudents}` : ""}
+                                    tone="orange"
+                                />
+                            </Grid>
+                        </Grid>
+
+                        {/* ===== MAIN CONTENT ===== */}
+                        <Grid container spacing={2.5} alignItems="stretch">
+                            {/* LEFT: Gợi ý lộ trình */}
+                            <Grid item xs={12} md={7} sx={{ display: "flex" }}>
+                                <CardShell>
+                                    <Box
+                                        sx={{
+                                            p: 3,
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            gap: 2,
+                                            height: "100%",
+                                            minWidth: 0,
+                                        }}
+                                    >
+                                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+                                            <Box
+                                                sx={{
+                                                    width: 44,
+                                                    height: 44,
+                                                    borderRadius: "14px",
+                                                    display: "grid",
+                                                    placeItems: "center",
+                                                    bgcolor: alpha(COLORS.orange, 0.1),
+                                                    color: COLORS.orange,
+                                                    flex: "0 0 auto",
+                                                }}
+                                            >
+                                                <LightbulbIcon />
+                                            </Box>
+
+                                            <Box sx={{ minWidth: 0 }}>
+                                                <Typography sx={{ fontWeight: 950, color: COLORS.text, lineHeight: 1.1 }}>
+                                                    Gợi ý lộ trình
+                                                </Typography>
+                                                <Typography variant="body2" sx={{ color: COLORS.subtext, fontWeight: 700 }}>
+                                                    Dựa trên tiến độ và kết quả gần đây
+                                                </Typography>
+                                            </Box>
+                                        </Box>
+
+                                        <Divider sx={{ borderColor: alpha(COLORS.border, 0.9) }} />
+
+                                        <Box
+                                            sx={{
+                                                p: 2.25,
+                                                borderRadius: "16px",
+                                                border: `1px solid ${alpha(COLORS.primary, 0.18)}`,
+                                                bgcolor: alpha(COLORS.primaryLight, 0.6),
+                                                position: "relative",
+                                                overflow: "hidden",
+                                                minWidth: 0,
+                                            }}
+                                        >
+                                            <Box
+                                                sx={{
+                                                    position: "absolute",
+                                                    inset: 0,
+                                                    background:
+                                                        "radial-gradient(circle at 10% 10%, rgba(46,45,132,0.10) 0, rgba(46,45,132,0) 45%), radial-gradient(circle at 85% 30%, rgba(236,94,50,0.10) 0, rgba(236,94,50,0) 48%)",
+                                                    pointerEvents: "none",
+                                                }}
+                                            />
+                                            <Box sx={{ position: "relative", zIndex: 1 }}>
+                                                <Typography
+                                                    sx={{
+                                                        color: COLORS.text,
+                                                        fontWeight: 900,
+                                                        lineHeight: 1.6,
+                                                        fontSize: "1.02rem",
+                                                        wordBreak: "break-word",
+                                                    }}
+                                                >
+                                                    {suggestion}
+                                                </Typography>
+
+                                                <Box sx={{ display: "flex", gap: 1, mt: 1.5, flexWrap: "wrap" }}>
+                                                    <Chip
+                                                        size="small"
+                                                        label="Giữ nhịp mỗi ngày"
+                                                        sx={{
+                                                            bgcolor: alpha(COLORS.primary, 0.12),
+                                                            color: COLORS.primaryDeep,
+                                                            fontWeight: 900,
+                                                        }}
+                                                    />
+                                                    <Chip
+                                                        size="small"
+                                                        label="Ưu tiên module yếu"
+                                                        sx={{
+                                                            bgcolor: alpha(COLORS.orange, 0.12),
+                                                            color: COLORS.orangeDeep,
+                                                            fontWeight: 900,
+                                                        }}
+                                                    />
+                                                </Box>
+                                            </Box>
+                                        </Box>
+                                    </Box>
+                                </CardShell>
+                            </Grid>
+
+                            {/* RIGHT: Tóm tắt mục tiêu */}
+                            <Grid item xs={12} md={5} sx={{ display: "flex" }}>
+                                <CardShell>
+                                    <Box
+                                        sx={{
+                                            p: 3,
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            gap: 2.5,
+                                            height: "100%",
+                                            width: "100%",
+                                        }}
+                                    >
+                                        <Box sx={{ minWidth: 0 }}>
+                                            <Typography sx={{ fontWeight: 950, color: COLORS.text, mb: 0.5 }}>
+                                                Tóm tắt mục tiêu
+                                            </Typography>
+                                            <Typography variant="body2" sx={{ color: COLORS.subtext, fontWeight: 700 }}>
+                                                Theo dõi nhanh để tối ưu lộ trình học
+                                            </Typography>
+                                        </Box>
+
+                                        <Divider sx={{ borderColor: alpha(COLORS.border, 0.9) }} />
+
+                                        <Box
+                                            sx={{
+                                                p: 2.5,
+                                                borderRadius: "16px",
+                                                border: `1px solid ${alpha(COLORS.primary, 0.18)}`,
+                                                bgcolor: alpha(COLORS.primaryLight, 0.55),
+                                                minWidth: 0,
+                                            }}
+                                        >
+                                            <Typography variant="caption" sx={{ color: COLORS.subtext, fontWeight: 900 }}>
+                                                ĐIỂM SỐ HIỆN TẠI
+                                            </Typography>
+
+                                            <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mt: 0.75 }}>
+                                                <Typography variant="h4" sx={{ fontWeight: 950, color: COLORS.text }}>
+                                                    {avgScore}
+                                                </Typography>
+                                                <Typography sx={{ fontWeight: 900, color: COLORS.subtext }}>/100</Typography>
+                                            </Box>
+
+                                            <Box sx={{ mt: 1.5 }}>
+                                                <Box
+                                                    sx={{
+                                                        height: 10,
+                                                        borderRadius: "999px",
+                                                        bgcolor: alpha(COLORS.primary, 0.12),
+                                                        overflow: "hidden",
+                                                    }}
+                                                >
+                                                    <Box
+                                                        sx={{
+                                                            height: "100%",
+                                                            width: `${scorePct}%`,
+                                                            bgcolor: COLORS.primary,
+                                                            borderRadius: "999px",
+                                                            transition: "width 0.4s ease",
+                                                        }}
+                                                    />
+                                                </Box>
+
+                                                <Typography
+                                                    variant="caption"
+                                                    sx={{
+                                                        display: "block",
+                                                        mt: 0.8,
+                                                        color: COLORS.subtext,
+                                                        fontWeight: 800,
+                                                    }}
+                                                >
+                                                    Tiến độ mục tiêu: {scorePct}%
+                                                </Typography>
+                                            </Box>
+                                        </Box>
+
+                                        <Box sx={{ flex: 1 }} />
+
+                                        <Box
+                                            sx={{
+                                                p: 2.5,
+                                                borderRadius: "16px",
+                                                border: `1px solid ${alpha(COLORS.orange, 0.18)}`,
+                                                bgcolor: alpha(COLORS.orangeLight, 0.65),
+                                                minWidth: 0,
+                                            }}
+                                        >
+                                            <Typography variant="caption" sx={{ color: COLORS.subtext, fontWeight: 900 }}>
+                                                MỤC TIÊU TIẾP THEO
+                                            </Typography>
+
+                                            <Typography variant="h6" sx={{ fontWeight: 950, color: COLORS.text, mt: 0.75 }}>
+                                                Top 10 học viên
+                                            </Typography>
+
+                                            <Typography
+                                                variant="body2"
+                                                sx={{ color: COLORS.subtext, fontWeight: 700, mt: 0.75 }}
+                                            >
+                                                Ưu tiên làm bài theo module bạn yếu để cải thiện nhanh.
+                                            </Typography>
+
+                                            <Box sx={{ display: "flex", gap: 1, mt: 1.75, flexWrap: "wrap" }}>
+                                                <Chip
+                                                    size="small"
+                                                    label={`Hoàn thành: ${completed}`}
+                                                    sx={{
+                                                        bgcolor: alpha(COLORS.primary, 0.1),
+                                                        color: COLORS.primaryDeep,
+                                                        fontWeight: 900,
+                                                    }}
+                                                />
+                                                <Chip
+                                                    size="small"
+                                                    label={`Thời gian: ${onlineTimeText}`}
+                                                    sx={{
+                                                        bgcolor: alpha(COLORS.orange, 0.1),
+                                                        color: COLORS.orangeDeep,
+                                                        fontWeight: 900,
+                                                    }}
+                                                />
+                                            </Box>
+                                        </Box>
+                                    </Box>
+                                </CardShell>
+                            </Grid>
+                        </Grid>
+                    </Box>
+                </Container>
             </Box>
         </Fade>
     );
-};
-
-export default UserDashboard;
+}
