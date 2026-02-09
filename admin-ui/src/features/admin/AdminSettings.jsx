@@ -62,17 +62,25 @@ const TIME_PRESETS = [
     "23:59",
 ];
 
-const TZ_PRESETS = [
-    "Asia/Bangkok",
-    "Asia/Ho_Chi_Minh",
-    "Asia/Singapore",
-    "Asia/Tokyo",
-    "Australia/Sydney",
-    "Europe/London",
-    "Europe/Paris",
-    "America/New_York",
-    "America/Los_Angeles",
-];
+const DEFAULT_TIMEZONE = "Asia/Ho_Chi_Minh";
+
+const parseEmails = (csv) =>
+    String(csv || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+const toEmailCsv = (emails) =>
+    Array.from(
+        new Set(
+            (emails || [])
+                .map((s) => String(s || "").trim().toLowerCase())
+                .filter(Boolean)
+        )
+    ).join(",");
+
+const isValidEmail = (s) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || "").trim());
 
 const TASKS = {
     PRACTICE: 0,
@@ -99,8 +107,12 @@ export default function AdminSettings() {
         monthlyReportEnabled: false,
         monthlyReportDayOfMonth: 0,
         monthlyReportTime: "23:59",
-        monthlyReportTimeZone: "Asia/Bangkok",
+        monthlyReportTimeZone: DEFAULT_TIMEZONE,
     });
+
+    // ===== Admin email chips =====
+    const [emailInput, setEmailInput] = useState("");
+    const [adminEmailList, setAdminEmailList] = useState([]);
 
     const [timeMode, setTimeMode] = useState("preset");
     const [timePresetValue, setTimePresetValue] = useState("23:59");
@@ -132,8 +144,11 @@ export default function AdminSettings() {
                     monthlyReportEnabled: !!data.monthlyReportEnabled,
                     monthlyReportDayOfMonth: data.monthlyReportDayOfMonth ?? 0,
                     monthlyReportTime: monthlyTime,
-                    monthlyReportTimeZone: data.monthlyReportTimeZone ?? "Asia/Bangkok",
+                    monthlyReportTimeZone: DEFAULT_TIMEZONE,
                 });
+
+                // sync chips from csv
+                setAdminEmailList(parseEmails(data.adminEmails));
 
                 setTimeMode(isPreset ? "preset" : "custom");
                 setTimePresetValue(isPreset ? monthlyTime : "23:59");
@@ -156,6 +171,45 @@ export default function AdminSettings() {
                 : e.target.value;
 
         setForm((prev) => ({ ...prev, [field]: value }));
+    };
+
+    const displaySecondsPerQuestion = useMemo(() => {
+        const m = Number(form.minutesPerQuestion);
+        if (Number.isNaN(m) || !Number.isFinite(m)) return "";
+        const s = Math.round(m * 60);
+        return s <= 0 ? "" : String(s);
+    }, [form.minutesPerQuestion]);
+
+    const handleSecondsPerQuestionChange = (e) => {
+        const raw = e.target.value;
+        const n = Number(raw);
+        if (raw === "") {
+            setForm((prev) => ({ ...prev, minutesPerQuestion: "" }));
+            return;
+        }
+        if (Number.isNaN(n)) return;
+        const seconds = Math.max(1, Math.round(n));
+        setForm((prev) => ({ ...prev, minutesPerQuestion: seconds / 60 }));
+    };
+
+    const addAdminEmail = () => {
+        const email = String(emailInput || "").trim().toLowerCase();
+        if (!email) return;
+        if (!isValidEmail(email)) {
+            showToast("Email không hợp lệ", "error");
+            return;
+        }
+
+        const next = Array.from(new Set([...adminEmailList, email]));
+        setAdminEmailList(next);
+        setForm((prev) => ({ ...prev, adminEmails: toEmailCsv(next) }));
+        setEmailInput("");
+    };
+
+    const removeAdminEmail = (email) => {
+        const next = adminEmailList.filter((e) => e !== email);
+        setAdminEmailList(next);
+        setForm((prev) => ({ ...prev, adminEmails: toEmailCsv(next) }));
     };
 
     const handleTimePresetChange = (e) => {
@@ -217,12 +271,12 @@ export default function AdminSettings() {
                 retestCooldownMinutes: clampInt(form.retestCooldownMinutes, 0, 1440),
 
                 emailNotificationsEnabled: !!form.emailNotificationsEnabled,
-                adminEmails: String(form.adminEmails || "").trim(),
+                adminEmails: toEmailCsv(adminEmailList),
 
                 monthlyReportEnabled: !!form.monthlyReportEnabled,
                 monthlyReportDayOfMonth: clampInt(form.monthlyReportDayOfMonth, 0, 31),
                 monthlyReportTime: String(form.monthlyReportTime || "23:59").trim(),
-                monthlyReportTimeZone: String(form.monthlyReportTimeZone || "Asia/Bangkok").trim(),
+                monthlyReportTimeZone: String(form.monthlyReportTimeZone || DEFAULT_TIMEZONE).trim(),
             };
 
             const updated = await adminSettingsApi.update(payload);
@@ -303,7 +357,7 @@ export default function AdminSettings() {
                         </Box>
                         <Box>
                             <Typography variant="h6" fontWeight={700}>
-                                Cấu hình luyện tập
+                                Cấu hình bài thi
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
                                 Thiết lập điểm số, thời gian và quy tắc làm lại
@@ -333,13 +387,13 @@ export default function AdminSettings() {
                 />
 
                 <TextField
-                    label="Thời gian / câu (phút)"
+                    label="Thời gian / câu (giây)"
                     type="number"
-                    value={form.minutesPerQuestion}
-                    onChange={handleChange("minutesPerQuestion")}
+                    value={displaySecondsPerQuestion}
+                    onChange={handleSecondsPerQuestionChange}
                     fullWidth
-                    inputProps={{ min: 0, step: 0.1 }}
-                    helperText="Mỗi câu hỏi sẽ có thời gian làm tối đa này."
+                    inputProps={{ min: 1, step: 1 }}
+                    helperText="Mỗi câu hỏi sẽ có thời gian làm tối đa theo giây."
                     InputProps={{
                         startAdornment: <InputAdornment position="start">⏱️</InputAdornment>,
                     }}
@@ -403,21 +457,92 @@ export default function AdminSettings() {
 
                 <Divider />
 
-                <TextField
-                    label="Email quản trị viên"
-                    value={form.adminEmails}
-                    onChange={handleChange("adminEmails")}
-                    fullWidth
-                    placeholder="admin1@email.com, admin2@email.com"
-                    helperText="Nhập nhiều email, cách nhau bằng dấu phẩy."
-                    multiline
-                    rows={2}
-                    sx={{
-                        "& .MuiOutlinedInput-root": {
-                            borderRadius: 2,
-                        },
-                    }}
-                />
+                <Stack spacing={1.5}
+                       sx={{
+                           p: 2,
+                           borderRadius: 2,
+                           border: `1px solid ${alpha("#000", 0.08)}`,
+                           bgcolor: (theme) => alpha(theme.palette.background.paper, 0.5),
+                       }}
+                >
+                    <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1.5}
+                        alignItems={{ xs: "stretch", sm: "flex-start" }} // ✅ canh theo top input
+                    >
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <TextField
+                                label="Thêm email quản trị"
+                                value={emailInput}
+                                onChange={(e) => setEmailInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        addAdminEmail();
+                                    }
+                                }}
+                                fullWidth
+                                placeholder="admin@email.com"
+                                // ✅ bỏ helperText để không đội chiều cao
+                                helperText={null}
+                                sx={{
+                                    "& .MuiOutlinedInput-root": { borderRadius: 2 },
+                                }}
+                            />
+                            {/* ✅ helperText tách riêng */}
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5, ml: 0.5 }}>
+                                Nhấn Enter hoặc bấm Thêm.
+                            </Typography>
+                        </Box>
+
+                        <Button
+                            variant="contained"
+                            onClick={addAdminEmail}
+                            sx={{
+                                height: 52,
+                                borderRadius: 2,
+                                px: 3,
+                                whiteSpace: "nowrap",
+                                // ✅ trên desktop canh đúng với input (để không dính helper)
+                                mt: { xs: 0, sm: "0px" },
+                                alignSelf: { xs: "stretch", sm: "flex-start" },
+                            }}
+                        >
+                            Thêm
+                        </Button>
+                    </Stack>
+                    <Box>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            Danh sách email sẽ nhận thông báo (di chuột lên từng email để hiện nút xoá).
+                        </Typography>
+                        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                            {adminEmailList.length === 0 ? (
+                                <Typography variant="body2" color="text.secondary">
+                                    Chưa có email nào.
+                                </Typography>
+                            ) : (
+                                adminEmailList.map((email) => (
+                                    <Chip
+                                        key={email}
+                                        label={email}
+                                        onDelete={() => removeAdminEmail(email)}
+                                        deleteIcon={<span style={{ fontSize: 16, lineHeight: 1 }}>×</span>}
+                                        sx={{
+                                            borderRadius: 2,
+                                            "& .MuiChip-deleteIcon": {
+                                                opacity: 0,
+                                                transition: "opacity 120ms ease",
+                                            },
+                                            "&:hover .MuiChip-deleteIcon": {
+                                                opacity: 1,
+                                            },
+                                        }}
+                                    />
+                                ))
+                            )}
+                        </Stack>
+                    </Box>
+                </Stack>
 
                 <Box
                     sx={{
@@ -436,7 +561,7 @@ export default function AdminSettings() {
                             Thông báo email
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                            Bật để nhận thông báo qua email
+                            Khi bật, bạn sẽ nhận: báo cáo tháng, học viên mới đăng ký và các thông báo hệ thống quan trọng.
                         </Typography>
                     </Box>
                     <FormControlLabel
@@ -614,12 +739,11 @@ export default function AdminSettings() {
                         </Collapse>
 
                         <TextField
-                            select
                             label="Timezone"
-                            value={form.monthlyReportTimeZone}
-                            onChange={handleChange("monthlyReportTimeZone")}
+                            value={DEFAULT_TIMEZONE}
                             fullWidth
-                            helperText="Chọn múi giờ"
+                            helperText="Múi giờ hệ thống cố định"
+                            disabled
                             InputProps={{
                                 startAdornment: <InputAdornment position="start">🌏</InputAdornment>,
                             }}
@@ -628,13 +752,7 @@ export default function AdminSettings() {
                                     borderRadius: 2,
                                 },
                             }}
-                        >
-                            {TZ_PRESETS.map((z) => (
-                                <MenuItem key={z} value={z}>
-                                    {z}
-                                </MenuItem>
-                            ))}
-                        </TextField>
+                        />
 
                         {lastSentYearMonth && (
                             <Box
@@ -725,7 +843,7 @@ export default function AdminSettings() {
                         <Tab
                             icon={<SchoolIcon />}
                             iconPosition="start"
-                            label="Cấu hình luyện tập"
+                            label="Cấu hình bài thi"
                             value={TASKS.PRACTICE}
                         />
                         <Tab icon={<EmailIcon />} iconPosition="start" label="Email" value={TASKS.EMAIL} />
