@@ -35,6 +35,13 @@ export default function AppConfirm({
 
                                        loading,
                                        variant = "default",
+
+                                       // ✅ NEW (backward-compatible)
+                                       toastOnSuccess = true,
+                                       toastOnError = true,
+                                       autoCloseOnSuccess = true,
+                                       successToastText = "Thành công",
+                                       errorToastText, // optional override
                                    }) {
     const toastApi = useToast?.();
     const showToast = toastApi?.showToast;
@@ -68,19 +75,27 @@ export default function AppConfirm({
 
             await onConfirm();
 
-            // ✅ FIX: showToast nhận string + type (không bắn object)
-            showToast?.("Thành công", "success");
+            // ✅ Optional success toast (default giữ nguyên hành vi cũ)
+            if (toastOnSuccess) {
+                showToast?.(successToastText, "success");
+            }
 
-            onClose?.();
+            // ✅ Optional auto close (default giữ nguyên hành vi cũ)
+            if (autoCloseOnSuccess) {
+                onClose?.();
+            }
         } catch (err) {
             const msg =
+                errorToastText ||
                 err?.response?.data?.message ||
                 (typeof err?.response?.data === "string" ? err.response.data : null) ||
                 err?.message ||
                 "Có lỗi xảy ra, vui lòng thử lại";
 
-            // ✅ FIX: showToast nhận string + type (không bắn object)
-            showToast?.(msg, "error");
+            // ✅ Optional error toast (default: true)
+            if (toastOnError) {
+                showToast?.(String(msg), "error");
+            }
         } finally {
             if (typeof loading !== "boolean") setInternalLoading(false);
         }

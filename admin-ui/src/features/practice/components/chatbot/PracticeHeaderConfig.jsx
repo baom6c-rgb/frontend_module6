@@ -23,7 +23,9 @@ export default function PracticeHeaderConfig({
         const n = Number(durationMinutes);
         if (Number.isFinite(n) && n >= 0) return n;
         // fallback nếu chưa có durationMinutes từ parent
-        return Math.max(0, qc * 2);
+        return Number.isFinite(durationMinutes)
+            ? durationMinutes
+            : Math.max(0, qc);
     }, [durationMinutes, qc]);
 
     return (
