@@ -1,5 +1,5 @@
 import React from "react";
-import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 
 import {
@@ -404,6 +404,7 @@ const AdminLayout = () => {
                         </IconButton>
 
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+                            <Link to="/admin" style={{ display: 'flex', textDecoration: 'none' }}>
                             <Box
                                 component="img"
                                 src="/images/logo_codegym_ai.png"
@@ -414,7 +415,7 @@ const AdminLayout = () => {
                                     flex: "0 0 auto",
                                 }}
                             />
-
+                            </Link>
                         </Box>
                     </Box>
                     {/* RIGHT */}

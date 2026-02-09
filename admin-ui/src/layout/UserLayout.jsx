@@ -1,5 +1,5 @@
 import React from "react";
-import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
     Box,
     Drawer,
@@ -399,13 +399,14 @@ export default function UserLayout() {
                         >
                             <MenuRounded />
                         </IconButton>
-
+                        <Link to="/users/dashboard" style={{ display: 'flex', textDecoration: 'none' }}>
                         <Box
                             component="img"
                             src="/images/logo_codegym_ai.png"
                             alt="CodeGym Logo"
                             sx={{ height: 32, width: "auto", flex: "0 0 auto" }}
                         />
+                        </Link>
                     </Box>
 
                     {/* RIGHT */}

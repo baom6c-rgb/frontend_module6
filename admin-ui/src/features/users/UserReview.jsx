@@ -745,7 +745,20 @@ export default function UserReview() {
 
                                 <Divider sx={{ my: 2 }} />
 
-                                <Typography sx={{ fontWeight: 900, mb: 1 }}>Chi tiết bài làm</Typography>
+                                {/* ✅ Trái: Xem lại đáp án (primary) */}
+                                <Button
+                                    variant="contained"
+                                    onClick={handleOpenReview}
+                                    disabled={reviewLoading}
+                                    sx={{
+                                        borderRadius: "12px",
+                                        textTransform: "none",
+                                        fontWeight: 900,
+                                        px: 2.2,
+                                    }}
+                                >
+                                    {reviewLoading ? "Đang tải..." : "Xem lại đáp án"}
+                                </Button>
 
                                 {reviewError && (
                                     <Alert severity="error" sx={{ mb: 2 }}>
@@ -770,37 +783,21 @@ export default function UserReview() {
                         sx={{
                             p: 2,
                             display: "flex",
-                            justifyContent: "space-between",
+                            justifyContent: "flex-end",
                             gap: 1,
                         }}
                     >
-                        {/* ✅ Trái: Xem lại đáp án (primary) */}
-                        <Button
-                            variant="contained"
-                            onClick={handleOpenReview}
-                            disabled={reviewLoading}
-                            sx={{
-                                borderRadius: "12px",
-                                textTransform: "none",
-                                fontWeight: 900,
-                                px: 2.2,
-                            }}
-                        >
-                            {reviewLoading ? "Đang tải..." : "Xem lại đáp án"}
-                        </Button>
-
                         {/* ✅ Phải: Đóng (neutral, khác màu) */}
                         <Button
                             onClick={handleCloseDetail}
                             variant="outlined"
                             sx={{
-                                borderRadius: "12px",
+                                borderRadius: "20px",
                                 textTransform: "none",
                                 fontWeight: 800,
                                 color: COLORS.textPrimary,
-                                borderColor: COLORS.borderLight,
                                 "&:hover": {
-                                    borderColor: "#C9D2E3",
+                                    borderColor: "#2e2d84",
                                     bgcolor: "#F3F6FB",
                                 },
                             }}
