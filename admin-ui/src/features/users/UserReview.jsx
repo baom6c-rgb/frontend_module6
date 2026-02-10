@@ -21,14 +21,17 @@ import {
     CircularProgress,
     Container,
     Button,
+    Chip,
+    useMediaQuery,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import { DataGrid } from "@mui/x-data-grid";
 import {
     Timer,
     Visibility,
     CheckCircle,
     Assignment as AssignmentIcon,
-    TrendingUp as TrendingIcon,
+    TrendingUpRounded,
 } from "@mui/icons-material";
 
 import { getMyExamAttemptsApi } from "../../api/examApi";
@@ -77,7 +80,6 @@ function normalizeAttempt(raw) {
 
     const type = String(raw?.type || raw?.examType || "").toUpperCase();
 
-    // ✅ ưu tiên examTitle/title nếu có (để ăn AI title)
     const name =
         raw?.examTitle ??
         raw?.title ??
@@ -260,6 +262,9 @@ const adaptToPracticeReview = (rawReview, selectedTest) => {
 };
 
 export default function UserReview() {
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
     const [testsRaw, setTestsRaw] = useState([]);
     const tests = useMemo(() => testsRaw.map(normalizeAttempt), [testsRaw]);
 
@@ -402,7 +407,6 @@ export default function UserReview() {
     const getScoreColor = (scorePct) =>
         scorePct >= 80 ? COLORS.success : scorePct >= 50 ? COLORS.warning : COLORS.danger;
 
-    // ✅ Chỉ mở dialog tổng quan (không load review ở đây)
     const handleViewDetail = (test) => {
         setSelectedTest(test);
         setDetailDialogOpen(true);
@@ -413,7 +417,6 @@ export default function UserReview() {
         setReviewLoading(false);
     };
 
-    // ✅ bấm nút mới load review + mở PracticeReviewDialog
     const handleOpenReview = async () => {
         const attemptId = selectedTest?.id;
         if (!attemptId) {
@@ -591,24 +594,29 @@ export default function UserReview() {
     return (
         <Box sx={{ bgcolor: COLORS.bgLight, minHeight: "100vh", py: 4 }}>
             <Container maxWidth="xl">
-                <Typography variant="h4" sx={{ fontWeight: 900, color: COLORS.textPrimary, mb: 3 }}>
-                    Đánh giá học tập
-                </Typography>
+                {/* ✅ Header đồng bộ: title left + chip right */}
+                <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    justifyContent="space-between"
+                    alignItems={{ xs: "stretch", sm: "center" }}
+                    spacing={{ xs: 1.5, sm: 0 }}
+                    sx={{ mb: { xs: 2, md: 3 } }}
+                >
+                    <Typography
+                        variant={isMobile ? "h5" : "h4"}
+                        sx={{ fontWeight: 800, color: COLORS.textPrimary }}
+                    >
+                        Đánh giá học tập
+                    </Typography>
 
-                <Grid container spacing={3} sx={{ mb: 4 }}>
-                    <Grid item xs={12} md={3}>
-                        <StatCard icon={<AssignmentIcon />} title="HOÀN THÀNH" value={stats.completedLessons} subtitle="Bài kiểm tra đã nộp" color={COLORS.primaryBlue} />
-                    </Grid>
-                    <Grid item xs={12} md={3}>
-                        <StatCard icon={<Timer />} title="THỜI GIAN" value={`${stats.onlineTime}h`} subtitle="Tổng thời lượng học" color={COLORS.success} />
-                    </Grid>
-                    <Grid item xs={12} md={3}>
-                        <StatCard icon={<TrendingIcon />} title="ĐIỂM TRUNG BÌNH" value={`${stats.averageScore}%`} subtitle="Tỉ lệ hoàn thành" color={COLORS.warning} />
-                    </Grid>
-                    <Grid item xs={12} md={3}>
-                        <StatCard icon={<CheckCircle />} title="THỨ HẠNG" value={`${stats.rank}/${stats.totalStudents}`} subtitle={`Trong tổng ${stats.totalStudents} học viên`} color={COLORS.secondaryOrange} />
-                    </Grid>
-                </Grid>
+                    <Chip
+                        icon={<TrendingUpRounded />}
+                        label={`Tổng: ${filteredTests.length} kết quả`}
+                        color="primary"
+                        variant="outlined"
+                        sx={{ fontWeight: 700, borderRadius: "8px" }}
+                    />
+                </Stack>
 
                 <FilterPanel
                     search={{ placeholder: "Tìm kiếm theo tên bài thi, module, lớp...", value: searchText, onChange: setSearchText }}
@@ -665,7 +673,6 @@ export default function UserReview() {
                     </Box>
                 </Paper>
 
-                {/* ✅ Dialog tổng quan: actions đặt chuẩn ở footer */}
                 <Dialog
                     open={detailDialogOpen}
                     onClose={handleCloseDetail}
@@ -745,7 +752,6 @@ export default function UserReview() {
 
                                 <Divider sx={{ my: 2 }} />
 
-                                {/* ✅ Trái: Xem lại đáp án (primary) */}
                                 <Button
                                     variant="contained"
                                     onClick={handleOpenReview}
@@ -778,7 +784,6 @@ export default function UserReview() {
                         )}
                     </DialogContent>
 
-                    {/* ✅ Footer actions: trái Đóng (outlined), phải Xem lại đáp án (contained) */}
                     <DialogActions
                         sx={{
                             p: 2,
@@ -787,7 +792,6 @@ export default function UserReview() {
                             gap: 1,
                         }}
                     >
-                        {/* ✅ Phải: Đóng (neutral, khác màu) */}
                         <Button
                             onClick={handleCloseDetail}
                             variant="outlined"
@@ -805,10 +809,8 @@ export default function UserReview() {
                             Đóng
                         </Button>
                     </DialogActions>
-
                 </Dialog>
 
-                {/* ✅ dialog review chỉ mở khi bấm nút */}
                 <PracticeReviewDialog open={openReview} onClose={() => setOpenReview(false)} review={reviewData} />
             </Container>
         </Box>
