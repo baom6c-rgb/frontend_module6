@@ -14,6 +14,100 @@ import {
 } from "@mui/material";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 
+function looksLikeCode(text) {
+    if (!text) return false;
+    const t = String(text);
+
+    const hasNewline = t.includes("\n");
+    const codeHints = [
+        "{",
+        "}",
+        ";",
+        "=>",
+        "function",
+        "const ",
+        "let ",
+        "var ",
+        "import ",
+        "export ",
+        "class ",
+        "public ",
+        "private ",
+        "@",
+        "SELECT ",
+        "FROM ",
+        "WHERE ",
+        "application.",
+        "spring.",
+        "http",
+        "JWT",
+        "Bearer ",
+    ];
+    const hintHit = codeHints.some((h) => t.includes(h));
+    return hasNewline && hintHit;
+}
+
+function splitTitleAndBody(raw) {
+    if (!raw) return { title: "Câu hỏi", body: "" };
+
+    const text = String(raw);
+    const lines = text.split("\n");
+    if (lines.length >= 2) {
+        const first = lines[0].trim();
+        const rest = lines.slice(1).join("\n").trim();
+        return { title: first || "Câu hỏi", body: rest };
+    }
+    return { title: text.trim() || "Câu hỏi", body: "" };
+}
+
+function QuestionContent({ raw }) {
+    const { title, body } = useMemo(() => splitTitleAndBody(raw), [raw]);
+    const showBodyAsCode = useMemo(() => looksLikeCode(body), [body]);
+
+    return (
+        <Box sx={{ mt: 0.25 }}>
+            <Typography
+                sx={{
+                    fontWeight: 900,
+                    color: "#1B2559",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                }}
+            >
+                {title}
+            </Typography>
+
+            {Boolean(body) && (
+                <Box
+                    sx={{
+                        mt: 1,
+                        border: "1px solid #E3E8EF",
+                        borderRadius: 2,
+                        bgcolor: showBodyAsCode ? "#F7F9FC" : "#FFFFFF",
+                        p: 1.25,
+                    }}
+                >
+                    <Typography
+                        sx={{
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                            fontFamily: showBodyAsCode
+                                ? "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
+                                : "inherit",
+                            fontSize: showBodyAsCode ? 13 : 14,
+                            lineHeight: showBodyAsCode ? 1.5 : 1.55,
+                            color: "#1B2559",
+                            fontWeight: 700,
+                        }}
+                    >
+                        {body}
+                    </Typography>
+                </Box>
+            )}
+        </Box>
+    );
+}
+
 export default function PracticeReviewDialog({ open, onClose, review }) {
     const [onlyWrong, setOnlyWrong] = useState(false);
 
@@ -68,6 +162,9 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                     filtered.map((q, idx) => {
                         const type = q?.questionType || "MCQ";
 
+                        // review item có thể dùng content hoặc question (tùy mapper BE)
+                        const rawContent = q?.content ?? q?.question ?? "Câu hỏi";
+
                         return (
                             <Box
                                 key={q.questionId || `${q._no}_${idx}`}
@@ -81,7 +178,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                             >
                                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1, flexWrap: "wrap" }}>
                                     <Typography sx={{ fontWeight: 900, color: "#1B2559" }}>
-                                        Câu {q._no}: {q.content}
+                                        Câu {q._no}:
                                     </Typography>
 
                                     <Chip
@@ -108,6 +205,9 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                         <Chip size="small" label={`Điểm: ${q.score}/${q.maxScore}`} sx={{ fontWeight: 900 }} />
                                     ) : null}
                                 </Stack>
+
+                                {/* ✅ Render content giống QuestionCard: title + body(code block nếu có) */}
+                                <QuestionContent raw={rawContent} />
 
                                 <Divider sx={{ my: 1.5 }} />
 
@@ -140,16 +240,19 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                                     }}
                                                 >
                                                     <Typography sx={{ fontWeight: 900, width: 26 }}>{k}.</Typography>
-                                                    <Typography sx={{ fontWeight: 700, color: "#1B2559" }}>
+                                                    <Typography
+                                                        sx={{
+                                                            fontWeight: 700,
+                                                            color: "#1B2559",
+                                                            whiteSpace: "pre-wrap",
+                                                            wordBreak: "break-word",
+                                                        }}
+                                                    >
                                                         {text || "(trống)"}
                                                     </Typography>
 
                                                     <Box sx={{ flex: 1 }} />
 
-                                                    {/* ✅ yêu cầu mới:
-                                                        - câu đúng: bỏ "Đáp án đúng" + "Bạn chọn" -> chỉ "ĐÚNG"
-                                                        - câu sai: bỏ "Bạn chọn" (vẫn giữ hiển thị đúng/sai qua border + chip phía trên)
-                                                    */}
                                                     {isCorrect ? (
                                                         <Chip size="small" label="ĐÚNG" sx={{ fontWeight: 900 }} />
                                                     ) : null}
