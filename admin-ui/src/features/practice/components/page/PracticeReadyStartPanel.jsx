@@ -2,13 +2,16 @@
 import React, { useMemo } from "react";
 import { Box, Paper, Typography, Button, Stack, Divider } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import { CheckCircleRounded, PlayArrowRounded, RestartAltRounded } from "@mui/icons-material";
+import {
+    CheckCircleRounded,
+    PlayArrowRounded,
+    RestartAltRounded,
+} from "@mui/icons-material";
 
 const COLORS = {
     primary: "#2E2D84",
     primaryDeep: "#1E1D6F",
 
-    // ✅ đồng bộ accent project
     orange: "#EC5E32",
     orangeDeep: "#D5522B",
 
@@ -16,6 +19,12 @@ const COLORS = {
     textPrimary: "#1B2559",
     textSecondary: "#6C757D",
     success: "#10B981",
+};
+
+const toPositiveIntOrNull = (v) => {
+    const n = Number.parseInt(String(v ?? ""), 10);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return n;
 };
 
 const toPositiveNumberOrNull = (v) => {
@@ -27,6 +36,9 @@ const toPositiveNumberOrNull = (v) => {
 export default function PracticeReadyStartPanel({
                                                     questionCount,
                                                     durationMinutes,
+
+                                                    // ✅ Flow mới: READY tin server -> prop này giữ để không phá nơi gọi cũ
+                                                    // nhưng không dùng để tính toán nữa
                                                     minutesPerQuestion,
 
                                                     loading = false,
@@ -34,26 +46,35 @@ export default function PracticeReadyStartPanel({
                                                     onStart,
                                                     onReset,
                                                 }) {
-    const safeCount = useMemo(() => {
-        const n = Number.parseInt(String(questionCount ?? ""), 10);
-        if (!Number.isFinite(n) || n <= 0) return 0;
-        return n;
-    }, [questionCount]);
+    // ✅ READY chỉ vào khi generate xong (server trả về count + duration)
+    const safeCount = useMemo(() => toPositiveIntOrNull(questionCount) ?? 0, [questionCount]);
 
-    const mpq = useMemo(() => toPositiveNumberOrNull(minutesPerQuestion), [minutesPerQuestion]);
-
-    // ✅ READY: ưu tiên durationMinutes (state đã được set từ rule/settings).
-    // fallback nếu durationMinutes chưa có -> count * mpq
     const uiDuration = useMemo(() => {
         const d = toPositiveNumberOrNull(durationMinutes);
-        if (d != null) return Math.max(1, Math.ceil(d));
-        if (mpq != null && safeCount > 0) return Math.max(1, Math.ceil(safeCount * mpq));
-        return null;
-    }, [durationMinutes, mpq, safeCount]);
+        if (d == null) return null;
+        return Math.max(1, Math.ceil(d));
+    }, [durationMinutes]);
+
+    const canStart = useMemo(() => !loading && safeCount > 0 && uiDuration != null, [loading, safeCount, uiDuration]);
+
+    const showWarning = useMemo(
+        () => !loading && (safeCount <= 0 || uiDuration == null),
+        [loading, safeCount, uiDuration]
+    );
+
+    const handleStart = () => {
+        if (!canStart) return;
+        onStart?.();
+    };
+
+    const handleReset = () => {
+        if (loading) return;
+        onReset?.();
+    };
 
     return (
         <Box sx={{ width: "100%" }}>
-            {/* Header (match style của PracticeIdleCreatePanel) */}
+            {/* Header */}
             <Box
                 sx={{
                     background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDeep} 100%)`,
@@ -95,14 +116,7 @@ export default function PracticeReadyStartPanel({
                         <Typography sx={{ fontSize: 18, fontWeight: 900, color: "#fff", letterSpacing: "-0.01em" }}>
                             Đã tạo đề xong
                         </Typography>
-                        <Typography
-                            sx={{
-                                fontSize: 12.5,
-                                fontWeight: 600,
-                                color: "rgba(255,255,255,0.86)",
-                                mt: 0.3,
-                            }}
-                        >
+                        <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: "rgba(255,255,255,0.86)", mt: 0.3 }}>
                             Kiểm tra nhanh thông tin và bấm bắt đầu làm bài.
                         </Typography>
                     </Box>
@@ -120,20 +134,21 @@ export default function PracticeReadyStartPanel({
                     bgcolor: "#fff",
                 }}
             >
-                {/* Info box (match vibe Idle panel) */}
+                {/* Info */}
                 <Paper
                     elevation={0}
                     sx={{
                         borderRadius: 16,
                         border: `1px solid ${COLORS.border}`,
-                        background: `linear-gradient(135deg, ${alpha(COLORS.primary, 0.06)} 0%, ${alpha(
-                            COLORS.orange,
-                            0.06
-                        )} 100%)`,
+                        background: `linear-gradient(135deg, ${alpha(COLORS.primary, 0.06)} 0%, ${alpha(COLORS.orange, 0.06)} 100%)`,
                         p: 2,
                     }}
                 >
-                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} alignItems={{ xs: "flex-start", sm: "center" }}>
+                    <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1.25}
+                        alignItems={{ xs: "flex-start", sm: "center" }}
+                    >
                         <Box
                             sx={{
                                 width: 36,
@@ -154,23 +169,29 @@ export default function PracticeReadyStartPanel({
                             <Typography sx={{ fontSize: 13.5, fontWeight: 900, color: COLORS.textPrimary }}>
                                 Đề đã sẵn sàng
                             </Typography>
+
                             <Typography sx={{ fontSize: 12.5, color: COLORS.textSecondary, mt: 0.35 }}>
-                                Số câu: <b>{safeCount || "—"}</b> · Thời gian:{" "}
+                                Số câu: <b>{safeCount > 0 ? safeCount : "—"}</b> · Thời gian:{" "}
                                 <b>{uiDuration != null ? `${uiDuration} phút` : "—"}</b>
                             </Typography>
+
+                            {showWarning && (
+                                <Typography sx={{ fontSize: 12, color: COLORS.textSecondary, mt: 0.6 }}>
+                                    Thiếu dữ liệu đề từ server (số câu / thời gian). Hãy bấm “Đổi học liệu” và tạo đề lại.
+                                </Typography>
+                            )}
                         </Box>
                     </Stack>
                 </Paper>
 
                 <Divider sx={{ my: 2 }} />
 
-                {/* CTA */}
                 <Stack spacing={1.25}>
                     <Button
                         fullWidth
                         variant="contained"
-                        onClick={onStart}
-                        disabled={loading}
+                        onClick={handleStart}
+                        disabled={!canStart}
                         startIcon={<PlayArrowRounded />}
                         sx={{
                             borderRadius: 3,
@@ -186,7 +207,7 @@ export default function PracticeReadyStartPanel({
                     <Button
                         fullWidth
                         variant="outlined"
-                        onClick={onReset}
+                        onClick={handleReset}
                         disabled={loading}
                         startIcon={<RestartAltRounded />}
                         sx={{

@@ -1,13 +1,6 @@
 // src/features/practice/components/page/PracticeCanvasPanel.jsx
 import React from "react";
-import {
-    Box,
-    Button,
-    Paper,
-    Stack,
-    Tooltip,
-    Typography,
-} from "@mui/material";
+import { Box, Button, Paper, Stack, Tooltip, Typography } from "@mui/material";
 import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
 
 import PracticePlayer from "../PracticePlayer";
@@ -47,7 +40,6 @@ export default function PracticeCanvasPanel({
                                                 result,
 
                                                 onGenerate,
-                                                onChangeQuestionCount,
                                                 onRequestStart,
                                                 onRequestReset,
 
@@ -60,8 +52,9 @@ export default function PracticeCanvasPanel({
                                             }) {
     if (!open) return null;
 
-    // ✅ badge hiển thị sau khi bấm “Tạo đề ngay” (READY/DOING/RESULT)
     const showBadge = mode !== MODE.IDLE;
+
+    const badgeCount = mode === MODE.RESULT ? Number(resultQuestionCount) : Number(questionCount);
 
     return (
         <Box
@@ -107,7 +100,7 @@ export default function PracticeCanvasPanel({
                         </Button>
                     </Tooltip>
 
-                    {/* ✅ Badge text bo góc: Số câu · Thời gian */}
+                    {/* Badge text bo góc: Số câu · Thời gian */}
                     {showBadge && (
                         <Paper
                             elevation={0}
@@ -122,8 +115,7 @@ export default function PracticeCanvasPanel({
                             }}
                         >
                             <Typography sx={{ fontSize: 12.5, color: COLORS.textSecondary }}>
-                                Số câu: <b>{mode === MODE.RESULT ? Number(resultQuestionCount) : Number(questionCount)}</b>{" "}
-                                · Thời gian:{" "}
+                                Số câu: <b>{Number.isFinite(badgeCount) && badgeCount > 0 ? badgeCount : "—"}</b> · Thời gian:{" "}
                                 <b>{Number(durationMinutes) > 0 ? `${Number(durationMinutes)} phút` : "—"}</b>
                             </Typography>
                         </Paper>
@@ -132,20 +124,17 @@ export default function PracticeCanvasPanel({
             </Box>
 
             <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 2.5 }}>
-                {/* ✅ IDLE: UI mới (không đổi flow) */}
                 {mode === MODE.IDLE && (
                     <PracticeIdleCreatePanel
                         questionCount={questionCount}
                         durationMinutes={durationMinutes}
                         minutesPerQuestion={minutesPerQuestion}
-                        onChangeQuestionCount={onChangeQuestionCount}
                         onGenerate={onGenerate}
                         loading={loading}
                         materialPresent={materialPresent}
                     />
                 )}
 
-                {/* ✅ READY: thiết kế lại theo cùng style/layout của IDLE */}
                 {mode === MODE.READY && (
                     <PracticeReadyStartPanel
                         questionCount={questionCount}
@@ -157,7 +146,6 @@ export default function PracticeCanvasPanel({
                     />
                 )}
 
-                {/* RESULT */}
                 {mode === MODE.RESULT && (
                     <PracticeResult
                         result={result}
@@ -169,7 +157,6 @@ export default function PracticeCanvasPanel({
                     />
                 )}
 
-                {/* DOING */}
                 {mode === MODE.DOING && (
                     <PracticePlayer
                         ref={playerRef}
