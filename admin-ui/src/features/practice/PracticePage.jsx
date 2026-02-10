@@ -1,12 +1,6 @@
 // src/features/practice/PracticePage.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-    Box,
-    IconButton,
-    Paper,
-    Tooltip,
-    Typography,
-} from "@mui/material";
+import { Box, IconButton, Paper, Tooltip, Typography } from "@mui/material";
 
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
@@ -43,6 +37,12 @@ import {
     validateKeywords,
 } from "./utils/practicePage.helpers";
 
+const toPositiveIntOrNull = (v) => {
+    const n = Number.parseInt(String(v ?? ""), 10);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return n;
+};
+
 export default function PracticePage() {
     const { showToast } = useToast();
 
@@ -78,7 +78,8 @@ export default function PracticePage() {
     const [loadingMessage, setLoadingMessage] = useState("Vui lòng chờ...");
 
     // ===== Config =====
-    const [questionCount, setQuestionCount] = useState(10);
+    // ✅ Student không được chọn count nữa -> source of truth là BE response
+    const [questionCount, setQuestionCount] = useState(null); // number|null
     const [durationMinutes, setDurationMinutes] = useState(0);
 
     // from BE SystemSettings (fallback default)
@@ -117,7 +118,7 @@ export default function PracticePage() {
     // ===== Assistant tab =====
     const [assistantMode, setAssistantMode] = useState(ASSISTANT_MODE.GENERATE);
 
-    const lockGenerate = mode === MODE.DOING; // DOING => ẩn "Tạo đề" + chặn switch về GENERATE
+    const lockGenerate = mode === MODE.DOING;
     const hideStudyWhenGenerate = assistantMode === ASSISTANT_MODE.GENERATE;
 
     const setAssistantModeSafe = useCallback(
@@ -133,8 +134,7 @@ export default function PracticePage() {
         {
             id: uid("a"),
             role: "assistant",
-            text:
-                "Gửi học liệu (upload/paste). Sau đó bấm nút Gửi để Fly AI tạo đề. Khi tạo xong bạn có thể “Bắt đầu làm bài”.",
+            text: "Gửi học liệu (upload/paste). Sau đó bấm nút Gửi để Fly AI tạo đề. Khi tạo xong bạn có thể “Bắt đầu làm bài”.",
         },
     ]);
 
@@ -156,9 +156,7 @@ export default function PracticePage() {
     const resetStudyChat = useCallback(() => {
         setStudySessionId(null);
         setStudyBooting(false);
-        setStudyMessages([
-            { id: "intro", role: "assistant", text: "Nhập từ khóa liên quan bài học. Mình chỉ gợi ý khái niệm tổng quát, không đưa đáp án." },
-        ]);
+        setStudyMessages([{ id: "intro", role: "assistant", text: "Nhập từ khóa liên quan bài học. Mình chỉ gợi ý khái niệm tổng quát, không đưa đáp án." }]);
     }, []);
 
     const messagesToRender = useMemo(() => {
@@ -231,19 +229,24 @@ export default function PracticePage() {
     }, []);
 
     // ===== Auto-fill duration in READY-TO-GENERATE state =====
+    // ✅ Flow mới: count do admin set, FE không đoán được trước
+    // Chỉ estimate khi đã có questionCount thật (từ server / resume)
     useEffect(() => {
         const mat = materialIdRef.current ?? materialId;
+        const safeCount = toPositiveIntOrNull(questionCount);
+
         const shouldEstimate =
             mode === MODE.IDLE &&
             Boolean(mat) &&
             !sessionTokenRef.current &&
             !sessionToken &&
             !attemptDetail &&
-            !result;
+            !result &&
+            safeCount != null;
 
         if (!shouldEstimate) return;
 
-        const est = estimateDurationMinutesByRule(questionCount, minutesPerQuestionRef.current);
+        const est = estimateDurationMinutesByRule(safeCount, minutesPerQuestionRef.current);
         if (est > 0 && est !== Number(durationMinutes)) setDurationMinutes(est);
     }, [attemptDetail, durationMinutes, materialId, mode, questionCount, result, sessionToken]);
 
@@ -271,10 +274,11 @@ export default function PracticePage() {
 
             setMode(MODE.IDLE);
             setDurationMinutes(0);
+            setQuestionCount(null); // ✅ quan trọng
             setIsCanvasOpen(true);
 
             setAssistantMode(ASSISTANT_MODE.GENERATE);
-            resetStudyChat(); // ✅ chỉ reset khi đổi học liệu
+            resetStudyChat();
 
             if (opts?.keepMessages) {
                 appendMessage({ role: "assistant", text: "Ok! Upload/paste học liệu mới rồi bấm Gửi để tạo đề nhé." });
@@ -348,9 +352,9 @@ export default function PracticePage() {
 
                 setMode(MODE.IDLE);
                 setDurationMinutes(0);
+                setQuestionCount(null); // ✅ quan trọng
 
                 clearActiveSession();
-
                 resetStudyChat();
 
                 const extracted = await waitForExtractedTextOrReady(id);
@@ -413,9 +417,9 @@ export default function PracticePage() {
 
                 setMode(MODE.IDLE);
                 setDurationMinutes(0);
+                setQuestionCount(null); // ✅ quan trọng
 
                 clearActiveSession();
-
                 resetStudyChat();
 
                 const extracted = await waitForExtractedTextOrReady(id);
@@ -539,34 +543,34 @@ export default function PracticePage() {
             return { ok: false };
         }
 
-        const n = Number(questionCount);
-        if (!Number.isFinite(n) || n < 1) {
-            showToast("Số câu hỏi chưa hợp lệ.", "warning");
-            return { ok: false };
-        }
-
         clearPersistedResult();
 
         setLoading(true);
         setLoadingMessage("Fly AI đang tạo đề…");
         appendMessage({ role: "assistant", text: "Fly AI đang tạo đề…" });
 
+        const dummyCount = 10;
+
         try {
             const data = await practiceApi.generateSessionV2({
                 materialId: matId,
-                numberOfQuestions: Number(questionCount),
+                numberOfQuestions: dummyCount,
             });
 
             const token = data?.sessionToken;
-            const dur = data?.durationMinutes;
+            const dur = Number(data?.durationMinutes);
+            const beCount = Number(data?.numberOfQuestions);
 
             if (!token) throw new Error("Missing sessionToken from server");
-            if (!Number.isFinite(Number(dur))) throw new Error("Missing durationMinutes from server");
+            if (!Number.isFinite(dur) || dur <= 0) throw new Error("Missing durationMinutes from server");
+            if (!Number.isFinite(beCount) || beCount <= 0) throw new Error("Missing numberOfQuestions from server");
 
             setSessionToken(token);
             sessionTokenRef.current = token;
 
-            setDurationMinutes(Number(dur));
+            // ✅ SOURCE OF TRUTH
+            setQuestionCount(beCount);
+            setDurationMinutes(dur);
 
             setStartedAtIso(null);
             setDeadlineIso(null);
@@ -579,18 +583,18 @@ export default function PracticePage() {
                 sessionToken: token,
                 attemptId: token,
                 materialId: matId,
-                questionCount: Number(questionCount),
-                durationMinutes: Number(dur),
+                questionCount: beCount,
+                durationMinutes: dur,
                 startedAtIso: null,
                 deadlineIso: null,
             });
 
             appendMessage({
                 role: "assistant",
-                text: `Đã tạo đề xong. Thời gian làm bài: ${Number(dur)} phút. Bắt đầu làm bài ngay!`,
+                text: `Đã tạo đề xong. Số câu: ${beCount}. Thời gian làm bài: ${dur} phút. Bắt đầu làm bài ngay!`,
             });
 
-            return { ok: true, token, durationMinutes: Number(dur) };
+            return { ok: true, token, durationMinutes: dur };
         } catch (e) {
             console.error(e);
             const status = e?.response?.status;
@@ -601,7 +605,7 @@ export default function PracticePage() {
         } finally {
             setLoading(false);
         }
-    }, [appendMessage, clearPersistedResult, materialId, questionCount, saveActiveSession, showToast]);
+    }, [appendMessage, clearPersistedResult, materialId, saveActiveSession, showToast]);
 
     // ===== Start session =====
     const startSessionV2 = useCallback(async () => {
@@ -626,7 +630,10 @@ export default function PracticePage() {
             setAttemptDetail(detail);
 
             const qLen = Array.isArray(detail?.questions) ? detail.questions.length : null;
-            if (qLen != null) setAttemptQuestionCount(qLen);
+            if (qLen != null) {
+                setAttemptQuestionCount(qLen);
+                setQuestionCount((prev) => (toPositiveIntOrNull(prev) != null ? prev : qLen));
+            }
 
             const startedAt = data?.startedAt || null;
             const deadline = data?.deadline || null;
@@ -637,15 +644,16 @@ export default function PracticePage() {
             setMode(MODE.DOING);
             setIsCanvasOpen(true);
 
-            // ✅ auto switch sang STUDY (DOING ẩn Tạo đề)
             setAssistantModeSafe(ASSISTANT_MODE.STUDY);
+
+            const safeCount = toPositiveIntOrNull(questionCount) ?? (qLen != null ? qLen : 0);
 
             saveActiveSession({
                 mode: MODE.DOING,
                 sessionToken: token,
                 attemptId: token,
                 materialId: materialIdRef.current ?? materialId,
-                questionCount: Number(questionCount),
+                questionCount: safeCount,
                 durationMinutes: Number.isFinite(Number(data?.durationMinutes)) ? Number(data.durationMinutes) : Number(durationMinutes),
                 startedAtIso: startedAt,
                 deadlineIso: deadline,
@@ -697,11 +705,11 @@ export default function PracticePage() {
                 const frozenCount =
                     (typeof attemptQuestionCount === "number" ? attemptQuestionCount : null) ??
                     (Array.isArray(attemptDetail?.questions) ? attemptDetail.questions.length : null) ??
-                    Number(questionCount);
+                    (toPositiveIntOrNull(questionCount) ?? 0);
 
                 savePersistedResult({
                     materialId: materialIdRef.current ?? materialId ?? null,
-                    questionCount: Number(questionCount),
+                    questionCount: toPositiveIntOrNull(questionCount) ?? frozenCount,
                     attemptQuestionCount: frozenCount,
                     durationMinutes: Number(durationMinutes),
                     result: data,
@@ -726,18 +734,7 @@ export default function PracticePage() {
                 setLoading(false);
             }
         },
-        [
-            appendMessage,
-            attemptDetail,
-            attemptQuestionCount,
-            durationMinutes,
-            materialId,
-            questionCount,
-            saveActiveSession,
-            savePersistedResult,
-            sessionToken,
-            showToast,
-        ]
+        [appendMessage, attemptDetail, attemptQuestionCount, durationMinutes, materialId, questionCount, saveActiveSession, savePersistedResult, sessionToken, showToast]
     );
 
     // ===== Review =====
@@ -785,7 +782,10 @@ export default function PracticePage() {
                 setAttemptDetail(detail);
 
                 const qLen = Array.isArray(detail?.questions) ? detail.questions.length : null;
-                if (qLen != null) setAttemptQuestionCount(qLen);
+                if (qLen != null) {
+                    setAttemptQuestionCount(qLen);
+                    setQuestionCount(qLen); // ✅ retest count theo đề thật
+                }
 
                 const startedAt = data?.startedAt || null;
                 const deadline = data?.deadline || null;
@@ -802,7 +802,7 @@ export default function PracticePage() {
                     sessionToken: token,
                     attemptId: token,
                     materialId: materialIdRef.current ?? materialId ?? null,
-                    questionCount: Number(questionCount),
+                    questionCount: qLen != null ? qLen : (toPositiveIntOrNull(questionCount) ?? 0),
                     durationMinutes: Number.isFinite(Number(data?.durationMinutes)) ? Number(data.durationMinutes) : Number(durationMinutes),
                     startedAtIso: startedAt,
                     deadlineIso: deadline,
@@ -871,6 +871,10 @@ export default function PracticePage() {
 
                 if (Number.isFinite(Number(data?.durationMinutes))) setDurationMinutes(Number(data.durationMinutes));
 
+                // ✅ nếu BE có trả count ở session API thì sync (không phải lúc nào cũng có)
+                const beCount = toPositiveIntOrNull(data?.numberOfQuestions ?? data?.questionCount ?? data?.totalQuestions);
+                if (beCount != null) setQuestionCount(beCount);
+
                 const startedAt = data?.startedAt || null;
                 const deadline = data?.deadline || null;
                 setStartedAtIso(startedAt);
@@ -883,7 +887,10 @@ export default function PracticePage() {
                         setAttemptDetail(detail);
 
                         const qLen = Array.isArray(detail?.questions) ? detail.questions.length : null;
-                        if (qLen != null) setAttemptQuestionCount(qLen);
+                        if (qLen != null) {
+                            setAttemptQuestionCount(qLen);
+                            setQuestionCount(qLen); // ✅ chắc nhất: count theo questions length
+                        }
 
                         setMode(MODE.DOING);
                         setIsCanvasOpen(true);
@@ -901,7 +908,7 @@ export default function PracticePage() {
                         sessionToken: token,
                         attemptId: token,
                         materialId: sess?.materialId ?? null,
-                        questionCount: typeof sess?.questionCount === "number" ? sess.questionCount : questionCount,
+                        questionCount: typeof sess?.questionCount === "number" ? sess.questionCount : 0,
                         durationMinutes: Number.isFinite(Number(data?.durationMinutes)) ? Number(data.durationMinutes) : Number(sess?.durationMinutes || 0),
                         startedAtIso: startedAt,
                         deadlineIso: deadline,
@@ -917,7 +924,7 @@ export default function PracticePage() {
                         sessionToken: token,
                         attemptId: token,
                         materialId: sess?.materialId ?? null,
-                        questionCount: typeof sess?.questionCount === "number" ? sess.questionCount : questionCount,
+                        questionCount: typeof sess?.questionCount === "number" ? sess.questionCount : 0,
                         durationMinutes: Number.isFinite(Number(data?.durationMinutes)) ? Number(data.durationMinutes) : Number(sess?.durationMinutes || 0),
                         startedAtIso: null,
                         deadlineIso: null,
@@ -939,7 +946,7 @@ export default function PracticePage() {
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [appendMessage, questionCount, saveActiveSession, setAssistantModeSafe]);
+    }, [appendMessage, saveActiveSession, setAssistantModeSafe]);
 
     // ===== Timer start ts =====
     const attemptStartTs = useMemo(() => {
@@ -980,12 +987,11 @@ export default function PracticePage() {
     const resultQuestionCount = useMemo(() => {
         if (typeof attemptQuestionCount === "number") return attemptQuestionCount;
         if (Array.isArray(attemptDetail?.questions)) return attemptDetail.questions.length;
-        return Number(questionCount);
+        return toPositiveIntOrNull(questionCount) ?? 0;
     }, [attemptDetail?.questions, attemptQuestionCount, questionCount]);
 
     // ===== Canvas actions (with confirm rules) =====
     const handleRequestReset = useCallback(() => {
-        // requirement: after created (READY/DOING/RESULT), reset needs confirm
         if (mode !== MODE.IDLE) {
             confirmRef.current?.requestReset?.();
             return;
@@ -994,17 +1000,12 @@ export default function PracticePage() {
     }, [mode, resetPracticeState]);
 
     const handleRequestStart = useCallback(() => {
-        // only READY has start; confirm required
         confirmRef.current?.requestStart?.();
     }, []);
 
-    const handlePlayerSubmit = useCallback(
-        (answersArray, meta) => {
-            // requirement: confirm submit for manual submit; timedOut auto submit
-            confirmRef.current?.requestSubmit?.(answersArray, meta);
-        },
-        []
-    );
+    const handlePlayerSubmit = useCallback((answersArray, meta) => {
+        confirmRef.current?.requestSubmit?.(answersArray, meta);
+    }, []);
 
     return (
         <Box
@@ -1077,9 +1078,7 @@ export default function PracticePage() {
                     allowUpload={allowUpload}
                     onUploadFile={handleUploadFile}
                     onSendText={assistantMode === ASSISTANT_MODE.GENERATE ? handleSendText : handleAskStudy}
-                    disabledComposer={
-                        loading || (assistantMode === ASSISTANT_MODE.STUDY && !materialPresent)
-                    }
+                    disabledComposer={loading || (assistantMode === ASSISTANT_MODE.STUDY && !materialPresent)}
                     helperText={
                         assistantMode === ASSISTANT_MODE.GENERATE
                             ? "Upload file xong bấm Gửi để Fly AI tạo đề."
@@ -1104,7 +1103,7 @@ export default function PracticePage() {
                         attemptStartTs={attemptStartTs}
                         result={result}
                         onGenerate={generateSessionV2}
-                        onChangeQuestionCount={(v) => setQuestionCount(Number(v))}
+                        // ✅ removed: onChangeQuestionCount
                         onRequestStart={handleRequestStart}
                         onRequestReset={handleRequestReset}
                         onSubmit={handlePlayerSubmit}
@@ -1126,6 +1125,7 @@ export default function PracticePage() {
                             sessionTokenRef.current = "";
 
                             setDurationMinutes(0);
+                            setQuestionCount(null);
 
                             clearActiveSession();
                             clearPersistedResult();
@@ -1166,11 +1166,7 @@ export default function PracticePage() {
                                 },
                             }}
                         >
-                            {isCanvasOpen ? (
-                                <ChevronRightRoundedIcon sx={{ color: "#fff" }} />
-                            ) : (
-                                <ChevronLeftRoundedIcon sx={{ color: "#fff" }} />
-                            )}
+                            {isCanvasOpen ? <ChevronRightRoundedIcon sx={{ color: "#fff" }} /> : <ChevronLeftRoundedIcon sx={{ color: "#fff" }} />}
                         </IconButton>
                     </Tooltip>
                 </Box>

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Paper, Typography, Divider, Chip, Stack } from "@mui/material";
-import { practiceApi } from "../../../api/practiceApi"; // ✅ thêm
+import { practiceApi } from "../../../api/practiceApi"; // ✅ dùng cho retest status
 
 function clampInt(n, min, max) {
     const x = Number(n);
@@ -21,139 +21,6 @@ function formatNumberTrim(n, maxDecimals) {
     if (!Number.isFinite(x)) return "0";
     const s = x.toFixed(maxDecimals);
     return s.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
-}
-
-/**
- * Split AI feedback into:
- * - greeting (1 line)
- * - strengths
- * - weaknesses
- * - recommendations
- *
- * Supports:
- * - JSON: { greeting, strengths, weaknesses, recommendations } (or pros/cons)
- * - Headings: "Điểm mạnh:", "Điểm yếu:", "Gợi ý ôn tập:" (and EN aliases)
- * - If cannot detect => fallback into weaknesses
- */
-function splitAiFeedback(raw) {
-    const text = String(raw || "").trim();
-    if (!text) return { greeting: "", strengths: [], weaknesses: [], recommendations: [], raw: "" };
-
-    const normalizeBullet = (s) =>
-        String(s || "")
-            .replace(/^[-•\u2022]\s*/, "")
-            .trim();
-
-    // 1) Try JSON parse
-    try {
-        const maybe = JSON.parse(text);
-        const greeting = String(maybe?.greeting ?? maybe?.hello ?? "").trim();
-
-        const s = maybe?.strengths ?? maybe?.pros ?? [];
-        const w = maybe?.weaknesses ?? maybe?.cons ?? [];
-        const r = maybe?.recommendations ?? maybe?.suggestions ?? maybe?.studyTips ?? [];
-
-        const strengths = Array.isArray(s) ? s.map(normalizeBullet).filter(Boolean) : [];
-        const weaknesses = Array.isArray(w) ? w.map(normalizeBullet).filter(Boolean) : [];
-        const recommendations = Array.isArray(r) ? r.map(normalizeBullet).filter(Boolean) : [];
-
-        if (greeting || strengths.length || weaknesses.length || recommendations.length) {
-            return { greeting, strengths, weaknesses, recommendations, raw: text };
-        }
-    } catch {}
-
-    // 2) Line-based parsing with headings
-    const lines = text
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .filter(Boolean);
-
-    // greeting: take the first line if it looks like greeting (Chào/Hello/Hi/Hey)
-    let greeting = "";
-    let startIdx = 0;
-    if (lines.length) {
-        const first = lines[0];
-        const lower = first.toLowerCase();
-        const looksGreeting =
-            lower.startsWith("chào ") ||
-            lower.startsWith("hello") ||
-            lower.startsWith("hi ") ||
-            lower.startsWith("hey ");
-        if (looksGreeting) {
-            greeting = first;
-            startIdx = 1;
-        }
-    }
-
-    const content = lines.slice(startIdx).join("\n");
-
-    const detectHeadingIndex = (candidates) => {
-        for (const h of candidates) {
-            const re = new RegExp(`(^|\\n)\\s*${h}\\s*[:：\\-]`, "i");
-            const m = re.exec(content);
-            if (m) return m.index;
-        }
-        return -1;
-    };
-
-    const H = {
-        strengths: ["điểm mạnh", "strengths", "pros", "ưu điểm"],
-        weaknesses: ["điểm yếu", "weaknesses", "cons", "nhược điểm"],
-        recommendations: [
-            "gợi ý ôn tập",
-            "gợi ý",
-            "khuyến nghị",
-            "recommendations",
-            "suggestions",
-            "study tips",
-        ],
-    };
-
-    const sIdx = detectHeadingIndex(H.strengths);
-    const wIdx = detectHeadingIndex(H.weaknesses);
-    const rIdx = detectHeadingIndex(H.recommendations);
-
-    const extractSection = (fromIdx, toIdx) => {
-        const chunk = content.slice(fromIdx, toIdx >= 0 ? toIdx : undefined).trim();
-        const withoutHeading = chunk.replace(/^[^\n]*[:：\-]\s*/i, "").trim();
-        return withoutHeading
-            .split(/\n+/)
-            .map((x) => normalizeBullet(x))
-            .filter(Boolean);
-    };
-
-    const sections = [
-        { key: "strengths", idx: sIdx },
-        { key: "weaknesses", idx: wIdx },
-        { key: "recommendations", idx: rIdx },
-    ]
-        .filter((x) => x.idx >= 0)
-        .sort((a, b) => a.idx - b.idx);
-
-    if (sections.length) {
-        const out = { greeting, strengths: [], weaknesses: [], recommendations: [], raw: text };
-
-        for (let i = 0; i < sections.length; i++) {
-            const cur = sections[i];
-            const next = sections[i + 1];
-            out[cur.key] = extractSection(cur.idx, next ? next.idx : -1);
-        }
-        return out;
-    }
-
-    // 3) Fallback: keep all as weaknesses (actionable)
-    const sentences = content
-        .split(/(?<=[.!?。！？])\s+/)
-        .map((x) => x.trim())
-        .filter(Boolean);
-
-    return {
-        greeting,
-        strengths: [],
-        weaknesses: sentences.length ? sentences : content ? [content] : [],
-        recommendations: [],
-        raw: text,
-    };
 }
 
 function BulletList({ items, emptyText }) {
@@ -178,6 +45,157 @@ function BulletList({ items, emptyText }) {
     );
 }
 
+/**
+ * Split AI feedback into:
+ * - greeting (optional)
+ * - strengths
+ * - weaknesses
+ * - recommendations
+ *
+ * Robust parsing:
+ * - Try JSON first (if BE ever returns structured)
+ * - Else: line-by-line state machine using headings:
+ *   "Điểm mạnh", "Điểm yếu", "Gợi ý ôn tập" (+ EN aliases)
+ * - Headings can appear with/without ":" and can be prefixed by bullets "- • *"
+ */
+function splitAiFeedback(raw) {
+    const text = String(raw || "")
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .trim();
+
+    const empty = { greeting: "", strengths: [], weaknesses: [], recommendations: [], raw: text };
+    if (!text) return empty;
+
+    const normalizeBullet = (s) =>
+        String(s || "")
+            .replace(/^\s*[-•\u2022*]+\s*/g, "")
+            .trim();
+
+    const normalizeHeadingKey = (s) => {
+        return normalizeBullet(s)
+            .replace(/[:：]\s*$/g, "")
+            .trim()
+            .toLowerCase();
+    };
+
+    const isGreetingLine = (line) => {
+        const lower = String(line || "").trim().toLowerCase();
+        return (
+            lower.startsWith("chào ") ||
+            lower.startsWith("xin chào") ||
+            lower.startsWith("hello") ||
+            lower.startsWith("hi ") ||
+            lower.startsWith("hey ")
+        );
+    };
+
+    // 1) Try JSON parse (optional / future-proof)
+    try {
+        const maybe = JSON.parse(text);
+
+        const greeting = String(maybe?.greeting ?? maybe?.hello ?? "").trim();
+
+        const s = maybe?.strengths ?? maybe?.pros ?? [];
+        const w = maybe?.weaknesses ?? maybe?.cons ?? [];
+        const r = maybe?.recommendations ?? maybe?.suggestions ?? maybe?.studyTips ?? [];
+
+        const strengths = Array.isArray(s) ? s.map(normalizeBullet).filter(Boolean) : [];
+        const weaknesses = Array.isArray(w) ? w.map(normalizeBullet).filter(Boolean) : [];
+        const recommendations = Array.isArray(r) ? r.map(normalizeBullet).filter(Boolean) : [];
+
+        if (greeting || strengths.length || weaknesses.length || recommendations.length) {
+            return { greeting, strengths, weaknesses, recommendations, raw: text };
+        }
+    } catch {}
+
+    // 2) State machine by headings
+    const lines = text
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
+
+    let greeting = "";
+    let idxStart = 0;
+
+    if (lines.length && isGreetingLine(lines[0])) {
+        greeting = lines[0];
+        idxStart = 1;
+    }
+
+    const H = {
+        strengths: new Set(["điểm mạnh", "strengths", "pros", "ưu điểm"]),
+        weaknesses: new Set(["điểm yếu", "weaknesses", "cons", "nhược điểm"]),
+        recommendations: new Set([
+            "gợi ý ôn tập",
+            "gợi ý",
+            "khuyến nghị",
+            "recommendations",
+            "suggestions",
+            "study tips",
+            "study tip",
+        ]),
+    };
+
+    const out = { greeting, strengths: [], weaknesses: [], recommendations: [], raw: text };
+
+    let current = null; // "strengths" | "weaknesses" | "recommendations" | null
+
+    const pushLine = (key, line) => {
+        const cleaned = normalizeBullet(line);
+        if (!cleaned) return;
+
+        // loại bỏ heading bị lặp lại trong body
+        const nk = normalizeHeadingKey(cleaned);
+        if (H.strengths.has(nk) || H.weaknesses.has(nk) || H.recommendations.has(nk)) return;
+
+        out[key].push(cleaned);
+    };
+
+    for (let i = idxStart; i < lines.length; i++) {
+        const line = lines[i];
+        const key = normalizeHeadingKey(line);
+
+        if (H.strengths.has(key)) {
+            current = "strengths";
+            continue;
+        }
+        if (H.weaknesses.has(key)) {
+            current = "weaknesses";
+            continue;
+        }
+        if (H.recommendations.has(key)) {
+            current = "recommendations";
+            continue;
+        }
+
+        // Nếu chưa có heading nào mà đã có content:
+        // - ưu tiên đưa vào "weaknesses" chỉ khi nó có vẻ là nhận xét lỗi,
+        // - còn lại đưa vào "recommendations" (trung tính)
+        if (!current) {
+            const lower = line.toLowerCase();
+            const looksWeak =
+                lower.includes("lỗi") ||
+                lower.includes("chưa") ||
+                lower.includes("thiếu") ||
+                lower.includes("nhầm") ||
+                lower.includes("sai") ||
+                lower.includes("không");
+            current = looksWeak ? "weaknesses" : "recommendations";
+        }
+
+        pushLine(current, line);
+    }
+
+    // 3) Nếu vẫn không có gì (AI trả 1 đoạn dài không xuống dòng) -> fallback đưa vào weaknesses
+    if (!out.strengths.length && !out.weaknesses.length && !out.recommendations.length) {
+        const one = text.replace(/\s+/g, " ").trim();
+        if (one) out.weaknesses = [one];
+    }
+
+    return out;
+}
+
 export default function PracticeResult({
                                            result,
                                            numberOfQuestions,
@@ -199,7 +217,6 @@ export default function PracticeResult({
         return 0;
     }, [earned, totalPoints, result]);
 
-    // ✅ 70.0% -> 70% ; 70.5% -> 70.5%
     const percentText = useMemo(() => `${formatNumberTrim(percent, 1)}%`, [percent]);
 
     const score10 = useMemo(() => {
@@ -207,7 +224,6 @@ export default function PracticeResult({
         return Math.max(0, Math.min(10, s));
     }, [percent]);
 
-    // ✅ 7.00/10 -> 7/10 ; 7.25/10 -> 7.25/10
     const score10Text = useMemo(() => `${formatNumberTrim(score10, 2)}/10`, [score10]);
 
     const statusRaw = useMemo(() => String(result?.status ?? "").toUpperCase(), [result]);

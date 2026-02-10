@@ -127,6 +127,10 @@ export default function AdminSettings() {
         emailNotificationsEnabled: false,
         adminEmails: "",
 
+        // ✅ NEW: distribution counts (Admin config)
+        mcqQuestionCount: 10,
+        essayQuestionCount: 0,
+
         monthlyReportEnabled: false,
         monthlyReportDayOfMonth: 0,
         monthlyReportTime: "23:59",
@@ -178,6 +182,10 @@ export default function AdminSettings() {
 
                     emailNotificationsEnabled: !!data.emailNotificationsEnabled,
                     adminEmails: data.adminEmails ?? "",
+
+                    // ✅ NEW
+                    mcqQuestionCount: data.mcqQuestionCount ?? 10,
+                    essayQuestionCount: data.essayQuestionCount ?? 0,
 
                     monthlyReportEnabled: !!data.monthlyReportEnabled,
                     monthlyReportDayOfMonth: data.monthlyReportDayOfMonth ?? 0,
@@ -251,6 +259,7 @@ export default function AdminSettings() {
         setAiForm((prev) => ({ ...prev, [field]: value }));
     };
 
+    // minutesPerQuestion (minutes) ↔ UI (seconds)
     const displaySecondsPerQuestion = useMemo(() => {
         const m = Number(form.minutesPerQuestion);
         if (Number.isNaN(m) || !Number.isFinite(m)) return "";
@@ -270,6 +279,7 @@ export default function AdminSettings() {
         setForm((prev) => ({ ...prev, minutesPerQuestion: seconds / 60 }));
     };
 
+    // Email chips
     const addAdminEmail = () => {
         const email = String(emailInput || "").trim().toLowerCase();
         if (!email) return;
@@ -290,6 +300,7 @@ export default function AdminSettings() {
         setForm((prev) => ({ ...prev, adminEmails: toEmailCsv(next) }));
     };
 
+    // Monthly report time preset/custom
     const handleTimePresetChange = (e) => {
         const v = e.target.value;
 
@@ -309,20 +320,39 @@ export default function AdminSettings() {
         setForm((prev) => ({ ...prev, monthlyReportTime: v }));
     };
 
+    // ✅ NEW: total questions + estimated duration preview for admin
+    const questionDistributionSummary = useMemo(() => {
+        const mcq = clampInt(form.mcqQuestionCount, 0, 200);
+        const essay = clampInt(form.essayQuestionCount, 0, 200);
+        const total = mcq + essay;
+
+        const mpq = Number(form.minutesPerQuestion);
+        const estMinutes =
+            Number.isFinite(mpq) && mpq > 0 && total > 0 ? Math.ceil(total * mpq) : null;
+
+        return { mcq, essay, total, estMinutes };
+    }, [form.essayQuestionCount, form.mcqQuestionCount, form.minutesPerQuestion]);
+
     const saveDisabledReason = useMemo(() => {
         const passScore = Number(form.passScore);
         const minutesPerQuestion = Number(form.minutesPerQuestion);
         const cooldown = Number(form.retestCooldownMinutes);
 
+        const mcq = Number(form.mcqQuestionCount);
+        const essay = Number(form.essayQuestionCount);
+
         if (activeTask === TASKS.PRACTICE) {
             if (Number.isNaN(passScore) || passScore < 0 || passScore > 100) return "Điểm đạt phải 0..100";
             if (Number.isNaN(minutesPerQuestion) || minutesPerQuestion <= 0) return "Thời gian / câu phải > 0";
             if (Number.isNaN(cooldown) || cooldown < 0 || cooldown > 1440) return "Cooldown phải 0..1440";
+
+            // ✅ NEW validate distribution
+            if (Number.isNaN(mcq) || mcq < 0 || mcq > 200) return "Số câu MCQ phải 0..200";
+            if (Number.isNaN(essay) || essay < 0 || essay > 200) return "Số câu tự luận phải 0..200";
+            if (mcq + essay <= 0) return "Tổng số câu (MCQ + Tự luận) phải > 0";
         }
 
-        if (activeTask === TASKS.EMAIL) {
-            return null;
-        }
+        if (activeTask === TASKS.EMAIL) return null;
 
         if (activeTask === TASKS.REPORT) {
             if (form.monthlyReportEnabled) {
@@ -366,6 +396,10 @@ export default function AdminSettings() {
                     emailNotificationsEnabled: !!form.emailNotificationsEnabled,
                     adminEmails: toEmailCsv(adminEmailList),
 
+                    // ✅ NEW
+                    mcqQuestionCount: clampInt(form.mcqQuestionCount, 0, 200),
+                    essayQuestionCount: clampInt(form.essayQuestionCount, 0, 200),
+
                     monthlyReportEnabled: !!form.monthlyReportEnabled,
                     monthlyReportDayOfMonth: clampInt(form.monthlyReportDayOfMonth, 0, 31),
                     monthlyReportTime: String(form.monthlyReportTime || "23:59").trim(),
@@ -391,11 +425,18 @@ export default function AdminSettings() {
                     emailNotificationsEnabled: !!updated.emailNotificationsEnabled,
                     adminEmails: updated.adminEmails ?? prev.adminEmails,
 
+                    // ✅ NEW
+                    mcqQuestionCount: updated.mcqQuestionCount ?? prev.mcqQuestionCount,
+                    essayQuestionCount: updated.essayQuestionCount ?? prev.essayQuestionCount,
+
                     monthlyReportEnabled: !!updated.monthlyReportEnabled,
                     monthlyReportDayOfMonth: updated.monthlyReportDayOfMonth ?? prev.monthlyReportDayOfMonth,
                     monthlyReportTime: monthlyTime,
                     monthlyReportTimeZone: updated.monthlyReportTimeZone ?? prev.monthlyReportTimeZone,
                 }));
+
+                // keep chips in sync if backend normalized emails
+                setAdminEmailList(parseEmails(updated.adminEmails ?? toEmailCsv(adminEmailList)));
 
                 showToast("Lưu cấu hình thành công!", "success");
                 return;
@@ -425,7 +466,8 @@ export default function AdminSettings() {
             }));
 
             showToast("Lưu Model AI thành công!", "success");
-        } catch {
+        } catch (e) {
+            console.error(e);
             showToast("Không lưu được cấu hình", "error");
         } finally {
             setSaving(false);
@@ -481,7 +523,7 @@ export default function AdminSettings() {
                                 Cấu hình bài thi
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                                Thiết lập điểm số, thời gian và quy tắc làm lại
+                                Thiết lập điểm số, thời gian và số lượng câu MCQ/Tự luận
                             </Typography>
                         </Box>
                     </Stack>
@@ -516,6 +558,60 @@ export default function AdminSettings() {
                     }}
                     sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
                 />
+
+                {/* ✅ NEW: question distribution */}
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                    <TextField
+                        label="Số câu trắc nghiệm (MCQ)"
+                        type="number"
+                        value={form.mcqQuestionCount}
+                        onChange={handleChange("mcqQuestionCount")}
+                        fullWidth
+                        inputProps={{ min: 0, max: 200, step: 1 }}
+                        helperText="0..200"
+                        InputProps={{
+                            startAdornment: <InputAdornment position="start">🧠</InputAdornment>,
+                        }}
+                        sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                    />
+
+                    <TextField
+                        label="Số câu tự luận (Essay)"
+                        type="number"
+                        value={form.essayQuestionCount}
+                        onChange={handleChange("essayQuestionCount")}
+                        fullWidth
+                        inputProps={{ min: 0, max: 200, step: 1 }}
+                        helperText="0..200"
+                        InputProps={{
+                            startAdornment: <InputAdornment position="start">✍️</InputAdornment>,
+                        }}
+                        sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                    />
+                </Stack>
+
+                <Box
+                    sx={{
+                        p: 1.25,
+                        borderRadius: 2,
+                        border: "1px solid",
+                        borderColor: (theme) => alpha(theme.palette.primary.main, 0.22),
+                        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
+                    }}
+                >
+                    <Typography variant="body2" sx={{ fontWeight: 900 }}>
+                        Tổng số câu hiện tại:{" "}
+                        <span style={{ color: theme.palette.primary.main }}>
+                            {questionDistributionSummary.total}
+                        </span>{" "}
+                        (MCQ {questionDistributionSummary.mcq} + Tự luận {questionDistributionSummary.essay})
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                        {questionDistributionSummary.estMinutes != null
+                            ? `Ước tính thời gian làm bài: ~${questionDistributionSummary.estMinutes} phút (theo thời gian/câu).`
+                            : "Nhập thời gian/câu hợp lệ để xem ước tính thời gian làm bài."}
+                    </Typography>
+                </Box>
 
                 <TextField
                     label="Cooldown làm lại (phút)"
@@ -1339,8 +1435,8 @@ export default function AdminSettings() {
                         onChange={(_, v) => setActiveTask(v)}
                         variant={isMobile ? "scrollable" : "fullWidth"}
                         allowScrollButtonsMobile
-                        scrollButtons={isMobile ? "on" : false}   // ✅ ép hiện mũi tên
-                        TabScrollButtonProps={{ sx: { width: 40 } }} // optional: rộng dễ bấm hơn
+                        scrollButtons={isMobile ? "on" : false}
+                        TabScrollButtonProps={{ sx: { width: 40 } }}
                         centered={!isMobile}
                         sx={{
                             "& .MuiTab-root": {
@@ -1355,7 +1451,7 @@ export default function AdminSettings() {
                             },
                         }}
                     >
-                    <Tab icon={<SchoolIcon />} iconPosition="start" label="Cấu hình bài thi" value={TASKS.PRACTICE} />
+                        <Tab icon={<SchoolIcon />} iconPosition="start" label="Cấu hình bài thi" value={TASKS.PRACTICE} />
                         <Tab icon={<EmailIcon />} iconPosition="start" label="Email" value={TASKS.EMAIL} />
                         <Tab icon={<AssessmentIcon />} iconPosition="start" label="Báo cáo tháng" value={TASKS.REPORT} />
                         <Tab icon={<SmartToyRoundedIcon />} iconPosition="start" label="Model AI" value={TASKS.MODEL_AI} />

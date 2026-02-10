@@ -1,13 +1,11 @@
 // src/features/practice/components/chatbot/PracticeHeaderConfig.jsx
 import React, { useMemo } from "react";
-import { Avatar, Box, Paper, Typography, TextField } from "@mui/material";
-import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
+import { Avatar, Box, Paper, Typography } from "@mui/material";
 import EastRoundedIcon from "@mui/icons-material/EastRounded";
 
 export default function PracticeHeaderConfig({
                                                  questionCount,
                                                  durationMinutes,
-                                                 onChangeQuestionCount,
                                                  attemptId,
                                                  hideConfig = false,
                                              }) {
@@ -15,18 +13,15 @@ export default function PracticeHeaderConfig({
 
     const qc = useMemo(() => {
         const n = Number(questionCount);
-        if (!Number.isFinite(n)) return 0;
-        return Math.max(0, n);
+        if (!Number.isFinite(n) || n <= 0) return null;
+        return n;
     }, [questionCount]);
 
     const displayMinutes = useMemo(() => {
         const n = Number(durationMinutes);
-        if (Number.isFinite(n) && n >= 0) return n;
-        // fallback nếu chưa có durationMinutes từ parent
-        return Number.isFinite(durationMinutes)
-            ? durationMinutes
-            : Math.max(0, qc);
-    }, [durationMinutes, qc]);
+        if (Number.isFinite(n) && n > 0) return n;
+        return null;
+    }, [durationMinutes]);
 
     return (
         <Paper
@@ -49,14 +44,14 @@ export default function PracticeHeaderConfig({
                     position: "relative",
                 }}
             >
-                {/* LEFT: icon + title (GIỮ NGUYÊN) */}
+                {/* LEFT */}
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
                     <Avatar
                         src="/images/AI_logo.png"
                         sx={{
                             width: 24,
                             height: 24,
-                            borderRadius: "50%", // Đảm bảo ảnh bo tròn nếu cần
+                            borderRadius: "50%",
                         }}
                     />
                     <Typography
@@ -71,43 +66,11 @@ export default function PracticeHeaderConfig({
                     </Typography>
                 </Box>
 
-                {/* RIGHT: compact config */}
+                {/* RIGHT */}
                 {!hideConfig && (
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexShrink: 0 }}>
                         <Typography sx={{ fontSize: 13, fontWeight: 800, color: "#2e2d84" }}>
                             Số câu
-                        </Typography>
-
-                        <TextField
-                            size="small"
-                            type="number"
-                            value={qc || ""}
-                            onChange={(e) => onChangeQuestionCount?.(e.target.value)}
-                            disabled={isDoing}
-                            inputProps={{ min: 1, max: 100 }}
-                            sx={{
-                                width: 65,
-                                "& .MuiOutlinedInput-root": {
-                                    borderRadius: 2,
-                                    height: 38,
-                                    "& fieldset": { borderColor: "#E3E8EF" },
-                                    "&:hover fieldset": { borderColor: "#BFC7D5" },
-                                    "&.Mui-focused fieldset": { borderColor: "#2E2D84" },
-                                },
-                                "& .MuiInputBase-input": {
-                                    textAlign: "center",
-                                    fontWeight: 900,
-                                    color: "#070707",
-                                    fontSize: 14,
-                                    py: 0,
-                                },
-                            }}
-                        />
-
-                        <EastRoundedIcon sx={{ color: "#A0AEC0", fontSize: 18 }} />
-
-                        <Typography sx={{ fontSize: 13, fontWeight: 800, color: "#2e2d84" }}>
-                            Thời gian
                         </Typography>
 
                         <Box
@@ -122,9 +85,35 @@ export default function PracticeHeaderConfig({
                                 alignItems: "center",
                                 justifyContent: "center",
                             }}
+                            title="Số câu được cấu hình bởi Admin (không thể chỉnh)"
                         >
                             <Typography sx={{ fontSize: 13, fontWeight: 900, color: "#020202" }}>
-                                {displayMinutes} phút
+                                {qc != null ? qc : "—"}
+                            </Typography>
+                        </Box>
+
+                        <EastRoundedIcon sx={{ color: "#A0AEC0", fontSize: 18 }} />
+
+                        <Typography sx={{ fontSize: 13, fontWeight: 800, color: "#2e2d84" }}>
+                            Thời gian
+                        </Typography>
+
+                        <Box
+                            sx={{
+                                height: 38,
+                                px: 1,
+                                minWidth: 86,
+                                borderRadius: 2,
+                                border: "1px solid #E3E8EF",
+                                bgcolor: "#F7F9FC",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                            }}
+                            title="Thời gian được tính theo cấu hình hệ thống"
+                        >
+                            <Typography sx={{ fontSize: 13, fontWeight: 900, color: "#020202" }}>
+                                {displayMinutes != null ? `${displayMinutes} phút` : "—"}
                             </Typography>
                         </Box>
                     </Box>
