@@ -551,7 +551,7 @@ export default function AdminDashboardAiInsightPanel(props) {
                         {/* ✅ GLOBAL: show 2 mini tables Top 5 */}
                         {resolvedMode === "GLOBAL" ? (
                             <Box sx={{ mb: 3 }}>
-                                <Typography sx={sectionTitleSx}>🏆 Top 5 đạt & Top 5 trượt</Typography>
+                                <Typography sx={sectionTitleSx}>🏆 Học viên xuất sắc & Học viên cần chú ý</Typography>
 
                                 <Box
                                     sx={{
@@ -560,8 +560,8 @@ export default function AdminDashboardAiInsightPanel(props) {
                                         gap: 2,
                                     }}
                                 >
-                                    <MiniTable title="Top 5 Đạt" tone="PASS" rows={topPassed} mode="PASS" />
-                                    <MiniTable title="Top 5 Trượt" tone="FAIL" rows={topFailed} mode="FAIL" />
+                                    <MiniTable title="Top Học viên xuất sắc" tone="PASS" rows={topPassed} mode="PASS" />
+                                    <MiniTable title="Top Học viên cần chú ý" tone="FAIL" rows={topFailed} mode="FAIL" />
                                 </Box>
 
                                 {!topPassed.length && !topFailed.length ? (

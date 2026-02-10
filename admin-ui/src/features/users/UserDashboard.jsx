@@ -21,6 +21,8 @@ import {
     School as SchoolIcon,
     Lightbulb as LightbulbIcon,
     AutoGraph as ProgressIcon,
+    CheckCircle as CheckCircleIcon,
+    Cancel as CancelIcon,
 } from "@mui/icons-material";
 import { useSelector } from "react-redux";
 import { getDashboardStatsApi } from "../../api/dashboardApi";
@@ -34,6 +36,14 @@ const COLORS = {
     orange: "#EC5E32",
     orangeDeep: "#D5522B",
     orangeLight: "#FFF1EB",
+
+    success: "#2E7D32",
+    successDeep: "#1B5E20",
+    successLight: "#E8F5E9",
+
+    error: "#D32F2F",
+    errorDeep: "#C62828",
+    errorLight: "#FFEBEE",
 
     bg: "#F7F9FC",
     white: "#FFFFFF",
@@ -87,7 +97,11 @@ const CardShell = ({ children, sx }) => (
 );
 
 const KpiCard = ({ icon, title, value, subtitle, tone = "primary" }) => {
-    const toneColor = tone === "orange" ? COLORS.orange : COLORS.primary;
+    const toneColor =
+        tone === "orange" ? COLORS.orange :
+            tone === "success" ? COLORS.success :
+                tone === "error" ? COLORS.error :
+                    COLORS.primary;
 
     return (
         <CardShell
@@ -95,8 +109,8 @@ const KpiCard = ({ icon, title, value, subtitle, tone = "primary" }) => {
                 p: 2.5,
                 display: "flex",
                 alignItems: "center",
-                height: 120,
-                width: "250px",
+                height: "100%",
+                minHeight: 120,
                 transition: "all 0.22s ease",
                 "&:hover": {
                     transform: "translateY(-4px)",
@@ -297,6 +311,8 @@ export default function UserDashboard() {
     const avgScore = fmtInt(stats?.averageScore, 0);
     const rank = fmtInt(stats?.rank, 0);
     const totalStudents = fmtInt(stats?.totalStudents, 0);
+    const passedLessons = fmtInt(stats?.passedLessons, 0);
+    const failedLessons = fmtInt(stats?.failedLessons, 0);
 
     const greeting = stats?.greeting || `Chào mừng ${displayName}!`;
     const suggestion =
@@ -395,7 +411,7 @@ export default function UserDashboard() {
                                         </Typography>
 
                                         <Typography sx={{ opacity: 0.92, fontWeight: 700, mb: 1.5 }}>
-                                            Hôm nay bạn muốn học gì nào? 📚
+                                            Học hành là chuyện cả đời. Bắt đầu học tập chưa bao giờ là quá muộn ! 📚
                                         </Typography>
 
                                         <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
@@ -458,49 +474,78 @@ export default function UserDashboard() {
                         </CardShell>
 
                         {/* ===== KPI GRID ===== */}
-                        <Grid container spacing={2.5} sx={{ mb: 3 }} alignItems="stretch">
-                            <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
-                                <KpiCard
-                                    icon={<AssignmentIcon />}
-                                    title="Hoàn thành"
-                                    value={completed}
-                                    subtitle="bài đã nộp"
-                                    tone="primary"
-                                />
-                            </Grid>
-                            <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
-                                <KpiCard
-                                    icon={<TimerIcon />}
-                                    title="Thời gian"
-                                    value={onlineTimeText}
-                                    subtitle="tổng học"
-                                    tone="orange"
-                                />
-                            </Grid>
-                            <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
-                                <KpiCard
-                                    icon={<SchoolIcon />}
-                                    title="Điểm trung bình"
-                                    value={avgScore}
-                                    subtitle="/100"
-                                    tone="primary"
-                                />
-                            </Grid>
-                            <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
-                                <KpiCard
-                                    icon={<TrendingIcon />}
-                                    title="Xếp hạng"
-                                    value={rank ? `#${rank}` : "--"}
-                                    subtitle={totalStudents ? `/${totalStudents}` : ""}
-                                    tone="orange"
-                                />
-                            </Grid>
-                        </Grid>
+                        <Box sx={{ mb: 3 }}>
+                            <CardShell sx={{ p: 2.5 }}>
+                                <Box
+                                    sx={{
+                                        display: 'grid',
+                                        gridTemplateColumns: {
+                                            xs: '1fr',
+                                            sm: 'repeat(2, 1fr)',
+                                            md: 'repeat(3, 1fr)'
+                                        },
+                                        gap: 2.5,
+                                    }}
+                                >
+                                    {/* Hàng 1 - 3 cards trên */}
+                                    <KpiCard
+                                        icon={<AssignmentIcon />}
+                                        title="Hoàn thành"
+                                        value={completed}
+                                        subtitle="bài đã nộp"
+                                        tone="primary"
+                                    />
+                                    <KpiCard
+                                        icon={<SchoolIcon />}
+                                        title="Điểm trung bình"
+                                        value={avgScore}
+                                        subtitle="/100"
+                                        tone="primary"
+                                    />
+                                    <KpiCard
+                                        icon={<TimerIcon />}
+                                        title="Thời gian"
+                                        value={onlineTimeText}
+                                        subtitle="tổng học"
+                                        tone="orange"
+                                    />
+
+                                    {/* Hàng 2 - 3 cards dưới */}
+                                    <KpiCard
+                                        icon={<CheckCircleIcon />}
+                                        title="Số bài Đạt"
+                                        value={passedLessons}
+                                        subtitle="Pass"
+                                        tone="success"
+                                    />
+                                    <KpiCard
+                                        icon={<CancelIcon />}
+                                        title="Số bài Trượt"
+                                        value={failedLessons}
+                                        subtitle="Fail"
+                                        tone="error"
+                                    />
+                                    <KpiCard
+                                        icon={<TrendingIcon />}
+                                        title="Xếp hạng"
+                                        value={rank ? `#${rank}` : "--"}
+                                        subtitle={totalStudents ? `/${totalStudents}` : ""}
+                                        tone="orange"
+                                    />
+                                </Box>
+                            </CardShell>
+                        </Box>
 
                         {/* ===== MAIN CONTENT ===== */}
-                        <Grid container spacing={2.5} alignItems="stretch">
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                gap: 2.5,
+                                flexWrap: 'wrap',
+                            }}
+                        >
                             {/* LEFT: Gợi ý lộ trình */}
-                            <Grid item xs={12} md={7} sx={{ display: "flex" }}>
+                            <Box sx={{ flex: { xs: '1 1 100%', md: '7' }, display: "flex", minWidth: 0 }}>
                                 <CardShell>
                                     <Box
                                         sx={{
@@ -597,10 +642,10 @@ export default function UserDashboard() {
                                         </Box>
                                     </Box>
                                 </CardShell>
-                            </Grid>
+                            </Box>
 
                             {/* RIGHT: Tóm tắt mục tiêu */}
-                            <Grid item xs={12} md={5} sx={{ display: "flex" }}>
+                            <Box sx={{ flex: { xs: '1 1 100%', md: '5' }, display: "flex", minWidth: 0 }}>
                                 <CardShell>
                                     <Box
                                         sx={{
@@ -726,8 +771,8 @@ export default function UserDashboard() {
                                         </Box>
                                     </Box>
                                 </CardShell>
-                            </Grid>
-                        </Grid>
+                            </Box>
+                        </Box>
                     </Box>
                 </Container>
             </Box>
