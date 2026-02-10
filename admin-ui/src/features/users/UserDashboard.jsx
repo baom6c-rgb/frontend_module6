@@ -506,7 +506,7 @@ export default function UserDashboard() {
                                         icon={<TimerIcon />}
                                         title="Thời gian"
                                         value={onlineTimeText}
-                                        subtitle="tổng học"
+                                        subtitle="Thời lượng học"
                                         tone="orange"
                                     />
 
@@ -515,14 +515,14 @@ export default function UserDashboard() {
                                         icon={<CheckCircleIcon />}
                                         title="Số bài Đạt"
                                         value={passedLessons}
-                                        subtitle="Pass"
+                                        subtitle="Đạt"
                                         tone="success"
                                     />
                                     <KpiCard
                                         icon={<CancelIcon />}
                                         title="Số bài Trượt"
                                         value={failedLessons}
-                                        subtitle="Fail"
+                                        subtitle="Trượt"
                                         tone="error"
                                     />
                                     <KpiCard
