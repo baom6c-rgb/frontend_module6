@@ -14,9 +14,16 @@ import {
 } from "@mui/material";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 
+// ✅ Syntax highlight
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+
 function looksLikeCode(text) {
     if (!text) return false;
     const t = String(text);
+
+    // ✅ Nếu có code fence thì chắc chắn là code
+    if (t.includes("```")) return true;
 
     const hasNewline = t.includes("\n");
     const codeHints = [
@@ -60,9 +67,94 @@ function splitTitleAndBody(raw) {
     return { title: text.trim() || "Câu hỏi", body: "" };
 }
 
+/**
+ * ✅ Parse markdown code fence:
+ * ```java
+ * code...
+ * ```
+ */
+function parseCodeFence(text) {
+    if (!text) return null;
+    const t = String(text);
+
+    const start = t.indexOf("```");
+    if (start === -1) return null;
+
+    const after = t.slice(start + 3);
+    const firstLineEnd = after.indexOf("\n");
+    if (firstLineEnd === -1) return null;
+
+    const lang = after.slice(0, firstLineEnd).trim() || "text";
+    const rest = after.slice(firstLineEnd + 1);
+
+    const end = rest.lastIndexOf("```");
+    if (end === -1) return null;
+
+    const code = rest.slice(0, end).trimEnd();
+    if (!code) return null;
+
+    return { language: lang.toLowerCase(), code };
+}
+
+function CodeBlock({ language, code }) {
+    const label = (language || "code").toUpperCase();
+
+    return (
+        <Box
+            sx={{
+                mt: 1,
+                borderRadius: 2,
+                overflow: "hidden",
+                border: "1px solid #E3E8EF",
+                bgcolor: "#0f172a",
+            }}
+        >
+            {/* Header giống IDE (không có nút copy) */}
+            <Box
+                sx={{
+                    px: 1.25,
+                    py: 0.75,
+                    bgcolor: "rgba(255,255,255,0.06)",
+                }}
+            >
+                <Typography sx={{ fontSize: 12, fontWeight: 900, color: "#E5E7EB" }}>
+                    {label}
+                </Typography>
+            </Box>
+
+            {/* Code */}
+            <Box sx={{ px: 1, pb: 1 }}>
+                <SyntaxHighlighter
+                    language={language}
+                    style={oneDark}
+                    customStyle={{
+                        margin: 0,
+                        background: "transparent",
+                        fontSize: 13,
+                        lineHeight: 1.55,
+                    }}
+                    codeTagProps={{
+                        style: {
+                            fontFamily:
+                                "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+                        },
+                    }}
+                >
+                    {code}
+                </SyntaxHighlighter>
+            </Box>
+        </Box>
+    );
+}
+
 function QuestionContent({ raw }) {
     const { title, body } = useMemo(() => splitTitleAndBody(raw), [raw]);
-    const showBodyAsCode = useMemo(() => looksLikeCode(body), [body]);
+
+    // ✅ ưu tiên parse code fence (đẹp nhất)
+    const fenced = useMemo(() => parseCodeFence(body) || parseCodeFence(raw), [body, raw]);
+
+    // ✅ fallback heuristic code (không có fence nhưng vẫn là snippet)
+    const showBodyAsCode = useMemo(() => !fenced && looksLikeCode(body), [body, fenced]);
 
     return (
         <Box sx={{ mt: 0.25 }}>
@@ -78,31 +170,59 @@ function QuestionContent({ raw }) {
             </Typography>
 
             {Boolean(body) && (
-                <Box
-                    sx={{
-                        mt: 1,
-                        border: "1px solid #E3E8EF",
-                        borderRadius: 2,
-                        bgcolor: showBodyAsCode ? "#F7F9FC" : "#FFFFFF",
-                        p: 1.25,
-                    }}
-                >
-                    <Typography
-                        sx={{
-                            whiteSpace: "pre-wrap",
-                            wordBreak: "break-word",
-                            fontFamily: showBodyAsCode
-                                ? "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
-                                : "inherit",
-                            fontSize: showBodyAsCode ? 13 : 14,
-                            lineHeight: showBodyAsCode ? 1.5 : 1.55,
-                            color: "#1B2559",
-                            fontWeight: 700,
-                        }}
-                    >
-                        {body}
-                    </Typography>
-                </Box>
+                <>
+                    {fenced ? (
+                        <CodeBlock language={fenced.language} code={fenced.code} />
+                    ) : showBodyAsCode ? (
+                        <Box
+                            sx={{
+                                mt: 1,
+                                border: "1px solid #E3E8EF",
+                                borderRadius: 2,
+                                bgcolor: "#F7F9FC",
+                                p: 1.25,
+                            }}
+                        >
+                            <Typography
+                                sx={{
+                                    whiteSpace: "pre-wrap",
+                                    wordBreak: "break-word",
+                                    fontFamily:
+                                        "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+                                    fontSize: 13,
+                                    lineHeight: 1.55,
+                                    color: "#1B2559",
+                                    fontWeight: 700,
+                                }}
+                            >
+                                {body}
+                            </Typography>
+                        </Box>
+                    ) : (
+                        <Box
+                            sx={{
+                                mt: 1,
+                                border: "1px solid #E3E8EF",
+                                borderRadius: 2,
+                                bgcolor: "#FFFFFF",
+                                p: 1.25,
+                            }}
+                        >
+                            <Typography
+                                sx={{
+                                    whiteSpace: "pre-wrap",
+                                    wordBreak: "break-word",
+                                    fontSize: 14,
+                                    lineHeight: 1.55,
+                                    color: "#1B2559",
+                                    fontWeight: 700,
+                                }}
+                            >
+                                {body}
+                            </Typography>
+                        </Box>
+                    )}
+                </>
             )}
         </Box>
     );
@@ -161,8 +281,6 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                 ) : (
                     filtered.map((q, idx) => {
                         const type = q?.questionType || "MCQ";
-
-                        // review item có thể dùng content hoặc question (tùy mapper BE)
                         const rawContent = q?.content ?? q?.question ?? "Câu hỏi";
 
                         return (
@@ -206,7 +324,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                     ) : null}
                                 </Stack>
 
-                                {/* ✅ Render content giống QuestionCard: title + body(code block nếu có) */}
+                                {/* ✅ Render content: title + body (code block nếu có) */}
                                 <QuestionContent raw={rawContent} />
 
                                 <Divider sx={{ my: 1.5 }} />
@@ -240,6 +358,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                                     }}
                                                 >
                                                     <Typography sx={{ fontWeight: 900, width: 26 }}>{k}.</Typography>
+
                                                     <Typography
                                                         sx={{
                                                             fontWeight: 700,
@@ -253,9 +372,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
 
                                                     <Box sx={{ flex: 1 }} />
 
-                                                    {isCorrect ? (
-                                                        <Chip size="small" label="ĐÚNG" sx={{ fontWeight: 900 }} />
-                                                    ) : null}
+                                                    {isCorrect ? <Chip size="small" label="ĐÚNG" sx={{ fontWeight: 900 }} /> : null}
                                                 </Box>
                                             );
                                         })}
@@ -264,14 +381,18 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                     /* ===== ESSAY ===== */
                                     <Box sx={{ display: "grid", gap: 1.25 }}>
                                         <Box>
-                                            <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>Câu trả lời của bạn</Typography>
+                                            <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
+                                                Câu trả lời của bạn
+                                            </Typography>
                                             <Typography sx={{ mt: 0.5, color: "#000000", fontWeight: 700, whiteSpace: "pre-wrap" }}>
                                                 {q.yourAnswer || "(chưa trả lời)"}
                                             </Typography>
                                         </Box>
 
                                         <Box>
-                                            <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>Gợi ý đáp án (sample)</Typography>
+                                            <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
+                                                Gợi ý đáp án (sample)
+                                            </Typography>
                                             <Typography sx={{ mt: 0.5, color: "#716f6f", fontWeight: 700, whiteSpace: "pre-wrap" }}>
                                                 {q.sampleAnswer || "(không có)"}
                                             </Typography>
@@ -282,7 +403,9 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                 {/* feedback chung per-question */}
                                 {q.feedback ? (
                                     <Box sx={{ mt: 1.5 }}>
-                                        <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>Giải thích / Gợi ý học lại</Typography>
+                                        <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
+                                            Giải thích / Gợi ý học lại
+                                        </Typography>
                                         <Typography sx={{ mt: 0.5, color: "#716f6f", fontWeight: 700, whiteSpace: "pre-wrap" }}>
                                             {q.feedback}
                                         </Typography>

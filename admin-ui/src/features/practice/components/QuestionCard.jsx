@@ -3,13 +3,42 @@ import React, { useMemo } from "react";
 import { Box, Paper, Typography, TextField, Chip } from "@mui/material";
 import AnswerOption from "./AnswerOption";
 
+// ✅ Syntax highlight
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+
 function looksLikeCode(text) {
     if (!text) return false;
     const t = String(text);
 
-    // Heuristic đơn giản: có xuống dòng + ký tự hay gặp trong code/config
+    // ✅ Nếu có code fence thì chắc chắn là code
+    if (t.includes("```")) return true;
+
     const hasNewline = t.includes("\n");
-    const codeHints = ["{", "}", ";", "=>", "function", "const ", "let ", "var ", "import ", "export ", "class ", "public ", "private ", "@", "SELECT ", "FROM ", "WHERE ", "application.", "spring.", "http", "JWT", "Bearer "];
+    const codeHints = [
+        "{",
+        "}",
+        ";",
+        "=>",
+        "function",
+        "const ",
+        "let ",
+        "var ",
+        "import ",
+        "export ",
+        "class ",
+        "public ",
+        "private ",
+        "@",
+        "SELECT ",
+        "FROM ",
+        "WHERE ",
+        "application.",
+        "spring.",
+        "http",
+        "JWT",
+        "Bearer ",
+    ];
     const hintHit = codeHints.some((h) => t.includes(h));
     return hasNewline && hintHit;
 }
@@ -18,21 +47,95 @@ function splitTitleAndBody(raw) {
     if (!raw) return { title: "Câu hỏi", body: "" };
 
     const text = String(raw);
-
-    // Nếu có nhiều dòng: dòng đầu làm title ngắn, phần sau là body (hay là code/snippet)
     const lines = text.split("\n");
+
     if (lines.length >= 2) {
         const first = lines[0].trim();
         const rest = lines.slice(1).join("\n").trim();
-
-        // Nếu dòng đầu quá ngắn hoặc kiểu "Cho đoạn code sau:" thì vẫn giữ làm title
-        return {
-            title: first || "Câu hỏi",
-            body: rest,
-        };
+        return { title: first || "Câu hỏi", body: rest };
     }
 
     return { title: text.trim() || "Câu hỏi", body: "" };
+}
+
+/**
+ * ✅ Parse markdown code fence:
+ * ```java
+ * code...
+ * ```
+ */
+function parseCodeFence(text) {
+    if (!text) return null;
+    const t = String(text);
+
+    const start = t.indexOf("```");
+    if (start === -1) return null;
+
+    const after = t.slice(start + 3);
+    const firstLineEnd = after.indexOf("\n");
+    if (firstLineEnd === -1) return null;
+
+    const lang = after.slice(0, firstLineEnd).trim() || "text";
+    const rest = after.slice(firstLineEnd + 1);
+
+    const end = rest.lastIndexOf("```");
+    if (end === -1) return null;
+
+    const code = rest.slice(0, end).trimEnd();
+    if (!code) return null;
+
+    return { language: lang.toLowerCase(), code };
+}
+
+function CodeBlock({ language, code }) {
+    const label = (language || "code").toUpperCase();
+
+    return (
+        <Box
+            sx={{
+                mt: 1.25,
+                borderRadius: 2,
+                overflow: "hidden",
+                border: "1px solid #E3E8EF",
+                bgcolor: "#0f172a",
+            }}
+        >
+            {/* Header giống IDE (không có nút copy) */}
+            <Box
+                sx={{
+                    px: 1.25,
+                    py: 0.75,
+                    bgcolor: "rgba(255,255,255,0.06)",
+                }}
+            >
+                <Typography sx={{ fontSize: 12, fontWeight: 900, color: "#E5E7EB" }}>
+                    {label}
+                </Typography>
+            </Box>
+
+            {/* Code */}
+            <Box sx={{ px: 1, pb: 1 }}>
+                <SyntaxHighlighter
+                    language={language}
+                    style={oneDark}
+                    customStyle={{
+                        margin: 0,
+                        background: "transparent",
+                        fontSize: 13,
+                        lineHeight: 1.55,
+                    }}
+                    codeTagProps={{
+                        style: {
+                            fontFamily:
+                                "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+                        },
+                    }}
+                >
+                    {code}
+                </SyntaxHighlighter>
+            </Box>
+        </Box>
+    );
 }
 
 export default function QuestionCard({ question, index, value, onChange }) {
@@ -44,16 +147,21 @@ export default function QuestionCard({ question, index, value, onChange }) {
     const isMcq = qType === "MCQ";
     const isEssay = qType === "ESSAY" || qType === "SHORT_ANSWER";
 
-    // NOTE: backend schema thường dùng "question", nhưng project mày đang map về "content"
-    // => giữ ưu tiên content, fallback sang question để tránh mất dữ liệu
-    const rawContent =
-        question?.content ??
-        question?.question ??
-        "Câu hỏi";
+    const rawContent = question?.content ?? question?.question ?? "Câu hỏi";
 
-    const { title, body } = useMemo(() => splitTitleAndBody(rawContent), [rawContent]);
+    const { title, body } = useMemo(
+        () => splitTitleAndBody(rawContent),
+        [rawContent]
+    );
 
-    const showBodyAsCode = useMemo(() => looksLikeCode(body), [body]);
+    // ✅ ưu tiên parse code fence (đẹp nhất)
+    const fenced = useMemo(
+        () => parseCodeFence(body) || parseCodeFence(rawContent),
+        [body, rawContent]
+    );
+
+    // ✅ fallback heuristic code (không có fence nhưng vẫn là snippet)
+    const showBodyAsCode = useMemo(() => !fenced && looksLikeCode(body), [body, fenced]);
 
     const options = useMemo(() => {
         if (!isMcq) return null;
@@ -61,7 +169,6 @@ export default function QuestionCard({ question, index, value, onChange }) {
         const fromMap = question?.options;
         if (fromMap && typeof fromMap === "object") return fromMap;
 
-        // fallback legacy fields
         return {
             A: question?.optionA,
             B: question?.optionB,
@@ -102,7 +209,7 @@ export default function QuestionCard({ question, index, value, onChange }) {
 
             {/* Question content */}
             <Box sx={{ mt: 1.25 }}>
-                {/* Title line (luôn hiển thị) */}
+                {/* Title line */}
                 <Typography
                     sx={{
                         fontWeight: 900,
@@ -116,32 +223,59 @@ export default function QuestionCard({ question, index, value, onChange }) {
                     {title}
                 </Typography>
 
-                {/* Body (nếu có) */}
+                {/* Body */}
                 {Boolean(body) && (
-                    <Box
-                        sx={{
-                            mt: 1.25,
-                            border: "1px solid #E3E8EF",
-                            borderRadius: 2,
-                            bgcolor: showBodyAsCode ? "#F7F9FC" : "#FFFFFF",
-                            p: 1.25,
-                        }}
-                    >
-                        <Typography
-                            sx={{
-                                whiteSpace: "pre-wrap",
-                                wordBreak: "break-word",
-                                fontFamily: showBodyAsCode
-                                    ? "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
-                                    : "inherit",
-                                fontSize: showBodyAsCode ? 13 : 14,
-                                lineHeight: showBodyAsCode ? 1.5 : 1.55,
-                                color: "#1B2559",
-                            }}
-                        >
-                            {body}
-                        </Typography>
-                    </Box>
+                    <>
+                        {fenced ? (
+                            <CodeBlock language={fenced.language} code={fenced.code} />
+                        ) : showBodyAsCode ? (
+                            <Box
+                                sx={{
+                                    mt: 1.25,
+                                    border: "1px solid #E3E8EF",
+                                    borderRadius: 2,
+                                    bgcolor: "#F7F9FC",
+                                    p: 1.25,
+                                }}
+                            >
+                                <Typography
+                                    sx={{
+                                        whiteSpace: "pre-wrap",
+                                        wordBreak: "break-word",
+                                        fontFamily:
+                                            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+                                        fontSize: 13,
+                                        lineHeight: 1.55,
+                                        color: "#1B2559",
+                                    }}
+                                >
+                                    {body}
+                                </Typography>
+                            </Box>
+                        ) : (
+                            <Box
+                                sx={{
+                                    mt: 1.25,
+                                    border: "1px solid #E3E8EF",
+                                    borderRadius: 2,
+                                    bgcolor: "#FFFFFF",
+                                    p: 1.25,
+                                }}
+                            >
+                                <Typography
+                                    sx={{
+                                        whiteSpace: "pre-wrap",
+                                        wordBreak: "break-word",
+                                        fontSize: 14,
+                                        lineHeight: 1.55,
+                                        color: "#1B2559",
+                                    }}
+                                >
+                                    {body}
+                                </Typography>
+                            </Box>
+                        )}
+                    </>
                 )}
             </Box>
 
