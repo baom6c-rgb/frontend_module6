@@ -157,7 +157,7 @@ const StatCard = ({ icon, title, value, subtitle, color }) => (
     <Paper
         elevation={0}
         sx={{
-            p: 3,
+            p: { xs: 2, sm: 2.5, md: 3 },
             borderRadius: "16px",
             border: `1px solid ${COLORS.borderLight}`,
             height: "100%",
@@ -173,8 +173,8 @@ const StatCard = ({ icon, title, value, subtitle, color }) => (
         <Stack direction="row" alignItems="center" spacing={2}>
             <Box
                 sx={{
-                    width: 56,
-                    height: 56,
+                    width: { xs: 48, sm: 52, md: 56 },
+                    height: { xs: 48, sm: 52, md: 56 },
                     borderRadius: "12px",
                     bgcolor: color + "20",
                     display: "flex",
@@ -182,17 +182,17 @@ const StatCard = ({ icon, title, value, subtitle, color }) => (
                     justifyContent: "center",
                 }}
             >
-                {React.cloneElement(icon, { sx: { color, fontSize: 28 } })}
+                {React.cloneElement(icon, { sx: { color, fontSize: { xs: 24, sm: 26, md: 28 } } })}
             </Box>
 
             <Box>
-                <Typography sx={{ fontSize: 14, color: COLORS.textSecondary, fontWeight: 800 }}>
+                <Typography sx={{ fontSize: { xs: 12, sm: 13, md: 14 }, color: COLORS.textSecondary, fontWeight: 800 }}>
                     {title}
                 </Typography>
-                <Typography sx={{ fontSize: 28, fontWeight: 900, color: COLORS.textPrimary, lineHeight: 1.1 }}>
+                <Typography sx={{ fontSize: { xs: 22, sm: 25, md: 28 }, fontWeight: 900, color: COLORS.textPrimary, lineHeight: 1.1 }}>
                     {value}
                 </Typography>
-                <Typography sx={{ fontSize: 12, color: "#8A94A6", fontWeight: 700 }}>
+                <Typography sx={{ fontSize: { xs: 11, sm: 11.5, md: 12 }, color: "#8A94A6", fontWeight: 700 }}>
                     {subtitle}
                 </Typography>
             </Box>
@@ -592,7 +592,7 @@ export default function UserReview() {
     }
 
     return (
-        <Box sx={{ bgcolor: COLORS.bgLight, minHeight: "100vh", py: 4 }}>
+        <Box sx={{ bgcolor: COLORS.bgLight, minHeight: "100vh", py: { xs: 2, sm: 3, md: 4 } }}>
             <Container maxWidth="xl">
                 {/* ✅ Header đồng bộ: title left + chip right */}
                 <Stack
@@ -600,13 +600,13 @@ export default function UserReview() {
                     justifyContent="space-between"
                     alignItems={{ xs: "stretch", sm: "center" }}
                     spacing={{ xs: 1.5, sm: 0 }}
-                    sx={{ mb: { xs: 2, md: 3 } }}
+                    sx={{ mb: { xs: 2, sm: 2.5, md: 3 } }}
                 >
                     <Typography
-                        variant={isMobile ? "h5" : "h4"}
-                        sx={{ fontWeight: 800, color: COLORS.textPrimary }}
+                        variant={isMobile ? "h2" : "h1"}
+                        sx={{ fontWeight: 800, color: COLORS.textPrimary, fontSize: { xs: 20, sm: 28, md: 28 } }}
                     >
-                        Đánh giá học tập
+                        Kết quả học tập & Bài thi
                     </Typography>
 
                     <Chip
@@ -632,13 +632,9 @@ export default function UserReview() {
                     }}
                 />
 
-                <Box sx={{ my: 3 }} />
+                <Box sx={{ my: { xs: 2, sm: 2.5, md: 3 } }} />
 
-                <Typography sx={{ mb: 2, color: COLORS.textSecondary, fontWeight: 700 }}>
-                    Hiển thị {filteredTests.length} kết quả{filteredTests.length !== tests.length && ` (từ ${tests.length} bài test)`}
-                </Typography>
-
-                <Paper elevation={0} sx={{ borderRadius: 2, overflow: "hidden", border: "1px solid", borderColor: "divider", display: "flex", flexDirection: "column", minHeight: 420 }}>
+                <Paper elevation={0} sx={{ borderRadius: 2, overflow: "hidden", border: "1px solid", borderColor: "divider", display: "flex", flexDirection: "column", minHeight: { xs: 400, sm: 420 } }}>
                     <Box sx={{ flex: 1, minHeight: 0 }}>
                         <DataGrid
                             rows={filteredTests}
@@ -660,7 +656,7 @@ export default function UserReview() {
                         />
                     </Box>
 
-                    <Box sx={{ px: 1.5, py: 1, borderTop: "1px solid", borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 1, flexWrap: "wrap" }}>
+                    <Box sx={{ px: { xs: 1, sm: 1.5 }, py: 1, borderTop: "1px solid", borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 1, flexWrap: "wrap" }}>
                         <AppPagination
                             page={paginationModel.page + 1}
                             pageSize={paginationModel.pageSize}
@@ -678,77 +674,80 @@ export default function UserReview() {
                     onClose={handleCloseDetail}
                     maxWidth="md"
                     fullWidth
-                    PaperProps={{ sx: { borderRadius: "16px" } }}
+                    fullScreen={isMobile}
+                    PaperProps={{ sx: { borderRadius: isMobile ? 0 : "16px" } }}
                 >
                     <DialogTitle>
-                        <Typography sx={{ fontWeight: 900 }}>Chi tiết bài thi</Typography>
+                        <Typography sx={{ fontWeight: 900, fontSize: { xs: 18, sm: 20 } }}>Chi tiết bài thi</Typography>
                     </DialogTitle>
 
                     <DialogContent>
                         {selectedTest && (
                             <Box>
-                                <Typography sx={{ fontWeight: 700, fontSize: 20, mb: 2, textAlign: "center" }}>
+                                <Typography sx={{ fontWeight: 700, fontSize: { xs: 16, sm: 18, md: 20 }, mb: 2, textAlign: "center" }}>
                                     {selectedTest.name}
                                 </Typography>
 
-                                <Table sx={{ width: "100%", borderCollapse: "collapse", mt: 1 }}>
-                                    <TableHead>
-                                        <TableRow sx={{ backgroundColor: "#f4f6fc" }}>
-                                            {["Module", "Lớp học", "Ngày làm bài", "Thời gian", "Điểm số", "Kết quả"].map((label) => (
-                                                <TableCell
-                                                    key={label}
-                                                    sx={{
-                                                        textAlign: "center",
-                                                        color: "#2E2D84",
-                                                        fontWeight: 700,
-                                                        fontSize: 15,
-                                                        borderBottom: "2px solid #e8eaf6",
-                                                        py: 1,
-                                                        whiteSpace: "nowrap",
-                                                    }}
-                                                >
-                                                    {label}
+                                <Box sx={{ overflowX: "auto" }}>
+                                    <Table sx={{ width: "100%", borderCollapse: "collapse", mt: 1, minWidth: { xs: 600, sm: "auto" } }}>
+                                        <TableHead>
+                                            <TableRow sx={{ backgroundColor: "#f4f6fc" }}>
+                                                {["Module", "Lớp học", "Ngày làm bài", "Thời gian", "Điểm số", "Kết quả"].map((label) => (
+                                                    <TableCell
+                                                        key={label}
+                                                        sx={{
+                                                            textAlign: "center",
+                                                            color: "#2E2D84",
+                                                            fontWeight: 700,
+                                                            fontSize: { xs: 12, sm: 14, md: 15 },
+                                                            borderBottom: "2px solid #e8eaf6",
+                                                            py: 1,
+                                                            whiteSpace: "nowrap",
+                                                        }}
+                                                    >
+                                                        {label}
+                                                    </TableCell>
+                                                ))}
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            <TableRow>
+                                                <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none", fontSize: { xs: 12, sm: 14 } }}>{selectedTest.module}</TableCell>
+                                                <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none", fontSize: { xs: 12, sm: 14 } }}>{selectedTest.className}</TableCell>
+                                                <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none", whiteSpace: "nowrap" }}>
+                                                    <Typography sx={{ fontSize: { xs: 12, sm: 13, md: 14 } }}>
+                                                        {formatDateTime(selectedTest.submitTime || selectedTest.startTime).split(" ")[1]}
+                                                    </Typography>
+                                                    <Typography sx={{ color: "text.secondary", fontSize: { xs: 11, sm: 12, md: 13 } }}>
+                                                        {formatDateTime(selectedTest.submitTime || selectedTest.startTime).split(" ")[0]}
+                                                    </Typography>
                                                 </TableCell>
-                                            ))}
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        <TableRow>
-                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>{selectedTest.module}</TableCell>
-                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>{selectedTest.className}</TableCell>
-                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none", whiteSpace: "nowrap" }}>
-                                                <Typography sx={{ fontSize: 14 }}>
-                                                    {formatDateTime(selectedTest.submitTime || selectedTest.startTime).split(" ")[1]}
-                                                </Typography>
-                                                <Typography sx={{ color: "text.secondary", fontSize: 13 }}>
-                                                    {formatDateTime(selectedTest.submitTime || selectedTest.startTime).split(" ")[0]}
-                                                </Typography>
-                                            </TableCell>
-                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>{selectedTest.durationMinutes} phút</TableCell>
-                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>
-                                                <Typography sx={{ fontWeight: 900, color: getScoreColor(selectedTest.scorePct) }}>
-                                                    {selectedTest.scorePct}/{selectedTest.totalScore}
-                                                </Typography>
-                                            </TableCell>
-                                            <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>
-                                                <Box
-                                                    component="span"
-                                                    sx={{
-                                                        color: selectedTest.scorePct >= 80 ? "#4caf50" : "#f44336",
-                                                        backgroundColor: selectedTest.scorePct >= 80 ? "#4caf5013" : "#f4433613",
-                                                        px: 1.5,
-                                                        py: 0.4,
-                                                        borderRadius: 1,
-                                                        fontWeight: 700,
-                                                        fontSize: 14,
-                                                    }}
-                                                >
-                                                    {selectedTest.scorePct >= 80 ? "Đạt" : "Trượt"}
-                                                </Box>
-                                            </TableCell>
-                                        </TableRow>
-                                    </TableBody>
-                                </Table>
+                                                <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none", fontSize: { xs: 12, sm: 14 } }}>{selectedTest.durationMinutes} phút</TableCell>
+                                                <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>
+                                                    <Typography sx={{ fontWeight: 900, color: getScoreColor(selectedTest.scorePct), fontSize: { xs: 13, sm: 14, md: 15 } }}>
+                                                        {selectedTest.scorePct}/{selectedTest.totalScore}
+                                                    </Typography>
+                                                </TableCell>
+                                                <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>
+                                                    <Box
+                                                        component="span"
+                                                        sx={{
+                                                            color: selectedTest.scorePct >= 80 ? "#4caf50" : "#f44336",
+                                                            backgroundColor: selectedTest.scorePct >= 80 ? "#4caf5013" : "#f4433613",
+                                                            px: 1.5,
+                                                            py: 0.4,
+                                                            borderRadius: 1,
+                                                            fontWeight: 700,
+                                                            fontSize: { xs: 12, sm: 13, md: 14 },
+                                                        }}
+                                                    >
+                                                        {selectedTest.scorePct >= 80 ? "Đạt" : "Trượt"}
+                                                    </Box>
+                                                </TableCell>
+                                            </TableRow>
+                                        </TableBody>
+                                    </Table>
+                                </Box>
 
                                 <Divider sx={{ my: 2 }} />
 
@@ -756,11 +755,13 @@ export default function UserReview() {
                                     variant="contained"
                                     onClick={handleOpenReview}
                                     disabled={reviewLoading}
+                                    fullWidth={isMobile}
                                     sx={{
                                         borderRadius: "12px",
                                         textTransform: "none",
                                         fontWeight: 900,
                                         px: 2.2,
+                                        fontSize: { xs: 14, sm: 15 },
                                     }}
                                 >
                                     {reviewLoading ? "Đang tải..." : "Xem lại đáp án"}
@@ -775,7 +776,7 @@ export default function UserReview() {
                                 {reviewLoading && (
                                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
                                         <CircularProgress size={18} />
-                                        <Typography sx={{ fontSize: 13, color: "text.secondary", fontWeight: 700 }}>
+                                        <Typography sx={{ fontSize: { xs: 12, sm: 13 }, color: "text.secondary", fontWeight: 700 }}>
                                             Đang tải dữ liệu xem lại...
                                         </Typography>
                                     </Stack>
@@ -790,15 +791,18 @@ export default function UserReview() {
                             display: "flex",
                             justifyContent: "flex-end",
                             gap: 1,
+                            flexDirection: { xs: "column", sm: "row" },
                         }}
                     >
                         <Button
                             onClick={handleCloseDetail}
                             variant="outlined"
+                            fullWidth={isMobile}
                             sx={{
                                 borderRadius: "20px",
                                 textTransform: "none",
                                 fontWeight: 800,
+                                fontSize: { xs: 14, sm: 15 },
                                 color: COLORS.textPrimary,
                                 "&:hover": {
                                     borderColor: "#2e2d84",

@@ -216,8 +216,8 @@ export default function PracticeChatPanel({
                                     </Typography>
                                     <Typography sx={{ fontSize: 12, color: COLORS.textSecondary }}>
                                         {assistantMode === ASSISTANT_MODE.GENERATE
-                                            ? "Upload/Paste để tạo đề"
-                                            : "Keyword-only • Không đáp án"}
+                                            ? "Upload/Paste học liệu để tạo đề"
+                                            : "Chỉ nhập từ khóa liên quan đến bài thi"}
                                     </Typography>
                                 </Stack>
 
