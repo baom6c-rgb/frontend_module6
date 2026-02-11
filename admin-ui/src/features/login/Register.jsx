@@ -8,12 +8,17 @@ import {
     CardContent,
     Stack,
     Autocomplete,
+    InputAdornment,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 
 import { getAllClassesApi } from "../../api/classApi";
 import { getAllModulesApi } from "../../api/moduleApi";
-import { registerApi } from "../../api/authApi";
+import {
+    registerApi,
+    requestRegisterOtpApi,
+    verifyRegisterOtpApi,
+} from "../../api/authApi";
 
 import PasswordField from "../../components/form/PasswordField";
 import GlobalLoading from "../../components/common/GlobalLoading";
@@ -32,6 +37,10 @@ export default function Register() {
         fullName: "",
         classId: null,
         moduleId: null,
+
+        // ✅ OTP fields
+        otp: "",
+        otpSessionId: "",
     });
 
     const [touched, setTouched] = useState({
@@ -39,9 +48,19 @@ export default function Register() {
         password: false,
         classId: false,
         moduleId: false,
+        otp: false,
     });
 
-    const [loading, setLoading] = useState(false);
+    // ✅ Loading states
+    const [loading, setLoading] = useState(false); // for register
+    const [sendingOtp, setSendingOtp] = useState(false);
+    const [verifyingOtp, setVerifyingOtp] = useState(false);
+
+    // ✅ OTP UI states
+    const [otpSent, setOtpSent] = useState(false);
+    const [otpVerified, setOtpVerified] = useState(false);
+    const [cooldown, setCooldown] = useState(0); // seconds
+    const [expiresIn, setExpiresIn] = useState(0); // seconds
 
     /* =====================
        Load options
@@ -59,14 +78,38 @@ export default function Register() {
     }, []);
 
     /* =====================
+       Helpers
+    ===================== */
+    const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+    const validatePassword = (password) => (password || "").length >= 6;
+
+    const validateOtp = (otp) => /^\d{6}$/.test((otp || "").trim());
+
+    const resetOtpState = () => {
+        setOtpSent(false);
+        setOtpVerified(false);
+        setCooldown(0);
+        setExpiresIn(0);
+        setForm((p) => ({ ...p, otp: "", otpSessionId: "" }));
+        setTouched((p) => ({ ...p, otp: false }));
+    };
+
+    // ✅ Timer for cooldown + expires
+    useEffect(() => {
+        if (cooldown <= 0 && expiresIn <= 0) return;
+
+        const t = setInterval(() => {
+            setCooldown((s) => (s > 0 ? s - 1 : 0));
+            setExpiresIn((s) => (s > 0 ? s - 1 : 0));
+        }, 1000);
+
+        return () => clearInterval(t);
+    }, [cooldown, expiresIn]);
+
+    /* =====================
        Validators
     ===================== */
-    const validateEmail = (email) =>
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-    const validatePassword = (password) =>
-        (password || "").length >= 6;
-
     const errors = useMemo(() => {
         const e = {};
 
@@ -83,8 +126,12 @@ export default function Register() {
             e.moduleId = "Vui lòng chọn module";
         }
 
+        if (otpSent && touched.otp && !validateOtp(form.otp)) {
+            e.otp = "OTP gồm 6 chữ số";
+        }
+
         return e;
-    }, [form, touched]);
+    }, [form, touched, otpSent]);
 
     const selectedClass = useMemo(
         () => classes.find((c) => c.id === form.classId) || null,
@@ -102,31 +149,134 @@ export default function Register() {
             password: true,
             classId: true,
             moduleId: true,
+            otp: true,
         });
     };
 
+    const getErrorMessage = (e, fallback) => {
+        return typeof e?.response?.data === "string"
+            ? e.response.data
+            : e?.response?.data?.message || fallback;
+    };
+
     /* =====================
-       Submit
+       OTP Actions
+    ===================== */
+    const sendOtp = async () => {
+        setTouched((p) => ({ ...p, email: true }));
+
+        if (!validateEmail(form.email)) {
+            showToast("Vui lòng nhập email hợp lệ trước khi gửi OTP", "warning");
+            return;
+        }
+
+        if (cooldown > 0) return;
+
+        try {
+            setSendingOtp(true);
+
+            // Nếu user đổi email sau khi đã gửi/verify → reset OTP
+            if (otpSent || otpVerified) resetOtpState();
+
+            const res = await requestRegisterOtpApi(form.email.trim());
+            const data = res?.data || {};
+
+            const otpSessionId = data?.otpSessionId || data?.sessionId || "";
+            if (!otpSessionId) {
+                showToast("Không nhận được otpSessionId từ server", "error");
+                return;
+            }
+
+            setForm((p) => ({ ...p, otpSessionId }));
+            setOtpSent(true);
+
+            // backend trả cooldownSeconds / expiresInSeconds (đúng như BE)
+            const cd = Number(data?.cooldownSeconds ?? 60);
+            const exp = Number(data?.expiresInSeconds ?? 300);
+
+            setCooldown(Number.isFinite(cd) ? cd : 60);
+            setExpiresIn(Number.isFinite(exp) ? exp : 300);
+
+            showToast("Đã gửi OTP, vui lòng kiểm tra email", "success");
+        } catch (e) {
+            showToast(getErrorMessage(e, "Gửi OTP thất bại"), "error");
+        } finally {
+            setSendingOtp(false);
+        }
+    };
+
+    const verifyOtp = async () => {
+        setTouched((p) => ({ ...p, otp: true, email: true }));
+
+        if (!validateEmail(form.email)) {
+            showToast("Email không hợp lệ", "warning");
+            return;
+        }
+        if (!form.otpSessionId) {
+            showToast("Thiếu otpSessionId, vui lòng gửi OTP lại", "warning");
+            return;
+        }
+        if (!validateOtp(form.otp)) {
+            showToast("OTP phải gồm đúng 6 chữ số", "warning");
+            return;
+        }
+        if (expiresIn <= 0) {
+            showToast("OTP đã hết hạn, vui lòng gửi lại mã", "warning");
+            return;
+        }
+
+        try {
+            setVerifyingOtp(true);
+
+            await verifyRegisterOtpApi({
+                otpSessionId: form.otpSessionId,
+                email: form.email.trim(),
+                otp: form.otp.trim(),
+            });
+
+            setOtpVerified(true);
+            showToast("Xác nhận email thành công", "success");
+        } catch (e) {
+            setOtpVerified(false);
+            showToast(getErrorMessage(e, "OTP không đúng hoặc đã hết hạn"), "error");
+        } finally {
+            setVerifyingOtp(false);
+        }
+    };
+
+    /* =====================
+       Submit Register
     ===================== */
     const submit = async () => {
         markAllTouched();
+
+        if (!otpVerified) {
+            showToast("Vui lòng xác nhận OTP trước khi đăng ký", "warning");
+            return;
+        }
 
         if (
             !validateEmail(form.email) ||
             !validatePassword(form.password) ||
             !form.classId ||
-            !form.moduleId
+            !form.moduleId ||
+            !validateOtp(form.otp) ||
+            !form.otpSessionId
         ) {
             showToast("Vui lòng kiểm tra lại thông tin đăng ký", "warning");
             return;
         }
 
         const payload = {
-            ...form,
-            // ✅ nếu chưa nhập tên → lấy từ email
-            fullName:
-                form.fullName?.trim() ||
-                form.email.split("@")[0],
+            email: form.email.trim(),
+            password: form.password,
+            classId: form.classId,
+            moduleId: form.moduleId,
+            fullName: form.fullName?.trim() || form.email.split("@")[0],
+
+            // ✅ OTP required by BE
+            otp: form.otp.trim(),
+            otpSessionId: form.otpSessionId,
         };
 
         try {
@@ -136,17 +286,23 @@ export default function Register() {
             showToast("Đăng ký thành công! Vui lòng đăng nhập", "success");
             navigate("/login", { state: { registered: true } });
         } catch (e) {
-            const msg =
-                typeof e?.response?.data === "string"
-                    ? e.response.data
-                    : e?.response?.data?.message ||
-                    "Đăng ký thất bại, vui lòng thử lại";
-
-            showToast(msg, "error");
+            showToast(
+                getErrorMessage(e, "Đăng ký thất bại, vui lòng thử lại"),
+                "error"
+            );
         } finally {
             setLoading(false);
         }
     };
+
+    const disableAll = loading || sendingOtp || verifyingOtp;
+
+    const otpHelperText = useMemo(() => {
+        if (!otpSent) return "";
+        if (otpVerified) return "Email đã được xác nhận ";
+        if (expiresIn > 0) return `Mã hết hạn sau ${expiresIn}s`;
+        return "OTP đã hết hạn, vui lòng gửi lại mã";
+    }, [otpSent, otpVerified, expiresIn]);
 
     return (
         <Box
@@ -157,12 +313,10 @@ export default function Register() {
                 justifyContent: "center",
                 position: "relative",
                 overflow: "hidden",
-                // Ảnh nền từ thư mục public/images
                 backgroundImage: 'url(/images/background_login.jpg)',
                 backgroundSize: "cover",
                 backgroundPosition: "center",
                 backgroundRepeat: "no-repeat",
-                // Overlay tối nhẹ để làm nổi bật form
                 "&::before": {
                     content: '""',
                     position: "absolute",
@@ -176,7 +330,10 @@ export default function Register() {
                 },
             }}
         >
-            <GlobalLoading open={loading} message="Vui lòng chờ... Đang đăng ký" />
+            <GlobalLoading
+                open={loading}
+                message="Vui lòng chờ... Đang đăng ký"
+            />
 
             <Card
                 sx={{
@@ -193,7 +350,6 @@ export default function Register() {
                 }}
             >
                 <CardContent sx={{ p: 3.5 }}>
-                    {/* Logo từ public/images */}
                     <Box
                         sx={{
                             display: "flex",
@@ -210,7 +366,8 @@ export default function Register() {
                                 height: 60,
                                 borderRadius: "50%",
                                 objectFit: "cover",
-                                filter: "drop-shadow(0 4px 12px rgba(46, 45, 132, 0.25))",
+                                filter:
+                                    "drop-shadow(0 4px 12px rgba(46, 45, 132, 0.25))",
                             }}
                         />
                     </Box>
@@ -242,14 +399,20 @@ export default function Register() {
                     </Typography>
 
                     <Stack spacing={2}>
-                        {/* Email */}
+                        {/* Email + Send OTP */}
                         <TextField
                             label="Email"
                             value={form.email}
                             onChange={(e) => {
-                                setForm((p) => ({ ...p, email: e.target.value }));
-                                if (!touched.email)
+                                const nextEmail = e.target.value;
+                                setForm((p) => ({ ...p, email: nextEmail }));
+
+                                if (!touched.email) {
                                     setTouched((p) => ({ ...p, email: true }));
+                                }
+                                if (otpSent || otpVerified) {
+                                    resetOtpState();
+                                }
                             }}
                             onBlur={() =>
                                 setTouched((p) => ({ ...p, email: true }))
@@ -257,8 +420,36 @@ export default function Register() {
                             error={!!errors.email}
                             helperText={errors.email}
                             autoComplete="email"
-                            disabled={loading}
+                            disabled={disableAll}
                             fullWidth
+                            InputProps={{
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        <Button
+                                            onClick={sendOtp}
+                                            disabled={
+                                                disableAll ||
+                                                !validateEmail(form.email) ||
+                                                cooldown > 0
+                                            }
+                                            sx={{
+                                                minWidth: 108,
+                                                borderRadius: 2,
+                                                textTransform: "none",
+                                                fontWeight: 600,
+                                                px: 1.5,
+                                            }}
+                                            variant="outlined"
+                                        >
+                                            {sendingOtp
+                                                ? "Đang gửi..."
+                                                : cooldown > 0
+                                                    ? `Gửi lại (${cooldown}s)`
+                                                    : "Gửi mã"}
+                                        </Button>
+                                    </InputAdornment>
+                                ),
+                            }}
                             sx={{
                                 "& .MuiOutlinedInput-root": {
                                     borderRadius: 2.5,
@@ -281,6 +472,89 @@ export default function Register() {
                             }}
                         />
 
+                        {/* OTP (show after sent) */}
+                        {otpSent && (
+                            <Stack spacing={1.2}>
+                                <TextField
+                                    label="Mã OTP (6 số)"
+                                    value={form.otp}
+                                    onChange={(e) => {
+                                        const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+                                        setForm((p) => ({ ...p, otp: v }));
+                                        if (!touched.otp) {
+                                            setTouched((p) => ({ ...p, otp: true }));
+                                        }
+                                        // nếu đã verify mà user sửa OTP -> bỏ verify
+                                        if (otpVerified) setOtpVerified(false);
+                                    }}
+                                    onBlur={() =>
+                                        setTouched((p) => ({ ...p, otp: true }))
+                                    }
+                                    error={!!errors.otp}
+                                    helperText={errors.otp || otpHelperText}
+                                    disabled={disableAll}
+                                    fullWidth
+                                    inputProps={{ inputMode: "numeric", pattern: "[0-9]*" }}
+                                    sx={{
+                                        "& .MuiOutlinedInput-root": {
+                                            borderRadius: 2.5,
+                                            backgroundColor: "#f8f8fc",
+                                            transition: "all 0.3s ease",
+                                            "&:hover": {
+                                                backgroundColor: "#f0f0fa",
+                                            },
+                                            "&.Mui-focused": {
+                                                backgroundColor: "#fff",
+                                                "& fieldset": {
+                                                    borderColor: "#2E2D84",
+                                                    borderWidth: "2px",
+                                                },
+                                            },
+                                        },
+                                        "& .MuiInputLabel-root.Mui-focused": {
+                                            color: "#2E2D84",
+                                        },
+                                    }}
+                                />
+
+                                <Stack direction="row" spacing={1.2}>
+                                    <Button
+                                        onClick={verifyOtp}
+                                        disabled={
+                                            disableAll ||
+                                            otpVerified ||
+                                            !validateOtp(form.otp) ||
+                                            expiresIn <= 0
+                                        }
+                                        variant="contained"
+                                        sx={{
+                                            flex: 1,
+                                            borderRadius: 2.5,
+                                            textTransform: "none",
+                                            fontWeight: 700,
+                                            background:
+                                                otpVerified
+                                                    ? "linear-gradient(135deg, #2E2D84 0%, #2E2D84 100%)"
+                                                    : "linear-gradient(135deg, #2E2D84 0%, #EC5E32 100%)",
+                                            boxShadow: "0 6px 20px rgba(46, 45, 132, 0.25)",
+                                            "&:hover": {
+                                                background:
+                                                    otpVerified
+                                                        ? "linear-gradient(135deg, #2E2D84 0%, #2E2D84 100%)"
+                                                        : "linear-gradient(135deg, #242370 0%, #d34d28 100%)",
+                                            },
+                                        }}
+                                    >
+                                        {verifyingOtp
+                                            ? "Đang xác nhận..."
+                                            : otpVerified
+                                                ? "Đã xác nhận "
+                                                : "Xác nhận OTP"}
+                                    </Button>
+                                </Stack>
+                            </Stack>
+                        )}
+
                         {/* Password */}
                         <PasswordField
                             label="Mật khẩu"
@@ -296,7 +570,7 @@ export default function Register() {
                             error={!!errors.password}
                             helperText={errors.password}
                             autoComplete="new-password"
-                            disabled={loading}
+                            disabled={disableAll || !otpVerified}
                             fullWidth
                             sx={{
                                 "& .MuiOutlinedInput-root": {
@@ -327,9 +601,13 @@ export default function Register() {
                             onChange={(e) =>
                                 setForm((p) => ({ ...p, fullName: e.target.value }))
                             }
-                            helperText="Có thể bỏ trống (sẽ lấy từ email)"
+                            helperText={
+                                otpVerified
+                                    ? "Có thể bỏ trống (sẽ lấy từ email)"
+                                    : "Vui lòng xác nhận email trước"
+                            }
                             autoComplete="name"
-                            disabled={loading}
+                            disabled={disableAll || !otpVerified}
                             fullWidth
                             sx={{
                                 "& .MuiOutlinedInput-root": {
@@ -366,7 +644,7 @@ export default function Register() {
                             onBlur={() =>
                                 setTouched((p) => ({ ...p, classId: true }))
                             }
-                            disabled={loading}
+                            disabled={disableAll || !otpVerified}
                             renderInput={(params) => (
                                 <TextField
                                     {...params}
@@ -410,7 +688,7 @@ export default function Register() {
                             onBlur={() =>
                                 setTouched((p) => ({ ...p, moduleId: true }))
                             }
-                            disabled={loading}
+                            disabled={disableAll || !otpVerified}
                             renderInput={(params) => (
                                 <TextField
                                     {...params}
@@ -445,7 +723,7 @@ export default function Register() {
                             variant="contained"
                             size="large"
                             onClick={submit}
-                            disabled={loading}
+                            disabled={disableAll || !otpVerified}
                             sx={{
                                 borderRadius: 2.5,
                                 py: 1.3,

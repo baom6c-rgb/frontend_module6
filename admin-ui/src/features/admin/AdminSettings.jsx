@@ -342,13 +342,13 @@ export default function AdminSettings() {
         const essay = Number(form.essayQuestionCount);
 
         if (activeTask === TASKS.PRACTICE) {
-            if (Number.isNaN(passScore) || passScore < 0 || passScore > 100) return "Điểm đạt phải 0..100";
+            if (Number.isNaN(passScore) || passScore < 0 || passScore > 100) return "Điểm đạt phải 0-100";
             if (Number.isNaN(minutesPerQuestion) || minutesPerQuestion <= 0) return "Thời gian / câu phải > 0";
-            if (Number.isNaN(cooldown) || cooldown < 0 || cooldown > 1440) return "Cooldown phải 0..1440";
+            if (Number.isNaN(cooldown) || cooldown < 0 || cooldown > 1440) return "Cooldown phải 0-1440";
 
             // ✅ NEW validate distribution
-            if (Number.isNaN(mcq) || mcq < 0 || mcq > 200) return "Số câu MCQ phải 0..200";
-            if (Number.isNaN(essay) || essay < 0 || essay > 200) return "Số câu tự luận phải 0..200";
+            if (Number.isNaN(mcq) || mcq < 0 || mcq > 20) return "Số câu MCQ phải 0-20";
+            if (Number.isNaN(essay) || essay < 0 || essay > 20) return "Số câu tự luận phải 0-20";
             if (mcq + essay <= 0) return "Tổng số câu (MCQ + Tự luận) phải > 0";
         }
 
@@ -567,8 +567,8 @@ export default function AdminSettings() {
                         value={form.mcqQuestionCount}
                         onChange={handleChange("mcqQuestionCount")}
                         fullWidth
-                        inputProps={{ min: 0, max: 200, step: 1 }}
-                        helperText="0..200"
+                        inputProps={{ min: 0, max: 20, step: 1 }}
+                        helperText="0-20"
                         InputProps={{
                             startAdornment: <InputAdornment position="start">🧠</InputAdornment>,
                         }}
@@ -581,8 +581,8 @@ export default function AdminSettings() {
                         value={form.essayQuestionCount}
                         onChange={handleChange("essayQuestionCount")}
                         fullWidth
-                        inputProps={{ min: 0, max: 200, step: 1 }}
-                        helperText="0..200"
+                        inputProps={{ min: 0, max: 20, step: 1 }}
+                        helperText="0-20"
                         InputProps={{
                             startAdornment: <InputAdornment position="start">✍️</InputAdornment>,
                         }}
