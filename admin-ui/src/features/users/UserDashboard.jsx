@@ -12,6 +12,8 @@ import {
     Container,
     Chip,
     Divider,
+    Button,
+    Stack,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import {
@@ -27,6 +29,7 @@ import {
 import { useSelector } from "react-redux";
 import { getDashboardStatsApi } from "../../api/dashboardApi";
 import { getMyProfileApi } from "../../api/userApi";
+import { useNavigate } from "react-router-dom";
 
 const COLORS = {
     primary: "#2E2D84",
@@ -196,6 +199,7 @@ const KpiCard = ({ icon, title, value, subtitle, tone = "primary" }) => {
 };
 
 export default function UserDashboard() {
+    const navigate = useNavigate();
     const { user } = useSelector((state) => state.auth);
 
     const [stats, setStats] = useState(null);
@@ -506,7 +510,7 @@ export default function UserDashboard() {
                                         icon={<TimerIcon />}
                                         title="Thời gian"
                                         value={onlineTimeText}
-                                        subtitle="Thời lượng học"
+                                        subtitle="Tổng thời gian làm bài"
                                         tone="orange"
                                     />
 
@@ -728,46 +732,71 @@ export default function UserDashboard() {
                                             sx={{
                                                 p: 2.5,
                                                 borderRadius: "16px",
-                                                border: `1px solid ${alpha(COLORS.orange, 0.18)}`,
+                                                border: `1px solid ${alpha(COLORS.orange, 0.2)}`,
                                                 bgcolor: alpha(COLORS.orangeLight, 0.65),
                                                 minWidth: 0,
                                             }}
                                         >
-                                            <Typography variant="caption" sx={{ color: COLORS.subtext, fontWeight: 900 }}>
-                                                MỤC TIÊU TIẾP THEO
-                                            </Typography>
-
-                                            <Typography variant="h6" sx={{ fontWeight: 950, color: COLORS.text, mt: 0.75 }}>
-                                                Top 10 học viên
-                                            </Typography>
-
-                                            <Typography
-                                                variant="body2"
-                                                sx={{ color: COLORS.subtext, fontWeight: 700, mt: 0.75 }}
-                                            >
-                                                Ưu tiên làm bài theo module bạn yếu để cải thiện nhanh.
-                                            </Typography>
-
-                                            <Box sx={{ display: "flex", gap: 1, mt: 1.75, flexWrap: "wrap" }}>
-                                                <Chip
-                                                    size="small"
-                                                    label={`Hoàn thành: ${completed}`}
-                                                    sx={{
-                                                        bgcolor: alpha(COLORS.primary, 0.1),
-                                                        color: COLORS.primaryDeep,
-                                                        fontWeight: 900,
-                                                    }}
-                                                />
-                                                <Chip
-                                                    size="small"
-                                                    label={`Thời gian: ${onlineTimeText}`}
-                                                    sx={{
-                                                        bgcolor: alpha(COLORS.orange, 0.1),
-                                                        color: COLORS.orangeDeep,
-                                                        fontWeight: 900,
-                                                    }}
-                                                />
+                                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
+                                                <LightbulbIcon sx={{ fontSize: 18, color: COLORS.orangeDeep, mr: 1 }} />
+                                                <Typography variant="caption" sx={{ color: COLORS.orangeDeep, fontWeight: 900, letterSpacing: '0.5px' }}>
+                                                    NHẮC NHỞ
+                                                </Typography>
                                             </Box>
+
+                                            <Stack spacing={1.5}>
+                                                {(stats?.aiSuggestions || [
+                                                    {
+                                                        title: "Xem lại lại các bài thi Trượt",
+                                                        // Sử dụng template string để truyền biến failedLessons vào câu thông báo
+                                                        desc: `Bạn có ${failedLessons} bài thi trượt, hãy xem lại bài làm và các câu sai ở trang "Đánh giá học tập"`
+                                                    },
+                                                    {
+                                                        title: "Mục tiêu điểm số",
+                                                        desc: `Cần cải thiện từ ${avgScore} lên >= 80 điểm`
+                                                    }
+                                                ]).map((action, idx) => (
+                                                    <Box key={idx} sx={{ display: 'flex', gap: 1.5 }}>
+                                                        <Box sx={{
+                                                            width: 20, height: 20, borderRadius: '50%',
+                                                            bgcolor: COLORS.orangeDeep, color: '#fff',
+                                                            display: 'grid', placeItems: 'center',
+                                                            fontSize: '10px', fontWeight: 900, flexShrink: 0, mt: 0.2
+                                                        }}>
+                                                            {idx + 1}
+                                                        </Box>
+                                                        <Box>
+                                                            <Typography sx={{ fontSize: '13px', fontWeight: 900, color: COLORS.text, lineHeight: 1.2 }}>
+                                                                {action.title}
+                                                            </Typography>
+                                                            <Typography sx={{ fontSize: '11.5px', color: COLORS.subtext, fontWeight: 700, mt: 0.3, lineHeight: 1.4 }}>
+                                                                {action.desc}
+                                                            </Typography>
+                                                        </Box>
+                                                    </Box>
+                                                ))}
+                                            </Stack>
+
+                                            <Button
+                                                variant="contained"
+                                                fullWidth
+                                                // Giả sử route của trang PracticePage là "/practice"
+                                                onClick={() => navigate("/users/practice")}
+                                                sx={{
+                                                    mt: 2,
+                                                    bgcolor: COLORS.orange,
+                                                    color: "#fff",
+                                                    fontWeight: 900,
+                                                    textTransform: "none",
+                                                    borderRadius: "10px",
+                                                    fontSize: "13px",
+                                                    "&:hover": {
+                                                        bgcolor: COLORS.orangeDeep
+                                                    }
+                                                }}
+                                            >
+                                                Cải thiện điểm số
+                                            </Button>
                                         </Box>
                                     </Box>
                                 </CardShell>

@@ -353,7 +353,7 @@ export default function PracticeResult({
 
     return (
         <Box>
-            <Typography sx={{ fontWeight: 900, fontSize: 18, color: "#1B2559" }}>Kết quả luyện tập</Typography>
+            <Typography sx={{ fontWeight: 900, fontSize: 18, color: "#1B2559" }}>Kết quả & Nhận xét Bài thi</Typography>
 
             <Paper
                 elevation={0}
@@ -381,15 +381,9 @@ export default function PracticeResult({
                 <Divider sx={{ my: 2 }} />
 
                 <Box sx={{ display: "grid", gap: 0.75 }}>
-                    <Typography sx={{ fontWeight: 900, color: "#1B2559" }}>
-                        Điểm (thang 10):{" "}
-                        <Box component="span" sx={{ color: "#0B5ED7" }}>
-                            {score10Text}
-                        </Box>
-                    </Typography>
 
                     <Typography sx={{ fontWeight: 900, color: "#1B2559" }}>
-                        Tổng điểm:{" "}
+                        Bạn đã hoàn thành:{" "}
                         <Box component="span" sx={{ color: "#2B3674" }}>
                             {earned}/{totalPoints > 0 ? totalPoints : "?"}
                         </Box>{" "}
@@ -415,7 +409,7 @@ export default function PracticeResult({
 
                 <Divider sx={{ my: 2 }} />
 
-                <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>Fly AI nhận xét</Typography>
+                <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>Nhận xét sau khi làm bài</Typography>
 
                 {greetingText ? (
                     <Typography sx={{ mt: 1, color: "#716f6f", fontWeight: 800, whiteSpace: "pre-wrap" }}>

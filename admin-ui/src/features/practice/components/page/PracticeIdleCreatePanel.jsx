@@ -69,15 +69,20 @@ export default function PracticeIdleCreatePanel({
                             width: 40,
                             height: 40,
                             borderRadius: 999,
-                            background: "rgba(255,255,255,0.14)",
+                            background: "#fff",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             boxShadow: "0 10px 24px rgba(0,0,0,0.10)",
                             flex: "0 0 auto",
+                            overflow: "hidden",
                         }}
                     >
-                        <AutoAwesomeRounded sx={{ color: "#fff", fontSize: 22 }} />
+                        <img
+                            src="/images/AI_logo.png"
+                            alt="icon"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
                     </Box>
 
                     <Box sx={{ minWidth: 0 }}>
@@ -85,7 +90,7 @@ export default function PracticeIdleCreatePanel({
                             Sẵn sàng tạo đề
                         </Typography>
                         <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: "rgba(255,255,255,0.86)", mt: 0.3 }}>
-                            Số câu hỏi được cấu hình bởi Admin. Bạn chỉ cần gửi học liệu và bấm tạo đề.
+                            Số lượng câu hỏi đã được cấu hình sẵn. Hãy tải lên Học liệu và bấm Tạo đề.
                         </Typography>
                     </Box>
                 </Stack>
@@ -131,14 +136,14 @@ export default function PracticeIdleCreatePanel({
 
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                             <Typography sx={{ fontSize: 13.5, fontWeight: 900, color: COLORS.textPrimary }}>
-                                Cấu hình bài luyện tập
+                                Cấu hình bài thi
                             </Typography>
                             <Typography sx={{ fontSize: 12.5, color: COLORS.textSecondary, mt: 0.35 }}>
-                                Số câu: <b>{qc != null ? qc : "Theo cấu hình Admin"}</b> · Thời gian:{" "}
-                                <b>{dur != null ? `${dur} phút` : "Theo hệ thống"}</b>
+                                Số câu: <b>{qc != null ? qc : "Đã được cấu hình sẵn"}</b> · Thời gian:{" "}
+                                <b>{dur != null ? `${dur} phút` : "Tính toán dựa trên số câu"}</b>
                             </Typography>
                             <Typography sx={{ fontSize: 12, color: COLORS.textSecondary, mt: 0.6 }}>
-                                (Nếu chưa hiện số câu, bấm “Tạo đề ngay” để hệ thống lấy đúng cấu hình từ server.)
+                                (Nếu chưa hiện số câu, bấm “Tạo đề ngay” để hệ thống tính toán.)
                             </Typography>
                         </Box>
                     </Stack>
@@ -152,7 +157,6 @@ export default function PracticeIdleCreatePanel({
                         variant="contained"
                         onClick={() => onGenerate?.()}
                         disabled={!canGenerate}
-                        startIcon={<AutoAwesomeRounded />}
                         sx={{
                             borderRadius: 3,
                             fontWeight: 900,

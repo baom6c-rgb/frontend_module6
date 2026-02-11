@@ -114,10 +114,10 @@ export default function PracticeReadyStartPanel({
 
                     <Box sx={{ minWidth: 0 }}>
                         <Typography sx={{ fontSize: 18, fontWeight: 900, color: "#fff", letterSpacing: "-0.01em" }}>
-                            Đã tạo đề xong
+                            Đã tạo xong đề thi
                         </Typography>
                         <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: "rgba(255,255,255,0.86)", mt: 0.3 }}>
-                            Kiểm tra nhanh thông tin và bấm bắt đầu làm bài.
+                            Đề thi đã sẵn sàng. Chúc bạn làm bài thật tốt nhé !
                         </Typography>
                     </Box>
                 </Stack>
@@ -220,7 +220,7 @@ export default function PracticeReadyStartPanel({
                     </Button>
 
                     <Typography sx={{ fontSize: 12, color: COLORS.textSecondary, textAlign: "center", mt: 0.5 }}>
-                        Mẹo: khi bắt đầu, thời gian sẽ chạy và câu hỏi sẽ hiển thị.
+                        * Khi bắt đầu làm bài, câu hỏi sẽ hiển thị và bắt đầu tính thời gian.
                     </Typography>
                 </Stack>
             </Paper>
