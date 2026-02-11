@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Paper, Typography, Divider, Chip, Stack } from "@mui/material";
 import { practiceApi } from "../../../api/practiceApi"; // ✅ dùng cho retest status
+import AppModal from "../../../components/common/AppModal";
 
 function clampInt(n, min, max) {
     const x = Number(n);
@@ -42,6 +43,195 @@ function BulletList({ items, emptyText }) {
                 </Box>
             ))}
         </Box>
+    );
+}
+
+// =============================
+// Study Guide parsing + rendering helpers
+// =============================
+function normalizeLine(s) {
+    return String(s || "")
+        .replace(/^\s*[-•\u2022*]+\s*/g, "")
+        .trim();
+}
+
+function splitLines(raw) {
+    return String(raw || "")
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
+}
+
+function isHeader(line, header) {
+    const a = normalizeLine(line).toLowerCase();
+    const b = normalizeLine(header).toLowerCase().replace(/[:：]\s*$/g, "");
+    return a.replace(/[:：]\s*$/g, "") === b;
+}
+
+function parseStudyGuide(raw) {
+    const lines = splitLines(raw);
+    if (!lines.length) {
+        return {
+            title: "",
+            subject: "",
+            topic: "",
+            tips: [],
+            concepts: [],
+            vocab: [],
+            questions: [],
+        };
+    }
+
+    // Find first "Gợi ý ôn tập:" section (outer heading)
+    const idx = lines.findIndex((l) => isHeader(l, "Gợi ý ôn tập:"));
+    const body = idx >= 0 ? lines.slice(idx + 1) : lines;
+
+    const out = {
+        title: "",
+        subject: "",
+        topic: "",
+        tips: [],
+        concepts: [],
+        vocab: [],
+        questions: [],
+    };
+
+    let current = null; // tips | concepts | vocab | questions
+
+    const pushBullet = (arr, line) => {
+        const cleaned = normalizeLine(line);
+        if (!cleaned) return;
+
+        const isBullet = /^\s*[-•\u2022*]+\s+/.test(line);
+        if (!isBullet && arr.length) {
+            arr[arr.length - 1] = `${arr[arr.length - 1]} ${cleaned}`.trim();
+            return;
+        }
+        arr.push(cleaned);
+    };
+
+    for (let i = 0; i < body.length; i++) {
+        const line = body[i];
+        const n = normalizeLine(line);
+
+        if (/^tiêu đề\s*[:：]/i.test(n)) {
+            out.title = n.replace(/^tiêu đề\s*[:：]\s*/i, "").trim();
+            current = null;
+            continue;
+        }
+        if (/^môn học\s*[:：]/i.test(n)) {
+            out.subject = n.replace(/^môn học\s*[:：]\s*/i, "").trim();
+            current = null;
+            continue;
+        }
+        if (/^chủ đề\s*[:：]/i.test(n)) {
+            out.topic = n.replace(/^chủ đề\s*[:：]\s*/i, "").trim();
+            current = null;
+            continue;
+        }
+
+        if (isHeader(n, "Gợi ý ôn tập:")) {
+            current = "tips";
+            continue;
+        }
+        if (isHeader(n, "Các khái niệm chính:")) {
+            current = "concepts";
+            continue;
+        }
+        if (isHeader(n, "Danh sách từ vựng:")) {
+            current = "vocab";
+            continue;
+        }
+        if (isHeader(n, "Câu hỏi ôn tập:")) {
+            current = "questions";
+            continue;
+        }
+
+        if (!current) continue;
+
+        if (current === "tips") pushBullet(out.tips, line);
+        if (current === "concepts") pushBullet(out.concepts, line);
+        if (current === "vocab") pushBullet(out.vocab, line);
+        if (current === "questions") pushBullet(out.questions, line);
+    }
+
+    return out;
+}
+
+function escapeRegExp(str) {
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightKeywords(text, keywords) {
+    const t = String(text || "");
+    const keys = Array.isArray(keywords) ? keywords.map((k) => String(k || "").trim()).filter(Boolean) : [];
+    if (!t || !keys.length) return t;
+
+    const sorted = [...new Set(keys)].sort((a, b) => b.length - a.length);
+    const pattern = new RegExp(`(${sorted.map(escapeRegExp).join("|")})`, "gi");
+
+    const parts = t.split(pattern);
+    return parts.map((p, i) => {
+        const hit = sorted.some((k) => k.toLowerCase() === String(p).toLowerCase());
+        if (!hit) return <React.Fragment key={i}>{p}</React.Fragment>;
+        return (
+            <Box component="span" key={i} sx={{ fontWeight: 900, color: "#1B2559" }}>
+                {p}
+            </Box>
+        );
+    });
+}
+
+function BulletItems({ items, keywordPool }) {
+    const list = Array.isArray(items) ? items.filter(Boolean) : [];
+    if (!list.length) return null;
+
+    return (
+        <Stack spacing={1} sx={{ mt: 1 }}>
+            {list.map((t, idx) => (
+                <Box
+                    key={idx}
+                    sx={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 1,
+                    }}
+                >
+                    <Box
+                        sx={{
+                            mt: "9px",
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            bgcolor: "#9AA4B2",
+                            flex: "0 0 auto",
+                        }}
+                    />
+                    <Typography sx={{ color: "#716f6f", fontWeight: 650, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>
+                        {highlightKeywords(t, keywordPool)}
+                    </Typography>
+                </Box>
+            ))}
+        </Stack>
+    );
+}
+
+function SectionCard({ title, children }) {
+    return (
+        <Paper
+            elevation={0}
+            sx={{
+                p: 1.5,
+                borderRadius: 3,
+                border: "1px solid #E3E8EF",
+                bgcolor: "#FFFFFF",
+            }}
+        >
+            <Typography sx={{ fontWeight: 900, color: "#1B2559" }}>{title}</Typography>
+            {children}
+        </Paper>
     );
 }
 
@@ -145,7 +335,6 @@ function splitAiFeedback(raw) {
         const cleaned = normalizeBullet(line);
         if (!cleaned) return;
 
-        // loại bỏ heading bị lặp lại trong body
         const nk = normalizeHeadingKey(cleaned);
         if (H.strengths.has(nk) || H.weaknesses.has(nk) || H.recommendations.has(nk)) return;
 
@@ -169,9 +358,6 @@ function splitAiFeedback(raw) {
             continue;
         }
 
-        // Nếu chưa có heading nào mà đã có content:
-        // - ưu tiên đưa vào "weaknesses" chỉ khi nó có vẻ là nhận xét lỗi,
-        // - còn lại đưa vào "recommendations" (trung tính)
         if (!current) {
             const lower = line.toLowerCase();
             const looksWeak =
@@ -187,7 +373,6 @@ function splitAiFeedback(raw) {
         pushLine(current, line);
     }
 
-    // 3) Nếu vẫn không có gì (AI trả 1 đoạn dài không xuống dòng) -> fallback đưa vào weaknesses
     if (!out.strengths.length && !out.weaknesses.length && !out.recommendations.length) {
         const one = text.replace(/\s+/g, " ").trim();
         if (one) out.weaknesses = [one];
@@ -243,6 +428,12 @@ export default function PracticeResult({
     const aiFeedback = useMemo(() => String(result?.aiFeedback ?? "").trim(), [result]);
 
     const aiSplit = useMemo(() => splitAiFeedback(aiFeedback), [aiFeedback]);
+
+    const studyGuide = useMemo(() => parseStudyGuide(aiFeedback), [aiFeedback]);
+    const keywordPool = useMemo(
+        () => [...(studyGuide?.concepts ?? []), ...(studyGuide?.vocab ?? [])].filter(Boolean),
+        [studyGuide]
+    );
 
     const totalQuestions = numberOfQuestions ?? 0;
 
@@ -350,6 +541,22 @@ export default function PracticeResult({
         if (aiFeedback) return "Chào bạn,";
         return "";
     }, [aiFeedback, aiSplit.greeting]);
+
+    // ✅ Modal state for Study Guide
+    const [openStudyGuide, setOpenStudyGuide] = useState(false);
+
+    const hasRecommendations = useMemo(() => {
+        const g = studyGuide || {};
+        const hasAny =
+            Boolean(String(g.title || "").trim()) ||
+            Boolean(String(g.subject || "").trim()) ||
+            Boolean(String(g.topic || "").trim()) ||
+            (Array.isArray(g.tips) && g.tips.filter(Boolean).length > 0) ||
+            (Array.isArray(g.concepts) && g.concepts.filter(Boolean).length > 0) ||
+            (Array.isArray(g.vocab) && g.vocab.filter(Boolean).length > 0) ||
+            (Array.isArray(g.questions) && g.questions.filter(Boolean).length > 0);
+        return hasAny;
+    }, [studyGuide]);
 
     return (
         <Box>
@@ -462,27 +669,6 @@ export default function PracticeResult({
                     </Paper>
                 </Box>
 
-                <Paper
-                    elevation={0}
-                    sx={{
-                        mt: 1.5,
-                        p: 1.5,
-                        borderRadius: 3,
-                        border: "1px solid rgba(11,94,215,0.25)",
-                        bgcolor: "rgba(11,94,215,0.06)",
-                    }}
-                >
-                    <Typography sx={{ fontWeight: 900, color: "#0B5ED7" }}>Gợi ý ôn tập</Typography>
-                    <BulletList
-                        items={aiSplit.recommendations}
-                        emptyText={
-                            aiFeedback
-                                ? "Chưa có gợi ý ôn tập cụ thể. (Bấm “Xem lại đáp án” để xem gợi ý theo từng câu.)"
-                                : "Chưa có gợi ý ôn tập."
-                        }
-                    />
-                </Paper>
-
                 <Box sx={{ display: "flex", gap: 1, mt: 2, flexWrap: "wrap" }}>
                     {showRetest ? (
                         <Button variant="contained" onClick={onRetry} sx={{ fontWeight: 900 }} disabled={retestDisabled}>
@@ -490,8 +676,13 @@ export default function PracticeResult({
                         </Button>
                     ) : null}
 
-                    <Button variant="outlined" onClick={onNewMaterial} sx={{ fontWeight: 800 }}>
-                        Upload học liệu khác
+                    <Button
+                        variant="outlined"
+                        onClick={() => setOpenStudyGuide(true)}
+                        sx={{ fontWeight: 900, borderColor: "#2E2D84", color: "#2E2D84" }}
+                        disabled={!hasRecommendations}
+                    >
+                        Hướng dẫn ôn tập
                     </Button>
 
                     <Button
@@ -503,6 +694,81 @@ export default function PracticeResult({
                     </Button>
                 </Box>
             </Paper>
+
+            {/* ✅ Modal “Hướng dẫn ôn tập” theo style Gemini */}
+            <AppModal
+                open={openStudyGuide}
+                title="Hướng dẫn ôn tập"
+                onClose={() => setOpenStudyGuide(false)}
+                hideActions
+                maxWidth="md"
+            >
+                <Box
+                    sx={{
+                        mt: 0.5,
+                        border: "1px solid #E3E8EF",
+                        borderRadius: 3,
+                        bgcolor: "#F7F9FC",
+                        p: 1.5,
+                        maxHeight: "60vh",
+                        overflow: "auto",
+                    }}
+                >
+                    {String(studyGuide?.title || "").trim() ? (
+                        <Typography sx={{ fontWeight: 950, fontSize: 16, color: "#1B2559" }}>
+                            {studyGuide.title}
+                        </Typography>
+                    ) : null}
+
+                    {/* Subject + Topic must be separate blocks */}
+                    <Stack spacing={1.25} sx={{ mt: 1.25 }}>
+                        <SectionCard title="Môn học">
+                            <Typography sx={{ mt: 0.75, color: "#716f6f", fontWeight: 650 }}>
+                                {String(studyGuide?.subject || "").trim() || "Chưa có thông tin môn học."}
+                            </Typography>
+                        </SectionCard>
+
+                        <SectionCard title="Chủ đề">
+                            <Typography sx={{ mt: 0.75, color: "#716f6f", fontWeight: 650 }}>
+                                {String(studyGuide?.topic || "").trim() || "Chưa có thông tin chủ đề."}
+                            </Typography>
+                        </SectionCard>
+                    </Stack>
+
+                    <Stack spacing={1.25} sx={{ mt: 1.25 }}>
+                        <SectionCard title="Gợi ý ôn tập">
+                            <BulletItems items={studyGuide?.tips} keywordPool={keywordPool} />
+                        </SectionCard>
+
+                        <SectionCard title="Các khái niệm chính">
+                            <BulletItems items={studyGuide?.concepts} keywordPool={keywordPool} />
+                        </SectionCard>
+
+                        <SectionCard title="Danh sách từ vựng">
+                            <BulletItems items={studyGuide?.vocab} keywordPool={keywordPool} />
+                        </SectionCard>
+
+                        <SectionCard title="Câu hỏi ôn tập">
+                            <BulletItems items={studyGuide?.questions} keywordPool={keywordPool} />
+                        </SectionCard>
+                    </Stack>
+
+                    {!hasRecommendations ? (
+                        <Typography sx={{ mt: 1.25, color: "#716f6f", fontWeight: 650, whiteSpace: "pre-wrap" }}>
+                            {aiFeedback ? "Chưa có hướng dẫn ôn tập cụ thể." : "Chưa có hướng dẫn ôn tập."}
+                        </Typography>
+                    ) : null}
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 2 }}>
+                    <Button variant="contained" onClick={() => setOpenStudyGuide(false)} sx={{ fontWeight: 900 }}>
+                        Đóng
+                    </Button>
+                </Box>
+            </AppModal>
+
+            {/* giữ prop onNewMaterial để không ảnh hưởng flow parent (không dùng nữa) */}
+            {typeof onNewMaterial === "function" ? null : null}
         </Box>
     );
 }
