@@ -357,7 +357,7 @@ export default function AdminSettings() {
         if (activeTask === TASKS.REPORT) {
             if (form.monthlyReportEnabled) {
                 const dom = Number(form.monthlyReportDayOfMonth);
-                if (Number.isNaN(dom) || dom < 0 || dom > 31) return "Ngày gửi phải 0..31 (0 = ngày cuối tháng)";
+                if (Number.isNaN(dom) || dom < 0 || dom > 31) return "Ngày gửi phải 0-31 (0 = ngày cuối tháng)";
                 if (!isValidTimeHHmm(form.monthlyReportTime)) return "Giờ gửi phải đúng định dạng HH:mm";
                 if (!String(form.monthlyReportTimeZone || "").trim()) return "Timezone không được rỗng";
             }
