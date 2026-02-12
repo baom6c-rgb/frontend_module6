@@ -194,6 +194,12 @@ export default function AdminUserList() {
         onConfirm: null,
     });
 
+    // ✅ NEW: đọc id từ query (?id=123)
+    const selectedId = useMemo(() => {
+        const sp = new URLSearchParams(location.search);
+        return sp.get("id"); // string | null
+    }, [location.search]);
+
     const openConfirm = ({ title = "Xác nhận", message, loadingMessage, onConfirm }) => {
         setConfirm({
             open: true,
@@ -264,13 +270,19 @@ export default function AdminUserList() {
         fetchFilterOptions();
     }, [fetchUsers, fetchFilterOptions]);
 
+    // ✅ UPDATED: parse cả status + id để reset filter/pagination
     useEffect(() => {
         const sp = new URLSearchParams(location.search);
         const status = sp.get("status");
+        const id = sp.get("id");
+
         if (status === "WAITING_APPROVAL") {
             setSelectedStatus("WAITING_APPROVAL");
-            setPaginationModel((p) => ({ ...p, page: 0 }));
             setShowFilters(true);
+        }
+
+        if (id || status === "WAITING_APPROVAL") {
+            setPaginationModel((p) => ({ ...p, page: 0 }));
         }
     }, [location.search]);
 
@@ -314,6 +326,7 @@ export default function AdminUserList() {
         return { total, active, pending, blocked };
     }, [rows]);
 
+    // ✅ UPDATED: filter thêm theo selectedId
     const filteredRows = useMemo(() => {
         const q = String(searchText || "").trim().toLowerCase();
 
@@ -334,9 +347,12 @@ export default function AdminUserList() {
                     ? true
                     : String(r.status || "").toUpperCase() === String(selectedStatus).toUpperCase();
 
-            return okSearch && okModule && okClass && okStatus;
+            // ✅ NEW: nếu có ?id=... thì chỉ show đúng user đó
+            const okId = !selectedId ? true : String(r.id) === String(selectedId);
+
+            return okSearch && okModule && okClass && okStatus && okId;
         });
-    }, [rows, searchText, selectedModule, selectedClass, selectedStatus]);
+    }, [rows, searchText, selectedModule, selectedClass, selectedStatus, selectedId]);
 
     const sortedRows = useMemo(() => {
         const arr = [...filteredRows];
@@ -757,20 +773,23 @@ export default function AdminUserList() {
                     const newRow = normalizeUserRow({
                         ...(created || {}),
                         // ✅ Kiểm tra nhiều field có thể
-                        role: created?.role ||
+                        role:
+                            created?.role ||
                             created?.roleName ||
                             formData?.roleName ||
                             formData?.role ||
                             (created?.roles && created.roles[0]) ||
                             "",
                         // ✅ Thêm className
-                        className: created?.className ||
+                        className:
+                            created?.className ||
                             formData?.className ||
                             created?.class?.name ||
                             created?.class?.className ||
                             "",
                         // ✅ Thêm moduleName
-                        moduleName: created?.moduleName ||
+                        moduleName:
+                            created?.moduleName ||
                             formData?.moduleName ||
                             created?.module?.name ||
                             created?.module?.moduleName ||

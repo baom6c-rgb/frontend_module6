@@ -480,7 +480,7 @@ const AdminLayout = () => {
                                                     key={u.id}
                                                     onClick={() => {
                                                         closeNotif();
-                                                        handleNav("/admin/approval");
+                                                        handleNav(`/admin/users?status=WAITING_APPROVAL&id=${u.id}`);
                                                     }}
                                                     sx={{ px: 2, py: 1.4, "&:hover": { bgcolor: "#F4F7FE" } }}
                                                 >
