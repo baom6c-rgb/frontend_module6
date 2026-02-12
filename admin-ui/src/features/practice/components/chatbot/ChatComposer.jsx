@@ -223,9 +223,11 @@ export default function ChatComposer({
                                 sx={{
                                     borderRadius: 2,
                                     border: `1px solid ${COLORS.border}`,
-                                    bgcolor: canSend ? "rgba(255, 140, 0, 0.10)" : "transparent",
+                                    bgcolor: canSend ? "primary.main" : "transparent",
+                                    color: canSend ? "#fff" : "inherit",
+                                    transition: "all 0.25s ease",
                                     "&:hover": {
-                                        bgcolor: canSend ? "rgba(255, 140, 0, 0.16)" : COLORS.hoverBg,
+                                        bgcolor: canSend ? "primary.dark" : COLORS.hoverBg,
                                     },
                                 }}
                             >
