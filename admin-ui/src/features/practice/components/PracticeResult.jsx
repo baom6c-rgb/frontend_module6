@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useSelector } from "react-redux";
 import { Box, Button, Paper, Typography, Divider, Chip, Stack } from "@mui/material";
 import { practiceApi } from "../../../api/practiceApi"; // ✅ dùng cho retest status
 import AppModal from "../../../components/common/AppModal";
@@ -390,6 +391,7 @@ export default function PracticeResult({
                                        }) {
     const earned = useMemo(() => Number(result?.earnedPoints ?? 0), [result]);
     const totalPoints = useMemo(() => Number(result?.totalPoints ?? 0), [result]);
+    const { user } = useSelector((state) => state.auth);
 
     const percent = useMemo(() => {
         const p = Number(result?.score);
@@ -544,6 +546,22 @@ export default function PracticeResult({
 
     // ✅ Modal state for Study Guide
     const [openStudyGuide, setOpenStudyGuide] = useState(false);
+
+    // Bạn có thể thêm một useEffect để tự động lưu mỗi khi studyGuide có dữ liệu mới
+    useEffect(() => {
+        // Thêm kiểm tra user._id thật kỹ trước khi lưu
+        if (user && user._id && studyGuide && (studyGuide.concepts?.length > 0 || studyGuide.questions?.length > 0)) {
+            const dataToSave = {
+                tips: studyGuide.tips || [],
+                concepts: studyGuide.concepts || [],
+                vocab: studyGuide.vocab || [],
+                questions: studyGuide.questions || [],
+                userId: user._id,
+                updatedAt: new Date().toISOString()
+            };
+            localStorage.setItem(`latest_study_guide_${user._id}`, JSON.stringify(dataToSave));
+        }
+    }, [studyGuide, user]);
 
     const hasRecommendations = useMemo(() => {
         const g = studyGuide || {};
