@@ -16,6 +16,7 @@ import { useToast } from "../../components/common/AppToast";
 import CountdownTimer from "../../components/common/CountdownTimer";
 
 import PracticeReviewDialog from "./components/PracticeReviewDialog";
+import TopicSelectDialog from "./components/TopicSelectDialog";
 
 import PracticeChatPanel from "./components/page/PracticeChatPanel";
 import PracticeCanvasPanel from "./components/page/PracticeCanvasPanel";
@@ -76,6 +77,12 @@ export default function PracticePage() {
     // ===== Loading =====
     const [loading, setLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState("Vui lòng chờ...");
+
+    // ===== Topic selection (multi-part material) =====
+    const [topicDialogOpen, setTopicDialogOpen] = useState(false);
+    const [topicOptions, setTopicOptions] = useState([]);
+    const [selectionToken, setSelectionToken] = useState("");
+    const [topicLoading, setTopicLoading] = useState(false);
 
     // ===== Config =====
     // ✅ Student không được chọn count nữa -> source of truth là BE response
@@ -193,7 +200,11 @@ export default function PracticePage() {
         let mounted = true;
 
         const pickMpq = (data) => {
-            const mpq = data?.minutesPerQuestion ?? data?.minutes_per_question ?? data?.settings?.minutesPerQuestion ?? null;
+            const mpq =
+                data?.minutesPerQuestion ??
+                data?.minutes_per_question ??
+                data?.settings?.minutesPerQuestion ??
+                null;
             const n = Number(mpq);
             return Number.isFinite(n) && n > 0 ? n : null;
         };
@@ -229,8 +240,6 @@ export default function PracticePage() {
     }, []);
 
     // ===== Auto-fill duration in READY-TO-GENERATE state =====
-    // ✅ Flow mới: count do admin set, FE không đoán được trước
-    // Chỉ estimate khi đã có questionCount thật (từ server / resume)
     useEffect(() => {
         const mat = materialIdRef.current ?? materialId;
         const safeCount = toPositiveIntOrNull(questionCount);
@@ -274,7 +283,7 @@ export default function PracticePage() {
 
             setMode(MODE.IDLE);
             setDurationMinutes(0);
-            setQuestionCount(null); // ✅ quan trọng
+            setQuestionCount(null);
             setIsCanvasOpen(true);
 
             setAssistantMode(ASSISTANT_MODE.GENERATE);
@@ -352,7 +361,7 @@ export default function PracticePage() {
 
                 setMode(MODE.IDLE);
                 setDurationMinutes(0);
-                setQuestionCount(null); // ✅ quan trọng
+                setQuestionCount(null);
 
                 clearActiveSession();
                 resetStudyChat();
@@ -370,7 +379,12 @@ export default function PracticePage() {
             } catch (e) {
                 console.error(e);
                 const status = e?.response?.status;
-                const serverMsg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Upload failed";
+                const serverMsg =
+                    e?.response?.data?.message ||
+                    e?.response?.data?.error ||
+                    e?.response?.data ||
+                    e?.message ||
+                    "Upload failed";
                 showToast(`Upload học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
                 appendMessage({ role: "assistant", text: "Không upload/đọc được file. Kiểm tra định dạng/size nhé." });
             } finally {
@@ -417,7 +431,7 @@ export default function PracticePage() {
 
                 setMode(MODE.IDLE);
                 setDurationMinutes(0);
-                setQuestionCount(null); // ✅ quan trọng
+                setQuestionCount(null);
 
                 clearActiveSession();
                 resetStudyChat();
@@ -435,7 +449,12 @@ export default function PracticePage() {
             } catch (e) {
                 console.error(e);
                 const status = e?.response?.status;
-                const serverMsg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Create material failed";
+                const serverMsg =
+                    e?.response?.data?.message ||
+                    e?.response?.data?.error ||
+                    e?.response?.data ||
+                    e?.message ||
+                    "Create material failed";
                 showToast(`Gửi học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
                 appendMessage({ role: "assistant", text: "Không tạo được học liệu từ text này. Thử lại nhé." });
             } finally {
@@ -557,6 +576,23 @@ export default function PracticePage() {
                 numberOfQuestions: dummyCount,
             });
 
+            // ✅ BE may return NEED_TOPIC when material has multiple parts
+            if (data?.status === "NEED_TOPIC") {
+                setSelectionToken(data?.selectionToken || "");
+                setTopicOptions(Array.isArray(data?.topics) ? data.topics : []);
+                setTopicDialogOpen(true);
+
+                setMode(MODE.IDLE);
+                setIsCanvasOpen(true);
+
+                appendMessage({
+                    role: "assistant",
+                    text: "Mình thấy học liệu có nhiều phần. Hãy chọn 1 phần (trong popup) để Fly AI tạo đề tập trung đúng nội dung đó nhé!",
+                });
+
+                return { ok: false, needTopic: true };
+            }
+
             const token = data?.sessionToken;
             const dur = Number(data?.durationMinutes);
             const beCount = Number(data?.numberOfQuestions);
@@ -568,7 +604,6 @@ export default function PracticePage() {
             setSessionToken(token);
             sessionTokenRef.current = token;
 
-            // ✅ SOURCE OF TRUTH
             setQuestionCount(beCount);
             setDurationMinutes(dur);
 
@@ -598,7 +633,12 @@ export default function PracticePage() {
         } catch (e) {
             console.error(e);
             const status = e?.response?.status;
-            const serverMsg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Generate failed";
+            const serverMsg =
+                e?.response?.data?.message ||
+                e?.response?.data?.error ||
+                e?.response?.data ||
+                e?.message ||
+                "Generate failed";
             showToast(`Không tạo được đề${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
             appendMessage({ role: "assistant", text: "Lỗi tạo đề (AI/Server). Thử gửi lại hoặc đổi học liệu." });
             return { ok: false };
@@ -606,6 +646,88 @@ export default function PracticePage() {
             setLoading(false);
         }
     }, [appendMessage, clearPersistedResult, materialId, saveActiveSession, showToast]);
+
+    const handleConfirmTopic = useCallback(
+        async (topicId) => {
+            const matId = materialIdRef.current ?? materialId;
+            if (!matId) {
+                showToast("Chưa có học liệu. Hãy upload/paste trước.", "warning");
+                return;
+            }
+            if (!selectionToken) {
+                showToast("Thiếu selectionToken. Vui lòng bấm tạo đề lại.", "warning");
+                return;
+            }
+
+            setTopicLoading(true);
+            setLoading(true);
+            setLoadingMessage("Fly AI đang tạo đề theo phần bạn chọn…");
+
+            try {
+                const data = await practiceApi.selectTopicV2({
+                    selectionToken,
+                    topicId,
+                });
+
+                const token = data?.sessionToken;
+                const dur = Number(data?.durationMinutes);
+                const beCount = Number(data?.numberOfQuestions);
+
+                if (!token) throw new Error("Missing sessionToken from server");
+                if (!Number.isFinite(dur) || dur <= 0) throw new Error("Missing durationMinutes from server");
+                if (!Number.isFinite(beCount) || beCount <= 0) throw new Error("Missing numberOfQuestions from server");
+
+                setTopicDialogOpen(false);
+                setTopicOptions([]);
+                setSelectionToken("");
+
+                setSessionToken(token);
+                sessionTokenRef.current = token;
+
+                setQuestionCount(beCount);
+                setDurationMinutes(dur);
+                setStartedAtIso(null);
+                setDeadlineIso(null);
+
+                setMode(MODE.READY);
+                setIsCanvasOpen(true);
+
+                saveActiveSession({
+                    mode: MODE.READY,
+                    sessionToken: token,
+                    attemptId: token,
+                    materialId: matId,
+                    questionCount: beCount,
+                    durationMinutes: dur,
+                    startedAtIso: null,
+                    deadlineIso: null,
+                });
+
+                appendMessage({
+                    role: "assistant",
+                    text: `Đã tạo đề theo phần bạn chọn. Số câu: ${beCount}. Thời gian: ${dur} phút. Bắt đầu làm bài nhé!`,
+                });
+            } catch (e) {
+                console.error(e);
+                const status = e?.response?.status;
+                const serverMsg =
+                    e?.response?.data?.message ||
+                    e?.response?.data?.error ||
+                    e?.response?.data ||
+                    e?.message ||
+                    "Select topic failed";
+                showToast(
+                    `Không tạo được đề theo phần đã chọn${status ? ` (${status})` : ""}: ${String(serverMsg)}`,
+                    "error"
+                );
+                appendMessage({ role: "assistant", text: "Lỗi tạo đề theo phần đã chọn. Bạn thử chọn lại hoặc bấm tạo đề lại nhé." });
+            } finally {
+                setTopicLoading(false);
+                setLoading(false);
+            }
+        },
+        [appendMessage, materialId, saveActiveSession, selectionToken, showToast]
+    );
 
     // ===== Start session =====
     const startSessionV2 = useCallback(async () => {
@@ -654,7 +776,9 @@ export default function PracticePage() {
                 attemptId: token,
                 materialId: materialIdRef.current ?? materialId,
                 questionCount: safeCount,
-                durationMinutes: Number.isFinite(Number(data?.durationMinutes)) ? Number(data.durationMinutes) : Number(durationMinutes),
+                durationMinutes: Number.isFinite(Number(data?.durationMinutes))
+                    ? Number(data.durationMinutes)
+                    : Number(durationMinutes),
                 startedAtIso: startedAt,
                 deadlineIso: deadline,
             });
@@ -784,7 +908,7 @@ export default function PracticePage() {
                 const qLen = Array.isArray(detail?.questions) ? detail.questions.length : null;
                 if (qLen != null) {
                     setAttemptQuestionCount(qLen);
-                    setQuestionCount(qLen); // ✅ retest count theo đề thật
+                    setQuestionCount(qLen);
                 }
 
                 const startedAt = data?.startedAt || null;
@@ -871,7 +995,6 @@ export default function PracticePage() {
 
                 if (Number.isFinite(Number(data?.durationMinutes))) setDurationMinutes(Number(data.durationMinutes));
 
-                // ✅ nếu BE có trả count ở session API thì sync (không phải lúc nào cũng có)
                 const beCount = toPositiveIntOrNull(data?.numberOfQuestions ?? data?.questionCount ?? data?.totalQuestions);
                 if (beCount != null) setQuestionCount(beCount);
 
@@ -889,7 +1012,7 @@ export default function PracticePage() {
                         const qLen = Array.isArray(detail?.questions) ? detail.questions.length : null;
                         if (qLen != null) {
                             setAttemptQuestionCount(qLen);
-                            setQuestionCount(qLen); // ✅ chắc nhất: count theo questions length
+                            setQuestionCount(qLen);
                         }
 
                         setMode(MODE.DOING);
@@ -1103,7 +1226,6 @@ export default function PracticePage() {
                         attemptStartTs={attemptStartTs}
                         result={result}
                         onGenerate={generateSessionV2}
-                        // ✅ removed: onChangeQuestionCount
                         onRequestStart={handleRequestStart}
                         onRequestReset={handleRequestReset}
                         onSubmit={handlePlayerSubmit}
@@ -1166,7 +1288,11 @@ export default function PracticePage() {
                                 },
                             }}
                         >
-                            {isCanvasOpen ? <ChevronRightRoundedIcon sx={{ color: "#fff" }} /> : <ChevronLeftRoundedIcon sx={{ color: "#fff" }} />}
+                            {isCanvasOpen ? (
+                                <ChevronRightRoundedIcon sx={{ color: "#fff" }} />
+                            ) : (
+                                <ChevronLeftRoundedIcon sx={{ color: "#fff" }} />
+                            )}
                         </IconButton>
                     </Tooltip>
                 </Box>
@@ -1180,6 +1306,16 @@ export default function PracticePage() {
             />
 
             <PracticeReviewDialog open={reviewOpen} onClose={() => setReviewOpen(false)} review={reviewData} />
+            <TopicSelectDialog
+                open={topicDialogOpen}
+                topics={topicOptions}
+                loading={topicLoading}
+                onClose={() => {
+                    if (topicLoading) return;
+                    setTopicDialogOpen(false);
+                }}
+                onConfirm={handleConfirmTopic}
+            />
             <GlobalLoading open={loading} message={loadingMessage} />
         </Box>
     );

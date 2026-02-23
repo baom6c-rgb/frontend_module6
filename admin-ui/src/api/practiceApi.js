@@ -105,6 +105,15 @@ export const practiceApi = {
         return normalizeGenerateSessionV2(res);
     },
 
+
+    selectTopicV2: async ({ selectionToken, topicId }) => {
+        const res = await axiosPrivate.post("/student/practice/v2/select-topic", {
+            selectionToken,
+            topicId,
+        });
+        return normalizeGenerateSessionV2(res);
+    },
+
     startSessionV2: async (payload) => {
         const res = await axiosPrivate.post("/student/practice/v2/start", payload);
         return unwrap(res);
