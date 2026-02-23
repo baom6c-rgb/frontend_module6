@@ -715,7 +715,7 @@ export default function UserDashboard() {
                                                 </Box>
                                                 <Box>
                                                     <Typography sx={{fontWeight: 950, color: COLORS.text, fontSize: '1rem', lineHeight: 1.2}}>
-                                                        {activeTab === 0 ? "Gợi ý học tập" : "Câu hỏi ôn tập"}
+                                                        {activeTab === 0 ? "Xem và không đánh giá " : "Phải bạn không - Cùng sửa nhé"}
                                                     </Typography>
                                                     <Typography variant="caption" sx={{
                                                         color: COLORS.subtext,
