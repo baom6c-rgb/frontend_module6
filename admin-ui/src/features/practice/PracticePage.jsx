@@ -648,7 +648,7 @@ export default function PracticePage() {
     }, [appendMessage, clearPersistedResult, materialId, saveActiveSession, showToast]);
 
     const handleConfirmTopic = useCallback(
-        async (topicId) => {
+        async (topicIds) => {
             const matId = materialIdRef.current ?? materialId;
             if (!matId) {
                 showToast("Chưa có học liệu. Hãy upload/paste trước.", "warning");
@@ -658,7 +658,10 @@ export default function PracticePage() {
                 showToast("Thiếu selectionToken. Vui lòng bấm tạo đề lại.", "warning");
                 return;
             }
-
+            if (!Array.isArray(topicIds) || topicIds.length === 0) {
+                showToast("Bạn phải chọn ít nhất 1 phần.", "warning");
+                return;
+            }
             setTopicLoading(true);
             setLoading(true);
             setLoadingMessage("Fly AI đang tạo đề theo phần bạn chọn…");
@@ -666,7 +669,7 @@ export default function PracticePage() {
             try {
                 const data = await practiceApi.selectTopicV2({
                     selectionToken,
-                    topicId,
+                    topicIds,
                 });
 
                 const token = data?.sessionToken;
