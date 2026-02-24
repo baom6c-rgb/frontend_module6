@@ -554,8 +554,8 @@ const AdminLayout = () => {
                                             sx={{
                                                 height: 20,
                                                 fontWeight: 900,
-                                                bgcolor: "rgba(255,255,255,0.2)",
-                                                color: "#FFFFFF",
+                                                bgcolor: "rgba(255,0,0,0.73)",
+                                                color: "#f8eded",
                                             }}
                                         />
                                     </Stack>
