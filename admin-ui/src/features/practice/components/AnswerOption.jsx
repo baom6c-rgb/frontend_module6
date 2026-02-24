@@ -1,8 +1,21 @@
 // src/features/practice/components/AnswerOption.jsx
-import React from "react";
+import React, { useMemo } from "react";
 import { Box, Typography } from "@mui/material";
 
+function cleanAnswerText(raw) {
+    if (raw == null) return "";
+    return String(raw)
+        .replace(/[‘’]/g, "")
+        .replace(/[“”]/g, "")
+        .trim();
+}
+
 export default function AnswerOption({ label, text, selected, onSelect }) {
+    const displayText = useMemo(() => {
+        const cleaned = cleanAnswerText(text);
+        return cleaned || "(Không có nội dung)";
+    }, [text]);
+
     return (
         <Box
             onClick={onSelect} // ✅ QUAN TRỌNG
@@ -39,8 +52,9 @@ export default function AnswerOption({ label, text, selected, onSelect }) {
                 {label}
             </Box>
 
-            <Typography sx={{ fontWeight: 700, color: "#1B2559" }}>
-                {text || "(Không có nội dung)"}
+            {/* ✅ BỎ IN ĐẬM: fontWeight 400 */}
+            <Typography sx={{ fontWeight: 400, color: "#1B2559", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                {displayText}
             </Typography>
         </Box>
     );

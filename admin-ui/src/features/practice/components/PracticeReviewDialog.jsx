@@ -18,6 +18,14 @@ import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 
+function cleanAnswerText(raw) {
+    if (raw == null) return "";
+    return String(raw)
+        .replace(/[‘’]/g, "")
+        .replace(/[“”]/g, "")
+        .trim();
+}
+
 function looksLikeCode(text) {
     if (!text) return false;
     const t = String(text);
@@ -192,7 +200,7 @@ function QuestionContent({ raw }) {
                                     fontSize: 13,
                                     lineHeight: 1.55,
                                     color: "#1B2559",
-                                    fontWeight: 700,
+                                    fontWeight: 400, // ✅ BỎ IN ĐẬM
                                 }}
                             >
                                 {body}
@@ -215,7 +223,7 @@ function QuestionContent({ raw }) {
                                     fontSize: 14,
                                     lineHeight: 1.55,
                                     color: "#1B2559",
-                                    fontWeight: 700,
+                                    fontWeight: 400, // ✅ BỎ IN ĐẬM
                                 }}
                             >
                                 {body}
@@ -324,7 +332,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                     ) : null}
                                 </Stack>
 
-                                {/* ✅ Render content: title + body (code block nếu có) */}
+                                {/* ✅ Render content */}
                                 <QuestionContent raw={rawContent} />
 
                                 <Divider sx={{ my: 1.5 }} />
@@ -333,7 +341,8 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                 {type === "MCQ" ? (
                                     <>
                                         {["A", "B", "C", "D"].map((k) => {
-                                            const text = q.options?.[k] || "";
+                                            const raw = q.options?.[k] || "";
+                                            const text = cleanAnswerText(raw); // ✅ XOÁ ‘ ’
                                             const isCorrect = q.correctAnswer === k;
                                             const isSelected = q.selectedAnswer === k;
                                             const isWrongSelected = isSelected && !isCorrect;
@@ -359,9 +368,10 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                                 >
                                                     <Typography sx={{ fontWeight: 900, width: 26 }}>{k}.</Typography>
 
+                                                    {/* ✅ BỎ IN ĐẬM + giữ wrap */}
                                                     <Typography
                                                         sx={{
-                                                            fontWeight: 700,
+                                                            fontWeight: 400,
                                                             color: "#1B2559",
                                                             whiteSpace: "pre-wrap",
                                                             wordBreak: "break-word",
@@ -384,7 +394,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                             <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
                                                 Câu trả lời của bạn
                                             </Typography>
-                                            <Typography sx={{ mt: 0.5, color: "#000000", fontWeight: 700, whiteSpace: "pre-wrap" }}>
+                                            <Typography sx={{ mt: 0.5, color: "#000000", fontWeight: 400, whiteSpace: "pre-wrap" }}>
                                                 {q.yourAnswer || "(chưa trả lời)"}
                                             </Typography>
                                         </Box>
@@ -393,7 +403,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                             <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
                                                 Gợi ý đáp án (sample)
                                             </Typography>
-                                            <Typography sx={{ mt: 0.5, color: "#716f6f", fontWeight: 700, whiteSpace: "pre-wrap" }}>
+                                            <Typography sx={{ mt: 0.5, color: "#716f6f", fontWeight: 400, whiteSpace: "pre-wrap" }}>
                                                 {q.sampleAnswer || "(không có)"}
                                             </Typography>
                                         </Box>
@@ -406,7 +416,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                         <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
                                             Giải thích / Gợi ý học lại
                                         </Typography>
-                                        <Typography sx={{ mt: 0.5, color: "#716f6f", fontWeight: 700, whiteSpace: "pre-wrap" }}>
+                                        <Typography sx={{ mt: 0.5, color: "#716f6f", fontWeight: 400, whiteSpace: "pre-wrap" }}>
                                             {q.feedback}
                                         </Typography>
                                     </Box>
