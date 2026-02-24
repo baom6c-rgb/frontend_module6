@@ -640,22 +640,6 @@ export default function UserDashboard() {
                                         tone="primary"
                                     />
                                     <KpiCard
-                                        icon={<SchoolIcon />}
-                                        title="Điểm trung bình"
-                                        value={avgScore}
-                                        subtitle="/100"
-                                        tone="primary"
-                                    />
-                                    <KpiCard
-                                        icon={<TimerIcon />}
-                                        title="Thời gian"
-                                        value={onlineTimeText}
-                                        subtitle="Tổng thời gian làm bài"
-                                        tone="orange"
-                                    />
-
-                                    {/* Hàng 2 - 3 cards dưới */}
-                                    <KpiCard
                                         icon={<CheckCircleIcon />}
                                         title="Số bài Đạt"
                                         value={passedLessons}
@@ -668,6 +652,22 @@ export default function UserDashboard() {
                                         value={failedLessons}
                                         subtitle="Trượt"
                                         tone="error"
+                                    />
+
+                                    {/* Hàng 2 - 3 cards dưới */}
+                                    <KpiCard
+                                        icon={<SchoolIcon />}
+                                        title="Điểm trung bình"
+                                        value={avgScore}
+                                        subtitle="/100"
+                                        tone="primary"
+                                    />
+                                    <KpiCard
+                                        icon={<TimerIcon />}
+                                        title="Thời gian"
+                                        value={onlineTimeText}
+                                        subtitle="Tổng thời gian làm bài"
+                                        tone="orange"
                                     />
                                     <KpiCard
                                         icon={<TrendingIcon />}

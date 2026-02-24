@@ -1,3 +1,4 @@
+// src/layout/UserLayout.jsx
 import React from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
@@ -24,7 +25,7 @@ import {
     Logout as LogoutIcon,
     SchoolRounded,
     MenuRounded,
-    LogoutRounded
+    LogoutRounded,
 } from "@mui/icons-material";
 import QuizRoundedIcon from "@mui/icons-material/QuizRounded";
 import { useDispatch } from "react-redux";
@@ -144,6 +145,20 @@ export default function UserLayout() {
         statusUpper === "WAITING_APPROVAL" ||
         statusUpper === "PENDING";
 
+    // ✅ status label + color styles (ACTIVE/WAITING)
+    const statusLabel = isWaiting ? "Đang chờ" : "Hoạt động";
+    const statusColorStyles = isWaiting
+        ? {
+            bgcolor: "rgba(255, 193, 7, 0.22)", // vàng nhạt
+            color: "#FF8C00", // cam đậm
+            border: "1px solid rgba(255,140,0,0.35)",
+        }
+        : {
+            bgcolor: "rgba(71,204,52,0.71)", // xanh nhạt
+            color: "#f8e8e8", // xanh đậm
+            border: "1px solid rgba(46,125,50,0.35)",
+        };
+
     // ===== avatar menu =====
     const [anchorEl, setAnchorEl] = React.useState(null);
     const menuOpen = Boolean(anchorEl);
@@ -169,10 +184,7 @@ export default function UserLayout() {
     const syncUserDataAvatar = React.useCallback((avatarUrl) => {
         if (!avatarUrl) return;
         const u = safeParse("userData", {});
-        localStorage.setItem(
-            "userData",
-            JSON.stringify({ ...(u || {}), avatarUrl })
-        );
+        localStorage.setItem("userData", JSON.stringify({ ...(u || {}), avatarUrl }));
     }, []);
 
     React.useEffect(() => {
@@ -193,7 +205,9 @@ export default function UserLayout() {
             }
         };
         load();
-        return () => { alive = false; };
+        return () => {
+            alive = false;
+        };
     }, [isWaiting, syncUserDataAvatar]);
 
     const avatarUrl =
@@ -205,9 +219,9 @@ export default function UserLayout() {
 
     // ===== Menu items =====
     const menuItems = [
-        { text: "Trang chủ",           icon: <DashboardRounded />,  path: "/users/dashboard" },
-        { text: "Đánh giá học tập",    icon: <SchoolRounded />,     path: "/users/review" },
-        { text: "Luyện tập (AI Quiz)", icon: <QuizRoundedIcon />,   path: "/users/practice" },
+        { text: "Trang chủ", icon: <DashboardRounded />, path: "/users/dashboard" },
+        { text: "Đánh giá học tập", icon: <SchoolRounded />, path: "/users/review" },
+        { text: "Luyện tập (AI Quiz)", icon: <QuizRoundedIcon />, path: "/users/practice" },
     ];
 
     // ===== AUTO HIDE SIDEBAR khi vào /users/practice =====
@@ -270,7 +284,6 @@ export default function UserLayout() {
             : drawerWidth;
 
     const currentPath = location.pathname;
-    const statusLabel = isWaiting ? "WAITING" : "ACTIVE";
 
     // ─── Drawer Content ──────────────────────────────────
     const drawerContent = (
@@ -307,8 +320,7 @@ export default function UserLayout() {
                 <Box sx={{ mt: 2 }}>
                     {menuItems.map((item) => {
                         const isActive =
-                            currentPath === item.path ||
-                            currentPath.startsWith(item.path + "/");
+                            currentPath === item.path || currentPath.startsWith(item.path + "/");
 
                         return (
                             <NavItem
@@ -371,7 +383,6 @@ export default function UserLayout() {
     // ─── Render ──────────────────────────────────────────
     return (
         <Box sx={{ display: "flex", bgcolor: COLORS.bgLight, minHeight: "100vh", width: "100%" }}>
-
             {/* ── AppBar ── */}
             <AppBar
                 position="fixed"
@@ -399,13 +410,14 @@ export default function UserLayout() {
                         >
                             <MenuRounded />
                         </IconButton>
-                        <Link to="/users/dashboard" style={{ display: 'flex', textDecoration: 'none' }}>
-                        <Box
-                            component="img"
-                            src="/images/logo_codegym_ai.png"
-                            alt="CodeGym Logo"
-                            sx={{ height: 32, width: "auto", flex: "0 0 auto" }}
-                        />
+
+                        <Link to="/users/dashboard" style={{ display: "flex", textDecoration: "none" }}>
+                            <Box
+                                component="img"
+                                src="/images/logo_codegym_ai.png"
+                                alt="CodeGym Logo"
+                                sx={{ height: 32, width: "auto", flex: "0 0 auto" }}
+                            />
                         </Link>
                     </Box>
 
@@ -430,7 +442,12 @@ export default function UserLayout() {
                             <Avatar
                                 src={avatarUrl || undefined}
                                 imgProps={{ referrerPolicy: "no-referrer" }}
-                                sx={{ width: 36, height: 36, bgcolor: COLORS.secondaryOrange, fontWeight: 900 }}
+                                sx={{
+                                    width: 36,
+                                    height: 36,
+                                    bgcolor: COLORS.secondaryOrange,
+                                    fontWeight: 900,
+                                }}
                             >
                                 {avatarChar}
                             </Avatar>
@@ -440,14 +457,19 @@ export default function UserLayout() {
                                     <Typography sx={{ fontWeight: 900, color: "#FFFFFF", fontSize: 14 }}>
                                         {profile?.fullName || displayName}
                                     </Typography>
+
+                                    {/* ✅ Status chip updated */}
                                     <Chip
                                         size="small"
                                         label={statusLabel}
                                         sx={{
-                                            height: 20,
+                                            height: 22,
                                             fontWeight: 900,
-                                            bgcolor: "rgba(255,255,255,0.2)",
-                                            color: "#FFFFFF",
+                                            fontSize: 11,
+                                            px: 0.5,
+                                            borderRadius: "10px",
+                                            textTransform: "none",
+                                            ...statusColorStyles,
                                         }}
                                     />
                                 </Box>
