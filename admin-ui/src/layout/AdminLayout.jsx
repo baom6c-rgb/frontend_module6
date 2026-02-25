@@ -52,6 +52,32 @@ import AppConfirm from "../components/common/AppConfirm";
 const drawerWidth = 280;
 const drawerCollapsedWidth = 84;
 
+// ── AdminFooter ──────────────────────────────────────────────
+const AdminFooter = () => (
+    <Box
+        component="footer"
+        sx={{
+            mt: "auto",
+            py: 1.5,
+            px: { xs: 2, md: 3, lg: 4 },
+            borderTop: "1px solid #E0E5F2",
+            bgcolor: "#F4F7FE",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 1,
+        }}
+    >
+        <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#A3AED0" }}>
+            © {new Date().getFullYear()} Hệ thống quản trị nội bộ
+        </Typography>
+        <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#A3AED0" }}>
+            Chỉ dành cho quản trị viên
+        </Typography>
+    </Box>
+);
+
 const safeParse = (key, fallback = null) => {
     try {
         const s = localStorage.getItem(key);
@@ -405,16 +431,16 @@ const AdminLayout = () => {
 
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
                             <Link to="/admin" style={{ display: 'flex', textDecoration: 'none' }}>
-                            <Box
-                                component="img"
-                                src="/images/logo_codegym_ai.png"
-                                alt="CodeGym Logo"
-                                sx={{
-                                    height: 32,
-                                    width: "auto",
-                                    flex: "0 0 auto",
-                                }}
-                            />
+                                <Box
+                                    component="img"
+                                    src="/images/logo_codegym_ai.png"
+                                    alt="CodeGym Logo"
+                                    sx={{
+                                        height: 32,
+                                        width: "auto",
+                                        flex: "0 0 auto",
+                                    }}
+                                />
                             </Link>
                         </Box>
                     </Box>
@@ -632,12 +658,15 @@ const AdminLayout = () => {
                     width: "100%",
                     minWidth: 0,
                     bgcolor: "#F4F7FE",
-                    px: { xs: 2, md: 3, lg: 4 },
-                    py: 3,
+                    display: "flex",
+                    flexDirection: "column",
                 }}
             >
-                <Toolbar />
-                <Outlet />
+                <Box sx={{ px: { xs: 2, md: 3, lg: 4 }, py: 3, flexGrow: 1 }}>
+                    <Toolbar />
+                    <Outlet />
+                </Box>
+                <AdminFooter />
             </Box>
 
             {/* ✅ AppConfirm: đặt cuối JSX */}

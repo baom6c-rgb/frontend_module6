@@ -23,8 +23,7 @@ import Autocomplete from "@mui/material/Autocomplete";
 // 1) HEIGHT + COMMON STYLE (đặt đầu file, trước export)
 // =====================================================
 
-// --- SỬA ĐOẠN NÀY ---
-const FIELD_HEIGHT = "45px"; // giảm chiều cao input (mặc định 56px)
+const FIELD_HEIGHT = "45px";
 
 const commonInputSx = {
     width: "100%",
@@ -34,8 +33,6 @@ const commonInputSx = {
         backgroundColor: "#fff",
         paddingRight: "8px",
     },
-
-    // ✅ căn lại label theo chiều cao mới
     "& .MuiInputLabel-root": {
         transform: "translate(14px, 11px) scale(1)",
         "&.Mui-focused, &.MuiFormLabel-filled": {
@@ -44,8 +41,6 @@ const commonInputSx = {
             padding: "0 4px",
         },
     },
-
-    // ✅ căn text input giữa theo chiều cao 45px
     "& .MuiOutlinedInput-input": {
         paddingTop: 0,
         paddingBottom: 0,
@@ -54,8 +49,6 @@ const commonInputSx = {
         alignItems: "center",
         boxSizing: "border-box",
     },
-
-    // ✅ căn text select giữa
     "& .MuiSelect-select": {
         paddingTop: 0,
         paddingBottom: 0,
@@ -80,13 +73,15 @@ export default function FilterPanel({
     const statusField = fields?.status;
     const startDateField = fields?.startDate;
     const endDateField = fields?.endDate;
+    const resultField = fields?.result;
 
     const hasAnyFilterField =
         !!moduleField?.enabled ||
         !!classField?.enabled ||
         !!statusField?.enabled ||
         !!startDateField?.enabled ||
-        !!endDateField?.enabled;
+        !!endDateField?.enabled ||
+        !!resultField?.enabled;
 
     const filterBtnSx = useMemo(
         () => ({
@@ -113,9 +108,8 @@ export default function FilterPanel({
     );
 
     // =====================================================
-    // 2) renderAutocomplete: ép full width + minWidth
+    // 2) renderAutocomplete: dùng cho module, class
     // =====================================================
-    // --- SỬA ĐOẠN NÀY ---
     const renderAutocomplete = (field, placeholder) => {
         if (!field || !field.enabled) return null;
 
@@ -137,12 +131,10 @@ export default function FilterPanel({
                 }
                 disableClearable
                 autoHighlight
-                // ✅ THÊM: minWidth để không bị mất chữ khi co
                 sx={{
                     width: "100%",
                     minWidth: "220px",
                     ...commonInputSx,
-                    // Autocomplete cần ép lại root để input đúng height
                     "& .MuiOutlinedInput-root": {
                         height: FIELD_HEIGHT,
                         borderRadius: "8px",
@@ -165,6 +157,34 @@ export default function FilterPanel({
                     />
                 )}
             />
+        );
+    };
+
+    // =====================================================
+    // 3) renderSelect: dùng cho status, result (dropdown)
+    // =====================================================
+    const renderSelect = (field) => {
+        if (!field || !field.enabled) return null;
+
+        return (
+            <FormControl fullWidth sx={{ ...commonInputSx, minWidth: "200px" }}>
+                <InputLabel>{field.label || "Chọn..."}</InputLabel>
+                <Select
+                    value={field.value}
+                    label={field.label || "Chọn..."}
+                    onChange={(e) => field.onChange?.(e.target.value)}
+                    sx={{
+                        height: FIELD_HEIGHT,
+                        borderRadius: "8px",
+                    }}
+                >
+                    {(field.options || []).map((opt) => (
+                        <MenuItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                        </MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
         );
     };
 
@@ -259,10 +279,6 @@ export default function FilterPanel({
                             borderColor: "divider",
                         }}
                     >
-                        {/* =====================================================
-                           3) Grid: giữ form gốc 3 ô 1 hàng (md={4})
-                           -> ô sẽ "dài ngang" vì bên trong đã width 100%
-                           ===================================================== */}
                         <Grid container spacing={2} alignItems="stretch">
                             {moduleField?.enabled ? (
                                 <Grid item xs={12} md={4}>
@@ -278,31 +294,14 @@ export default function FilterPanel({
 
                             {statusField?.enabled ? (
                                 <Grid item xs={12} md={4}>
-                                    <FormControl
-                                        fullWidth
-                                        sx={{ ...commonInputSx, minWidth: "200px" }}
-                                    >
-                                        <InputLabel>
-                                            {statusField.label || "Trạng thái"}
-                                        </InputLabel>
-                                        <Select
-                                            value={statusField.value}
-                                            label={statusField.label || "Trạng thái"}
-                                            onChange={(e) =>
-                                                statusField.onChange?.(e.target.value)
-                                            }
-                                            sx={{
-                                                height: FIELD_HEIGHT,
-                                                borderRadius: "8px",
-                                            }}
-                                        >
-                                            {(statusField.options || []).map((opt) => (
-                                                <MenuItem key={opt.value} value={opt.value}>
-                                                    {opt.label}
-                                                </MenuItem>
-                                            ))}
-                                        </Select>
-                                    </FormControl>
+                                    {renderSelect(statusField)}
+                                </Grid>
+                            ) : null}
+
+                            {/* ✅ Trường Kết quả mới: Đạt / Trượt */}
+                            {resultField?.enabled ? (
+                                <Grid item xs={12} md={4}>
+                                    {renderSelect(resultField)}
                                 </Grid>
                             ) : null}
 
@@ -317,9 +316,7 @@ export default function FilterPanel({
                                             startDateField.onChange?.(e.target.value)
                                         }
                                         InputLabelProps={{ shrink: true }}
-                                        inputProps={{
-                                            placeholder: "dd/mm/yyyy"
-                                        }}
+                                        inputProps={{ placeholder: "dd/mm/yyyy" }}
                                         sx={{
                                             ...commonInputSx,
                                             "& .MuiInputLabel-root": {
@@ -343,9 +340,7 @@ export default function FilterPanel({
                                             endDateField.onChange?.(e.target.value)
                                         }
                                         InputLabelProps={{ shrink: true }}
-                                        inputProps={{
-                                            placeholder: "dd/mm/yyyy"
-                                        }}
+                                        inputProps={{ placeholder: "dd/mm/yyyy" }}
                                         sx={{
                                             ...commonInputSx,
                                             "& .MuiInputLabel-root": {
@@ -357,6 +352,7 @@ export default function FilterPanel({
                                     />
                                 </Grid>
                             ) : null}
+
                         </Grid>
                     </Box>
                 </Collapse>
