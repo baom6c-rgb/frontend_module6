@@ -38,6 +38,7 @@ import {
 import { adminSettingsApi } from "../../api/adminSettingsApi";
 import GlobalLoading from "../../components/common/GlobalLoading";
 import { useToast } from "../../components/common/AppToast";
+import AppConfirm from "../../components/common/AppConfirm";
 
 const clampInt = (v, min, max) => {
     const n = Number(v);
@@ -162,6 +163,9 @@ export default function AdminSettings() {
 
     const [showAiKey, setShowAiKey] = useState(false);
 
+    const [removeKeyOpen, setRemoveKeyOpen] = useState(false);
+    const [deletingAiKey, setDeletingAiKey] = useState(false);
+
     // ===== Load base settings =====
     useEffect(() => {
         let mounted = true;
@@ -183,7 +187,6 @@ export default function AdminSettings() {
                     emailNotificationsEnabled: !!data.emailNotificationsEnabled,
                     adminEmails: data.adminEmails ?? "",
 
-                    // ✅ NEW
                     mcqQuestionCount: data.mcqQuestionCount ?? 10,
                     essayQuestionCount: data.essayQuestionCount ?? 0,
 
@@ -320,7 +323,6 @@ export default function AdminSettings() {
         setForm((prev) => ({ ...prev, monthlyReportTime: v }));
     };
 
-    // ✅ NEW: total questions + estimated duration preview for admin
     const questionDistributionSummary = useMemo(() => {
         const mcq = clampInt(form.mcqQuestionCount, 0, 200);
         const essay = clampInt(form.essayQuestionCount, 0, 200);
@@ -346,7 +348,6 @@ export default function AdminSettings() {
             if (Number.isNaN(minutesPerQuestion) || minutesPerQuestion <= 0) return "Thời gian / câu phải > 0";
             if (Number.isNaN(cooldown) || cooldown < 0 || cooldown > 1440) return "Cooldown phải 0-1440";
 
-            // ✅ NEW validate distribution
             if (Number.isNaN(mcq) || mcq < 0 || mcq > 20) return "Số câu MCQ phải 0-20";
             if (Number.isNaN(essay) || essay < 0 || essay > 20) return "Số câu tự luận phải 0-20";
             if (mcq + essay <= 0) return "Tổng số câu (MCQ + Tự luận) phải > 0";
@@ -396,7 +397,6 @@ export default function AdminSettings() {
                     emailNotificationsEnabled: !!form.emailNotificationsEnabled,
                     adminEmails: toEmailCsv(adminEmailList),
 
-                    // ✅ NEW
                     mcqQuestionCount: clampInt(form.mcqQuestionCount, 0, 200),
                     essayQuestionCount: clampInt(form.essayQuestionCount, 0, 200),
 
@@ -425,7 +425,6 @@ export default function AdminSettings() {
                     emailNotificationsEnabled: !!updated.emailNotificationsEnabled,
                     adminEmails: updated.adminEmails ?? prev.adminEmails,
 
-                    // ✅ NEW
                     mcqQuestionCount: updated.mcqQuestionCount ?? prev.mcqQuestionCount,
                     essayQuestionCount: updated.essayQuestionCount ?? prev.essayQuestionCount,
 
@@ -471,6 +470,34 @@ export default function AdminSettings() {
             showToast("Không lưu được cấu hình", "error");
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleRemoveAiKey = async () => {
+        if (!aiKeyMasked) return;
+
+        setDeletingAiKey(true);
+        try {
+            const updated = await adminSettingsApi.deleteAiKey();
+
+            // backend có thể trả updated settings; nếu không thì vẫn set local
+            setAiUpdatedAt(updated?.updatedAt ?? new Date().toISOString());
+            setAiKeyMasked(updated?.aiApiKeyMasked ?? null);
+
+            setAiForm((prev) => ({
+                ...prev,
+                aiApiKey: "",
+            }));
+
+            setShowAiKey(false);
+
+            showToast("Đã xoá API Key thành công!", "success");
+        } catch (e) {
+            console.error(e);
+            showToast("Không xoá được API Key", "error");
+        } finally {
+            setDeletingAiKey(false);
+            setRemoveKeyOpen(false);
         }
     };
 
@@ -1290,6 +1317,7 @@ export default function AdminSettings() {
                                     direction={{ xs: "column", sm: "row" }}
                                     spacing={1}
                                     alignItems={{ xs: "flex-start", sm: "center" }}
+                                    justifyContent="space-between"
                                 >
                                     <Stack direction="row" spacing={1} alignItems="center">
                                         <KeyRoundedIcon fontSize="small" color="primary" />
@@ -1298,23 +1326,49 @@ export default function AdminSettings() {
                                         </Typography>
                                     </Stack>
 
-                                    {aiKeyMasked ? (
-                                        <Chip
-                                            size="small"
-                                            label={`Đang có key: ${aiKeyMasked}`}
-                                            color="success"
-                                            variant="outlined"
-                                            sx={{ fontWeight: 800 }}
-                                        />
-                                    ) : (
-                                        <Chip
-                                            size="small"
-                                            label="Chưa có key"
-                                            color="warning"
-                                            variant="outlined"
-                                            sx={{ fontWeight: 800 }}
-                                        />
-                                    )}
+                                    <Stack
+                                        direction="row"
+                                        spacing={1}
+                                        alignItems="center"
+                                        sx={{ width: { xs: "100%", sm: "auto" } }}
+                                    >
+                                        {aiKeyMasked ? (
+                                            <Chip
+                                                size="small"
+                                                label={`Đang có key: ${aiKeyMasked}`}
+                                                color="success"
+                                                variant="outlined"
+                                                sx={{ fontWeight: 800 }}
+                                            />
+                                        ) : (
+                                            <Chip
+                                                size="small"
+                                                label="Chưa có key"
+                                                color="warning"
+                                                variant="outlined"
+                                                sx={{ fontWeight: 800 }}
+                                            />
+                                        )}
+
+                                        {/* ✅ NEW: remove key button */}
+                                        {aiKeyMasked && (
+                                            <Button
+                                                variant="outlined"
+                                                color="error"
+                                                size="small"
+                                                disabled={deletingAiKey}
+                                                onClick={() => setRemoveKeyOpen(true)}
+                                                sx={{
+                                                    borderRadius: 2,
+                                                    fontWeight: 900,
+                                                    textTransform: "none",
+                                                    whiteSpace: "nowrap",
+                                                }}
+                                            >
+                                                {deletingAiKey ? "Đang xoá..." : "Xoá key"}
+                                            </Button>
+                                        )}
+                                    </Stack>
                                 </Stack>
 
                                 <Typography variant="body2" color="text.secondary">
@@ -1366,6 +1420,19 @@ export default function AdminSettings() {
                                 )}
                             </Stack>
                         </Box>
+
+                        {/* ✅ NEW: Confirm dialog */}
+                        <AppConfirm
+                            open={removeKeyOpen}
+                            title="Xoá AI API Key?"
+                            message="Thao tác này sẽ xoá key hiện tại. AI sẽ không hoạt động cho đến khi bạn nhập key mới."
+                            onClose={() => setRemoveKeyOpen(false)}
+                            onConfirm={handleRemoveAiKey}
+                            loading={deletingAiKey}
+                            confirmText="Xoá key"
+                            cancelText="Huỷ"
+                            variant="danger"
+                        />
                     </>
                 )}
             </Stack>

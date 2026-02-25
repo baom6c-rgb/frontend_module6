@@ -14,4 +14,7 @@ export const adminSettingsApi = {
 
     updateAi: (payload) =>
         axiosPrivate.put("/admin/settings/ai", payload).then((res) => res.data),
+
+    deleteAiKey: () =>
+        axiosPrivate.delete("/admin/settings/ai/key").then((res) => res.data),
 };
