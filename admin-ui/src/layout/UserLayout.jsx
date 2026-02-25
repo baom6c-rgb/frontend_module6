@@ -28,6 +28,9 @@ import {
     LogoutRounded,
 } from "@mui/icons-material";
 import QuizRoundedIcon from "@mui/icons-material/QuizRounded";
+import EmailRoundedIcon from "@mui/icons-material/EmailRounded";
+import LocalPhoneRoundedIcon from "@mui/icons-material/LocalPhoneRounded";
+import LocationOnRoundedIcon from "@mui/icons-material/LocationOnRounded";
 import { useDispatch } from "react-redux";
 import { logout } from "../features/auth/authSlice.js";
 
@@ -37,6 +40,176 @@ import AppConfirm from "../components/common/AppConfirm";
 // ─── Constants ────────────────────────────────────────────
 const drawerWidth = 280;
 const drawerCollapsedWidth = 84;
+
+// ── UserFooter ───────────────────────────────────────────────
+const FooterLink = ({ href, children }) => (
+    <Box component="li" sx={{ listStyle: "none", mb: 0.8, display: "flex", alignItems: "center", gap: 0.8 }}>
+        <Box sx={{ width: 5, height: 5, borderRadius: "50%", bgcolor: "rgba(255,255,255,0.4)", flexShrink: 0 }} />
+        <Typography
+            component="a"
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            sx={{
+                fontSize: 13,
+                fontWeight: 500,
+                color: "rgba(255,255,255,0.75)",
+                textDecoration: "none",
+                transition: "color 0.2s",
+                "&:hover": { color: "#fff" },
+            }}
+        >
+            {children}
+        </Typography>
+    </Box>
+);
+
+const SocialBtn = ({ href, bgColor, img, children }) => (
+    <Box
+        component="a"
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        sx={{
+            width: 30, height: 30,
+            borderRadius: "50%",
+            background: bgColor || "transparent",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#fff",
+            textDecoration: "none",
+            fontSize: 12,
+            fontWeight: 700,
+            overflow: "hidden",
+            transition: "transform 0.2s, opacity 0.2s",
+            "&:hover": { transform: "translateY(-2px)", opacity: 0.85 },
+        }}
+    >
+        {img
+            ? <Box component="img" src={img} alt="" sx={{ width: 30, height: 30, objectFit: "cover", display: "block" }} />
+            : children
+        }
+    </Box>
+);
+
+const UserFooter = () => {
+    const location = useLocation();
+    if (!location.pathname.startsWith("/users/dashboard")) return null;
+    return (
+        <Box component="footer" sx={{ mt: "auto", background: "linear-gradient(135deg, #2E2D84 0%, #2E2D84 60%, #EC5E32 100%)" }}>
+
+            {/* ── Main columns ── */}
+            <Box sx={{
+                px: { xs: 2, md: 4, lg: 5 },
+                pt: 2.5, pb: 2,
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "1.4fr 1fr 1fr 1.2fr" },
+                gap: 4,
+            }}>
+
+                {/* Col 1: Logo + thông tin trung tâm */}
+                <Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
+                        <Box
+                            component="img"
+                            src="/images/codegym_login.png"
+                            alt="Codegym"
+                            sx={{
+                                width: 48, height: 48,
+                                borderRadius: "50%",
+                                objectFit: "cover",
+                                border: "2px solid rgba(255,255,255,0.25)",
+                                bgcolor: "#fff",
+                                p: "2px",
+                            }}
+                        />
+                        <Box>
+                            <Typography sx={{ fontSize: 15, fontWeight: 800, color: "#fff", lineHeight: 1.2 }}>
+                                CodeGym
+                            </Typography>
+                            <Typography sx={{ fontSize: 11, color: "rgba(255,255,255,0.5)", lineHeight: 1.3 }}>
+                                Hệ thống đào tạo lập trình
+                            </Typography>
+                        </Box>
+                    </Box>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <EmailRoundedIcon sx={{ fontSize: 14, color: "rgba(255,255,255,0.5)" }} />
+                            <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
+                                info@codegym.vn
+                            </Typography>
+                        </Box>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <LocalPhoneRoundedIcon sx={{ fontSize: 14, color: "rgba(255,255,255,0.5)" }} />
+                            <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
+                                098 953 44 58
+                            </Typography>
+                        </Box>
+                        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                            <LocationOnRoundedIcon sx={{ fontSize: 14, color: "rgba(255,255,255,0.5)", mt: "1px", flexShrink: 0 }} />
+                            <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,0.7)", lineHeight: 1.6 }}>
+                                Lô TT-01/23 P. Hàm Nghi, Khu đô thị MonCity, Nam Từ Liêm, Hà Nội
+                            </Typography>
+                        </Box>
+                    </Box>
+                </Box>
+
+                {/* Col 2: Chương trình */}
+                <Box>
+                    <Typography sx={{ fontSize: 13, fontWeight: 800, color: "#fff", letterSpacing: "0.8px", textTransform: "uppercase", mb: 1.8 }}>
+                        Chương trình
+                    </Typography>
+                    <Box component="ul" sx={{ p: 0, m: 0 }}>
+                        <FooterLink href="https://codegym.vn/career/">Career</FooterLink>
+                        <FooterLink href="https://codegym.vn/premium/">Premium</FooterLink>
+                        <FooterLink href="https://codegym.vn/wp-content/uploads/2020/05/accelerator.jpg">Accelerator</FooterLink>
+                    </Box>
+                </Box>
+
+                {/* Col 3: Tài nguyên */}
+                <Box>
+                    <Typography sx={{ fontSize: 13, fontWeight: 800, color: "#fff", letterSpacing: "0.8px", textTransform: "uppercase", mb: 1.8 }}>
+                        Tài nguyên
+                    </Typography>
+                    <Box component="ul" sx={{ p: 0, m: 0 }}>
+                        <FooterLink href="https://codegym.vn/blog/">Blog</FooterLink>
+                        <FooterLink href="http://tapchilaptrinh.vn/">Tạp chí Lập trình</FooterLink>
+                        <FooterLink href="https://hocvienagile.com/agilebreakfast/">AgileBreakfast</FooterLink>
+                    </Box>
+                </Box>
+
+                {/* Col 4: Follow Us */}
+                <Box>
+                    <Typography sx={{ fontSize: 13, fontWeight: 800, color: "#fff", letterSpacing: "0.8px", textTransform: "uppercase", mb: 1.8 }}>
+                        Follow Us
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                        <SocialBtn href="https://facebook.com/codegym.vn" img="/images/social/facebook.png" />
+                        <SocialBtn href="https://linkedin.com/company/codegym" img="/images/social/linkedin.png" />
+                        <SocialBtn href="https://youtube.com/@codegym" img="/images/social/youtube.png" />
+                        <SocialBtn href="https://www.instagram.com/codegymvietnam" img="/images/social/instagram.png" />
+                        <SocialBtn href="https://www.tiktok.com/@codegymvietnam" img="/images/social/tiktok.png" />
+                    </Box>
+                </Box>
+            </Box>
+
+            {/* ── Bottom bar ── */}
+            <Box sx={{
+                borderTop: "1px solid rgba(255,255,255,0.12)",
+                px: { xs: 2, md: 4, lg: 5 },
+                py: 1.5,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 1,
+            }}>
+                <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>
+                    CodeGym © {new Date().getFullYear()}. All rights reserved.
+                </Typography>
+            </Box>
+        </Box>
+    );
+};
 
 const COLORS = {
     primaryBlue: "#2E2D84",
@@ -563,12 +736,15 @@ export default function UserLayout() {
                     width: "100%",
                     minWidth: 0,
                     bgcolor: COLORS.bgLight,
-                    px: { xs: 2, md: 3, lg: 4 },
-                    py: 3,
+                    display: "flex",
+                    flexDirection: "column",
                 }}
             >
-                <Toolbar />
-                <Outlet />
+                <Box sx={{ px: { xs: 2, md: 3, lg: 4 }, py: 3, flexGrow: 1 }}>
+                    <Toolbar />
+                    <Outlet />
+                </Box>
+                <UserFooter />
             </Box>
 
             {/* ── Logout Confirm ── */}

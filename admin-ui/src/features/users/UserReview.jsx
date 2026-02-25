@@ -41,6 +41,7 @@ import { practiceApi } from "../../api/practiceApi";
 import FilterPanel from "../../components/common/FilterPanel.jsx";
 import AppPagination from "../../components/common/AppPagination.jsx";
 import PracticeReviewDialog from "../practice/components/PracticeReviewDialog.jsx";
+import { useLocation } from "react-router-dom";
 
 const COLORS = {
     primaryBlue: "#0B5ED7",
@@ -264,6 +265,7 @@ const adaptToPracticeReview = (rawReview, selectedTest) => {
 export default function UserReview() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+    const location = useLocation();
 
     const [testsRaw, setTestsRaw] = useState([]);
     const tests = useMemo(() => testsRaw.map(normalizeAttempt), [testsRaw]);
@@ -296,10 +298,19 @@ export default function UserReview() {
     const [selectedClass, setSelectedClass] = useState(ALL);
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
+    const [selectedResult, setSelectedResult] = useState(ALL);
     const [showFilters, setShowFilters] = useState(false);
 
     const [modules, setModules] = useState([ALL]);
     const [classes, setClasses] = useState([ALL]);
+
+    // ✅ Tự động set filter "Trượt" khi navigate từ Dashboard (nút Cải thiện điểm số)
+    useEffect(() => {
+        if (location.state?.filterResult) {
+            setSelectedResult(location.state.filterResult);
+            setShowFilters(true);
+        }
+    }, [location.state]);
 
     useEffect(() => {
         let alive = true;
@@ -393,8 +404,16 @@ export default function UserReview() {
             filtered = filtered.filter((t) => new Date(t.submitTime || t.startTime) <= new Date(endDate));
         }
 
+        if (selectedResult !== ALL) {
+            filtered = filtered.filter((t) => {
+                const scorePercent = t.totalScore ? (Number(t.scorePct) / Number(t.totalScore)) * 100 : 0;
+                const isPassed = scorePercent >= 80;
+                return selectedResult === "Đạt" ? isPassed : !isPassed;
+            });
+        }
+
         return filtered;
-    }, [tests, searchText, selectedModule, selectedClass, startDate, endDate]);
+    }, [tests, searchText, selectedModule, selectedClass, startDate, endDate, selectedResult]);
 
     useEffect(() => setPaginationModel((prev) => ({ ...prev, page: 0 })), [
         searchText,
@@ -402,6 +421,7 @@ export default function UserReview() {
         selectedClass,
         startDate,
         endDate,
+        selectedResult,
     ]);
 
     const getScoreColor = (scorePct) =>
@@ -462,6 +482,7 @@ export default function UserReview() {
         setSelectedClass(ALL);
         setStartDate("");
         setEndDate("");
+        setSelectedResult(ALL);
     };
 
     const columns = useMemo(() => {
@@ -629,6 +650,7 @@ export default function UserReview() {
                         class: { enabled: true, label: "Lớp học", value: selectedClass, options: classes.map((c) => ({ value: c, label: c })), onChange: setSelectedClass, loading: false },
                         startDate: { enabled: true, label: "Từ ngày", value: startDate, onChange: setStartDate },
                         endDate: { enabled: true, label: "Đến ngày", value: endDate, onChange: setEndDate },
+                        result: { enabled: true, label: "Kết quả", value: selectedResult, options: [{ value: ALL, label: "Tất cả" }, { value: "Đạt", label: "Đạt" }, { value: "Trượt", label: "Trượt" }], onChange: setSelectedResult, loading: false },
                     }}
                 />
 

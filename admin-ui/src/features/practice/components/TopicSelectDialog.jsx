@@ -24,7 +24,6 @@ import { useTheme } from "@mui/material/styles";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
-import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import LayersRoundedIcon from "@mui/icons-material/LayersRounded";
 import SelectAllRoundedIcon from "@mui/icons-material/SelectAllRounded";
 import DeselectRoundedIcon from "@mui/icons-material/DeselectRounded";
@@ -265,16 +264,18 @@ export default function TopicSelectDialog({
             >
                 <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
                     <Box>
-                        <Stack direction="row" alignItems="center" spacing={1} mb={0.5}>
-                            <AutoAwesomeRoundedIcon
-                                fontSize="small"
-                                sx={{ color: "primary.main", opacity: 0.85 }}
+                        <Stack direction="row" alignItems="center" spacing={0.5} mb={0.5}>
+                            <Box
+                                component="img"
+                                src="/images/AI_logo.png"
+                                alt="icon"
+                                sx={{ width: 25, height: 25, opacity: 0.85 }}
                             />
                             <Typography
                                 variant={compact ? "subtitle1" : "h6"}
                                 sx={{ fontWeight: 800, lineHeight: 1.3 }}
                             >
-                                Chọn phần bạn muốn làm
+                                Chọn chủ đề bạn muốn làm bài
                             </Typography>
                         </Stack>
                         <Typography variant="body2" color="text.secondary" sx={{ fontSize: 13 }}>
@@ -451,13 +452,7 @@ export default function TopicSelectDialog({
                             disableElevation
                             disabled={!selectedIds.length || loading}
                             onClick={handleConfirm}
-                            startIcon={
-                                loading ? (
-                                    <CircularProgress size={16} color="inherit" />
-                                ) : (
-                                    <AutoAwesomeRoundedIcon fontSize="small" />
-                                )
-                            }
+                            startIcon={loading ? <CircularProgress size={16} color="inherit" /> : null}
                             sx={{
                                 flex: { xs: 1, sm: "none" },
                                 fontWeight: 700,

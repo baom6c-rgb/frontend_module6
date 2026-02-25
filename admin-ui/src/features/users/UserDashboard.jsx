@@ -416,7 +416,22 @@ export default function UserDashboard() {
             }
         }
 
-        return { streak, didTodaysExam };
+        // 5. Tính 7 ngày gần nhất để hiển thị dots
+        const weekDays = [];
+        const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date(now);
+            d.setDate(d.getDate() - i);
+            const dateStr = getLocalDateString(d);
+            weekDays.push({
+                label: DAY_LABELS[d.getDay()],
+                dateStr,
+                done: datesSet.has(dateStr),
+                isToday: dateStr === todayStr,
+            });
+        }
+
+        return { streak, didTodaysExam, weekDays };
     }, [examAttempts]);
 
     if (loading) {
@@ -1008,120 +1023,110 @@ export default function UserDashboard() {
 
                                         <Divider sx={{ borderColor: alpha(COLORS.border, 0.9) }} />
 
+                                        {/* ── STREAK CARD – Duolingo style (muted) ── */}
                                         <Box
                                             sx={{
-                                                p: 2.5,
                                                 borderRadius: "16px",
-                                                border: `1px solid ${alpha(COLORS.orange, 0.18)}`,
-                                                bgcolor: alpha(COLORS.orangeLight, 0.65),
-                                                minWidth: 0,
+                                                background: streakData.streak > 0
+                                                    ? `linear-gradient(135deg, #2E2D84 0%, #6B3A6E 50%, #EC5E32 100%)`
+                                                    : `linear-gradient(135deg, #B0BEC5 0%, #CFD8DC 100%)`,
+                                                p: 2,
                                                 position: 'relative',
                                                 overflow: 'hidden',
+                                                boxShadow: streakData.streak > 0
+                                                    ? '0 4px 20px rgba(46, 45, 132, 0.25), 0 2px 10px rgba(236, 94, 50, 0.20)'
+                                                    : '0 2px 10px rgba(0,0,0,0.08)',
                                             }}
                                         >
-                                            {/* Decorative gradient */}
-                                            {streakData.streak >= 7 && (
-                                                <Box
-                                                    sx={{
-                                                        position: 'absolute',
-                                                        top: -50,
-                                                        right: -50,
-                                                        width: 150,
-                                                        height: 150,
-                                                        borderRadius: '50%',
-                                                        background: `radial-gradient(circle, ${alpha(COLORS.orange, 0.15)} 0%, transparent 70%)`,
-                                                        pointerEvents: 'none',
-                                                    }}
-                                                />
-                                            )}
+                                            {/* Subtle glow blobs */}
+                                            <Box sx={{ position: 'absolute', top: -24, right: -24, width: 90, height: 90, borderRadius: '50%', background: 'rgba(255,255,255,0.07)', pointerEvents: 'none' }} />
+                                            <Box sx={{ position: 'absolute', bottom: -16, left: -16, width: 60, height: 60, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', pointerEvents: 'none' }} />
 
-                                            <Typography variant="caption" sx={{ color: COLORS.subtext, fontWeight: 900, position: 'relative', zIndex: 1 }}>
-                                                STREAK HIỆN TẠI
-                                            </Typography>
-
-                                            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mt: 0.75, position: 'relative', zIndex: 1 }}>
-                                                <FireIcon
-                                                    sx={{
-                                                        fontSize: streakData.streak >= 30 ? '2.5rem' : streakData.streak >= 7 ? '2rem' : '1.5rem',
-                                                        color: streakData.streak >= 30 ? COLORS.error : streakData.streak >= 7 ? COLORS.orange : COLORS.orangeDeep,
-                                                        transition: 'all 0.3s ease',
-                                                        filter: streakData.streak >= 7 ? 'drop-shadow(0 2px 4px rgba(236, 94, 50, 0.3))' : 'none'
-                                                    }}
-                                                />
-
-                                                <Box sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
-                                                    <Typography
-                                                        variant="h4"
-                                                        sx={{
-                                                            fontWeight: 950,
-                                                            color: COLORS.text,
-                                                            fontSize: streakData.streak >= 30 ? '2.5rem' : '2rem',
-                                                        }}
-                                                    >
-                                                        {streakData.streak}
-                                                    </Typography>
-                                                    <Typography sx={{ fontWeight: 900, color: COLORS.subtext }}>
-                                                        ngày
+                                            {/* Top row: label + badge */}
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.25, position: 'relative', zIndex: 1 }}>
+                                                <Typography sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 800, fontSize: 10.5, letterSpacing: 1.1, textTransform: 'uppercase' }}>
+                                                    Chuỗi làm bài
+                                                </Typography>
+                                                <Box sx={{ px: 1, py: 0.25, borderRadius: 999, bgcolor: 'rgba(0,0,0,0.18)' }}>
+                                                    <Typography sx={{ color: 'rgba(255,255,255,0.85)', fontWeight: 800, fontSize: 10.5 }}>
+                                                        {streakData.streak >= 30 ? "👑 Huyền thoại" :
+                                                            streakData.streak >= 7 ? "🔥 Mạnh" :
+                                                                streakData.streak >= 3 ? "💪 Tiến bộ" :
+                                                                    streakData.streak > 0 ? "⚡ Mới bắt đầu" : "💤 Chưa có Streak"}
                                                     </Typography>
                                                 </Box>
                                             </Box>
 
-                                            <Typography
-                                                variant="body2"
-                                                sx={{ color: COLORS.text, fontWeight: 700, mt: 1, position: 'relative', zIndex: 1 }}
-                                            >
-                                                {streakData.streak === 0
-                                                    ? "Bắt đầu chuỗi streak ngay hôm nay!"
-                                                    : streakData.streak < 7
-                                                        ? `Cố lên nào !`
-                                                        : streakData.streak < 30
-                                                            ? `Streak ${streakData.streak} ngày ấn tượng! Thật kiên trì!`
-                                                            : `${streakData.streak} ngày liên tiếp! Bạn là huyền thoại!`
-                                                }
-                                            </Typography>
-
-                                            <Box sx={{ display: "flex", gap: 1, mt: 1.75, flexWrap: "wrap", position: 'relative', zIndex: 1 }}>
-                                                <Chip
-                                                    size="small"
-                                                    label={
-                                                        streakData.streak >= 30 ? "👑 HUYỀN THOẠI" :
-                                                            streakData.streak >= 7 ? "🔥 STREAK MẠNH" :
-                                                                streakData.streak >= 3 ? "💪 ĐANG TIẾN BỘ" :
-                                                                    streakData.streak > 0 ? "⚡ STREAK YẾU" : "💤 CHƯA CÓ STREAK"
-                                                    }
-                                                    sx={{
-                                                        bgcolor: alpha(
-                                                            streakData.streak >= 7 ? COLORS.success :
-                                                                streakData.streak >= 3 ? COLORS.orange :
-                                                                    COLORS.primary,
-                                                            0.1
-                                                        ),
-                                                        color: streakData.streak >= 7 ? COLORS.successDeep :
-                                                            streakData.streak >= 3 ? COLORS.orangeDeep :
-                                                                COLORS.primaryDeep,
-                                                        fontWeight: 900,
-                                                        border: `1px solid ${alpha(
-                                                            streakData.streak >= 7 ? COLORS.success :
-                                                                streakData.streak >= 3 ? COLORS.orange :
-                                                                    COLORS.primary,
-                                                            0.2
-                                                        )}`,
-                                                    }}
-                                                />
-
-                                                {/* Thay đổi logic hiển thị câu thông báo tại đây */}
-                                                <Chip
-                                                    size="small"
-                                                    label={streakData.didTodaysExam ? "✅ Bạn đã làm bài thi hôm nay !" : "⚠️ Hãy làm bài để giữ Streak nhé !"}
-                                                    sx={{
-                                                        bgcolor: alpha(streakData.didTodaysExam ? COLORS.success : COLORS.error, 0.1),
-                                                        color: streakData.didTodaysExam ? COLORS.successDeep : COLORS.errorDeep,
-                                                        fontWeight: 900,
-                                                        border: `1px solid ${alpha(streakData.didTodaysExam ? COLORS.success : COLORS.error, 0.2)}`,
-                                                    }}
-                                                />
+                                            {/* Center: Fire icon + number */}
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5, position: 'relative', zIndex: 1 }}>
+                                                <Box sx={{
+                                                    width: 50, height: 50, borderRadius: '50%',
+                                                    bgcolor: '#fff',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    flexShrink: 0,
+                                                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                                                }}>
+                                                    <FireIcon sx={{
+                                                        fontSize: 28,
+                                                        color: streakData.streak === 0 ? 'rgba(255,255,255,0.4)' : '#EC5E32',
+                                                    }} />
+                                                </Box>
+                                                <Box>
+                                                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
+                                                        <Typography sx={{ fontSize: 34, fontWeight: 950, color: '#fff', lineHeight: 1 }}>
+                                                            {streakData.streak}
+                                                        </Typography>
+                                                        <Typography sx={{ fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.75)', pb: 0.3 }}>
+                                                            ngày
+                                                        </Typography>
+                                                    </Box>
+                                                    <Typography sx={{ color: 'rgba(255,255,255,0.65)', fontSize: 11, fontWeight: 700, mt: 0.2 }}>
+                                                        {streakData.streak === 0 ? "Hãy bắt đầu hôm nay!"
+                                                            : streakData.streak < 7 ? "Cố lên, bạn đang tiến bộ!"
+                                                                : streakData.streak < 30 ? "Tuyệt vời! Giữ vững nhé!"
+                                                                    : "Bạn là huyền thoại! 🏆"}
+                                                    </Typography>
+                                                </Box>
                                             </Box>
 
+                                            {/* 7-day dots */}
+                                            <Box sx={{
+                                                display: 'flex', justifyContent: 'space-between',
+                                                bgcolor: 'rgba(0,0,0,0.18)', borderRadius: "10px", p: 1,
+                                                position: 'relative', zIndex: 1,
+                                            }}>
+                                                {(streakData.weekDays || []).map((day, idx) => (
+                                                    <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.4 }}>
+                                                        <Typography sx={{ fontSize: 9.5, fontWeight: 700, color: day.isToday ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.45)' }}>
+                                                            {day.label}
+                                                        </Typography>
+                                                        <Box sx={{
+                                                            width: 24, height: 24, borderRadius: '50%',
+                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                            bgcolor: day.done ? 'rgba(255,255,255,0.9)' : day.isToday ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.07)',
+                                                            border: day.isToday && !day.done ? '1.5px solid rgba(255,255,255,0.5)' : 'none',
+                                                        }}>
+                                                            {day.done
+                                                                ? <FireIcon sx={{ fontSize: 14, color: streakData.streak > 0 ? '#EC5E32' : '#90A4AE' }} />
+                                                                : day.isToday
+                                                                    ? <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.8)' }} />
+                                                                    : <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.2)' }} />
+                                                            }
+                                                        </Box>
+                                                    </Box>
+                                                ))}
+                                            </Box>
+
+                                            {/* Status row */}
+                                            <Box sx={{ mt: 1.25, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.6, position: 'relative', zIndex: 1 }}>
+                                                <Box sx={{
+                                                    width: 6, height: 6, borderRadius: '50%',
+                                                    bgcolor: streakData.didTodaysExam ? '#A5D6A7' : '#FFE082',
+                                                }} />
+                                                <Typography sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 700 }}>
+                                                    {streakData.didTodaysExam ? "Đã hoàn thành bài hôm nay!" : "Làm bài để giữ streak nhé!"}
+                                                </Typography>
+                                            </Box>
                                         </Box>
 
                                         <Box sx={{ flex: 1 }} />
@@ -1151,7 +1156,7 @@ export default function UserDashboard() {
                                                     },
                                                     {
                                                         title: "Mục tiêu điểm số",
-                                                        desc: `Cần cải thiện từ ${avgScore} lên ≥ 80 điểm`
+                                                        desc: `Cần cải thiện từ ${avgScore} điểm lên ≥ 80 điểm`
                                                     }
                                                 ]).map((action, idx) => (
                                                     <Box key={idx} sx={{ display: 'flex', gap: 1.5 }}>
@@ -1178,8 +1183,9 @@ export default function UserDashboard() {
                                             <Button
                                                 variant="contained"
                                                 fullWidth
-                                                // Giả sử route của trang PracticePage là "/practice"
-                                                onClick={() => navigate("/users/practice")}
+                                                onClick={() => navigate("/users/review", {
+                                                    state: { filterResult: "Trượt" }
+                                                })}
                                                 sx={{
                                                     mt: 2,
                                                     bgcolor: COLORS.orange,
@@ -1193,7 +1199,7 @@ export default function UserDashboard() {
                                                     }
                                                 }}
                                             >
-                                                Cải thiện điểm số
+                                                Xem lại các bài thi Trượt
                                             </Button>
                                         </Box>
                                     </Box>
