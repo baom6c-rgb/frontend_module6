@@ -1,9 +1,13 @@
+// src/features/practice/components/PracticeResult.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
-import { Box, Button, Paper, Typography, Divider, Chip, Stack } from "@mui/material";
-import { practiceApi } from "../../../api/practiceApi"; // ✅ dùng cho retest status
+import { Box, Button, Paper, Typography, Divider, Chip, Stack, CircularProgress } from "@mui/material";
 import AppModal from "../../../components/common/AppModal";
+import { practiceApi } from "../../../api/practiceApi";
 
+// =============================
+// Small utils
+// =============================
 function clampInt(n, min, max) {
     const x = Number(n);
     if (!Number.isFinite(x)) return min;
@@ -17,7 +21,6 @@ function formatMMSS(totalSeconds) {
     return `${mm}:${ss}`;
 }
 
-// ✅ 7.00 -> 7 ; 7.25 -> 7.25 | 70.0 -> 70 ; 70.5 -> 70.5
 function formatNumberTrim(n, maxDecimals) {
     const x = Number(n);
     if (!Number.isFinite(x)) return "0";
@@ -25,11 +28,85 @@ function formatNumberTrim(n, maxDecimals) {
     return s.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
 }
 
+// =============================
+// AI Feedback parsing (Strength/Weakness)
+// =============================
+function splitAiFeedback(raw) {
+    const text = String(raw || "")
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .trim();
+
+    const empty = { greeting: "", strengths: [], weaknesses: [], raw: text };
+    if (!text) return empty;
+
+    const normalizeBullet = (s) =>
+        String(s || "")
+            .replace(/^\s*[-•\u2022*]+\s*/g, "")
+            .trim();
+
+    const headingKey = (s) =>
+        normalizeBullet(s).replace(/[:：]\s*$/g, "").trim().toLowerCase();
+
+    const isGreetingLine = (line) => {
+        const lower = String(line || "").trim().toLowerCase();
+        return lower.startsWith("chào ") || lower.startsWith("xin chào");
+    };
+
+    const lines = text
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
+
+    let greeting = "";
+    let idxStart = 0;
+
+    if (lines.length && isGreetingLine(lines[0])) {
+        greeting = lines[0];
+        idxStart = 1;
+    }
+
+    const out = { greeting, strengths: [], weaknesses: [], raw: text };
+
+    const H = {
+        strengths: new Set(["điểm mạnh", "strengths", "pros", "ưu điểm"]),
+        weaknesses: new Set(["điểm yếu", "weaknesses", "cons", "nhược điểm"]),
+    };
+
+    let current = null;
+
+    for (let i = idxStart; i < lines.length; i++) {
+        const line = lines[i];
+        const key = headingKey(line);
+
+        if (H.strengths.has(key)) {
+            current = "strengths";
+            continue;
+        }
+        if (H.weaknesses.has(key)) {
+            current = "weaknesses";
+            continue;
+        }
+
+        if (!current) continue;
+
+        const cleaned = normalizeBullet(line);
+        if (!cleaned) continue;
+
+        const k2 = headingKey(cleaned);
+        if (H.strengths.has(k2) || H.weaknesses.has(k2)) continue;
+
+        out[current].push(cleaned);
+    }
+
+    return out;
+}
+
 function BulletList({ items, emptyText }) {
     const list = Array.isArray(items) ? items.filter(Boolean) : [];
     if (!list.length) {
         return (
-            <Typography sx={{ mt: 1, color: "#716f6f", fontWeight: 650, whiteSpace: "pre-wrap" }}>
+            <Typography sx={{ mt: 1, color: "#64748B", fontWeight: 650, whiteSpace: "pre-wrap" }}>
                 {emptyText}
             </Typography>
         );
@@ -38,7 +115,7 @@ function BulletList({ items, emptyText }) {
         <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2.2 }}>
             {list.map((t, idx) => (
                 <Box component="li" key={idx} sx={{ mb: 0.75 }}>
-                    <Typography sx={{ color: "#716f6f", fontWeight: 650, whiteSpace: "pre-wrap" }}>
+                    <Typography sx={{ color: "#64748B", fontWeight: 650, whiteSpace: "pre-wrap" }}>
                         {t}
                     </Typography>
                 </Box>
@@ -48,7 +125,7 @@ function BulletList({ items, emptyText }) {
 }
 
 // =============================
-// Study Guide parsing + rendering helpers
+// Study Guide parsing + render helpers
 // =============================
 function normalizeLine(s) {
     return String(s || "")
@@ -56,60 +133,174 @@ function normalizeLine(s) {
         .trim();
 }
 
+/**
+ * ✅ FE sanitize (backup) để:
+ * - xử lý attempt cũ lưu trong DB bị "xé chữ"
+ * - join @\nRestController -> @RestController
+ * - remove zero-width chars
+ * - gom các dòng 1 ký tự (V\ní\ndụ -> Ví dụ)
+ */
+function sanitizeStudyGuideClient(raw) {
+    let t = String(raw || "");
+
+    // normalize newlines
+    t = t.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+    // remove zero-width
+    t = t.replace(/[\u200B\u200C\u200D\uFEFF]/g, "");
+
+    // join annotations split by newline: "@\nRestController" -> "@RestController"
+    t = t.replace(/@\s*\n\s*(\w)/g, "@$1");
+
+    const lines = t.split("\n");
+    const out = [];
+    let pending = "";
+
+    const isSingleLetterLine = (s) => {
+        const x = String(s || "").trim();
+        if (!x) return false;
+        if (x.length !== 1) return false;
+        const c = x.charAt(0);
+        return /[A-Za-zÀ-Ỵà-ỵ]/.test(c);
+    };
+
+    const flushPending = () => {
+        if (!pending) return;
+        out.push(pending);
+        pending = "";
+    };
+
+    for (const line of lines) {
+        const l = String(line || "").trim();
+
+        if (!l) {
+            flushPending();
+            out.push("");
+            continue;
+        }
+
+        // collect single-letter lines to rebuild broken words
+        if (isSingleLetterLine(l)) {
+            pending += l;
+            continue;
+        }
+
+        if (pending) {
+            // attach pending letters to current line (no extra spaces)
+            const merged = `${pending}${l}`;
+            pending = "";
+            out.push(merged);
+        } else {
+            out.push(l);
+        }
+    }
+    flushPending();
+
+    // collapse too many blank lines
+    return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function splitLines(raw) {
-    return String(raw || "")
-        .replace(/\r\n/g, "\n")
-        .replace(/\r/g, "\n")
+    const cleaned = sanitizeStudyGuideClient(raw);
+    return String(cleaned || "")
         .split("\n")
         .map((l) => l.trim())
         .filter(Boolean);
 }
 
 function isHeader(line, header) {
-    const a = normalizeLine(line).toLowerCase();
+    const a = normalizeLine(line).toLowerCase().replace(/[:：]\s*$/g, "");
     const b = normalizeLine(header).toLowerCase().replace(/[:：]\s*$/g, "");
-    return a.replace(/[:：]\s*$/g, "") === b;
+    return a === b;
 }
 
 function parseStudyGuide(raw) {
     const lines = splitLines(raw);
-    if (!lines.length) {
-        return {
-            title: "",
-            subject: "",
-            topic: "",
-            tips: [],
-            concepts: [],
-            vocab: [],
-            questions: [],
-        };
-    }
-
-    // Find first "Gợi ý ôn tập:" section (outer heading)
-    const idx = lines.findIndex((l) => isHeader(l, "Gợi ý ôn tập:"));
-    const body = idx >= 0 ? lines.slice(idx + 1) : lines;
-
     const out = {
         title: "",
         subject: "",
         topic: "",
+        summary: "",
         tips: [],
         concepts: [],
         vocab: [],
         questions: [],
     };
+    if (!lines.length) return out;
+
+    const idx = lines.findIndex((l) => isHeader(l, "Gợi ý ôn tập:"));
+    const body = idx >= 0 ? lines.slice(idx + 1) : lines;
 
     let current = null; // tips | concepts | vocab | questions
+    const isBulletLine = (line) => /^\s*[-•\u2022*]+\s+/.test(String(line || ""));
 
-    const pushBullet = (arr, line) => {
+    const isShortContinuationToken = (cleaned) => {
+        const s = String(cleaned || "").trim();
+        if (!s) return false;
+        if (s === "@" || s === "(" || s === ")" || s === "[" || s === "]") return true;
+        if (s.length <= 25) return true; // tokens like "trong", "Spring", "MVC):"
+        // also treat "MVC):" etc
+        if (/^[A-Za-zÀ-Ỵà-ỵ0-9_@()\/.,-]+$/.test(s) && s.length <= 35) return true;
+        return false;
+    };
+
+    // push for tips/questions (allow continuation already), but concepts/vocab need special continuation rules
+    const pushTipsOrQuestions = (arr, line, allowContinuation) => {
         const cleaned = normalizeLine(line);
         if (!cleaned) return;
 
-        const isBullet = /^\s*[-•\u2022*]+\s+/.test(line);
-        if (!isBullet && arr.length) {
-            arr[arr.length - 1] = `${arr[arr.length - 1]} ${cleaned}`.trim();
+        const bullet = isBulletLine(line);
+
+        if (!bullet) {
+            if (allowContinuation && arr.length) {
+                arr[arr.length - 1] = `${arr[arr.length - 1]} ${cleaned}`.trim();
+                return;
+            }
+            arr.push(cleaned);
             return;
         }
+
+        arr.push(cleaned);
+    };
+
+    const pushConceptOrVocab = (arr, line) => {
+        const cleaned = normalizeLine(line);
+        if (!cleaned) return;
+
+        // If bullet sneaks in, treat as its own item
+        if (isBulletLine(line)) {
+            arr.push(cleaned);
+            return;
+        }
+
+        const hasColon = cleaned.includes(":");
+
+        if (hasColon) {
+            // new item
+            arr.push(cleaned);
+            return;
+        }
+
+        // no colon => likely continuation (Controller / trong / Spring / MVC) or broken @
+        if (arr.length) {
+            const last = arr[arr.length - 1] || "";
+            // heuristic: if token is short OR last item doesn't yet contain ":" (meaning we're still building the "Name: ..." line)
+            if (isShortContinuationToken(cleaned) || !String(last).includes(":")) {
+                // handle standalone "@"
+                if (cleaned === "@") {
+                    arr[arr.length - 1] = `${last}@`.replace(/\s+@$/, "@").trim();
+                    return;
+                }
+                // handle "@RestController" already ok, but if last ends with "@", join without space
+                const joinNoSpace = String(last).trim().endsWith("@") || cleaned.startsWith(")");
+                arr[arr.length - 1] = joinNoSpace
+                    ? `${String(last).trim()}${cleaned}`.trim()
+                    : `${String(last).trim()} ${cleaned}`.trim();
+                return;
+            }
+        }
+
+        // if no previous item, start a pending line (will be continued until ":" appears)
         arr.push(cleaned);
     };
 
@@ -129,6 +320,11 @@ function parseStudyGuide(raw) {
         }
         if (/^chủ đề\s*[:：]/i.test(n)) {
             out.topic = n.replace(/^chủ đề\s*[:：]\s*/i, "").trim();
+            current = null;
+            continue;
+        }
+        if (/^tóm tắt\s*[:：]/i.test(n)) {
+            out.summary = n.replace(/^tóm tắt\s*[:：]\s*/i, "").trim();
             current = null;
             continue;
         }
@@ -152,10 +348,77 @@ function parseStudyGuide(raw) {
 
         if (!current) continue;
 
-        if (current === "tips") pushBullet(out.tips, line);
-        if (current === "concepts") pushBullet(out.concepts, line);
-        if (current === "vocab") pushBullet(out.vocab, line);
-        if (current === "questions") pushBullet(out.questions, line);
+        if (current === "tips") pushTipsOrQuestions(out.tips, line, true);
+
+        // ✅ Gom block "Ví dụ:" thành 1 item duy nhất (giữ newline hợp lý),
+        // tránh case "return ... : ..." bị hiểu là item mới => UI hiện nhiều bullet gây nhầm.
+        const isExampleStart = (s) => /^ví\s*dụ\s*[:：]/i.test(String(s || "").trim());
+
+        // Key/value line kiểu "Tên: Giải thích..." (concept/vocab item mới)
+        // - prefix trước ":" chỉ cho phép chữ/số/ký tự đơn giản, KHÔNG có { } " '
+        const looksLikeNewKeyValue = (s) => {
+            const t = String(s || "").trim();
+            const idx2 = t.indexOf(":");
+            if (idx2 <= 0) return false;
+
+            const prefix = t.slice(0, idx2).trim();
+            if (!prefix) return false;
+            if (prefix.length > 60) return false;
+
+            // loại mấy dòng code có ":" như JSON/string/template
+            if (/[{}"'`]/.test(prefix)) return false;
+
+            // loại time format 12:30
+            if (/^\d{1,2}:\d{2}\b/.test(t)) return false;
+
+            return /^[A-Za-zÀ-Ỵà-ỵ0-9_ @().\/-]+$/.test(prefix);
+        };
+
+        if (current === "concepts" || current === "vocab") {
+            // Nếu bắt đầu bằng "Ví dụ:" => gom các dòng tiếp theo thành 1 block
+            if (isExampleStart(n)) {
+                let block = n;
+                let j = i + 1;
+
+                while (j < body.length) {
+                    const nextRaw = body[j];
+                    const nextN = normalizeLine(nextRaw);
+
+                    // stop nếu sang header/mục mới
+                    if (
+                        isHeader(nextN, "Gợi ý ôn tập:") ||
+                        isHeader(nextN, "Các khái niệm chính:") ||
+                        isHeader(nextN, "Danh sách từ vựng:") ||
+                        isHeader(nextN, "Câu hỏi ôn tập:")
+                    ) {
+                        break;
+                    }
+
+                    // stop nếu gặp item mới dạng "Tên: ..."
+                    // (nhưng không stop với các dòng code có ":" trong content)
+                    if (looksLikeNewKeyValue(nextN) && !isExampleStart(nextN)) {
+                        break;
+                    }
+
+                    // gom dòng vào block
+                    block += "\n" + nextN;
+                    j++;
+                }
+
+                if (current === "concepts") out.concepts.push(block);
+                else out.vocab.push(block);
+
+                i = j - 1;
+                continue;
+            }
+
+            if (current === "concepts") pushConceptOrVocab(out.concepts, line);
+            else pushConceptOrVocab(out.vocab, line);
+
+            continue;
+        }
+
+        if (current === "questions") pushTipsOrQuestions(out.questions, line, true);
     }
 
     return out;
@@ -167,50 +430,72 @@ function escapeRegExp(str) {
 
 function highlightKeywords(text, keywords) {
     const t = String(text || "");
-    const keys = Array.isArray(keywords) ? keywords.map((k) => String(k || "").trim()).filter(Boolean) : [];
+    const keys = Array.isArray(keywords)
+        ? keywords.map((k) => String(k || "").trim()).filter(Boolean)
+        : [];
     if (!t || !keys.length) return t;
 
-    const sorted = [...new Set(keys)].sort((a, b) => b.length - a.length);
-    const pattern = new RegExp(`(${sorted.map(escapeRegExp).join("|")})`, "gi");
-
+    const uniq = [...new Set(keys)].sort((a, b) => b.length - a.length);
+    const pattern = new RegExp(`(${uniq.map(escapeRegExp).join("|")})`, "gi");
     const parts = t.split(pattern);
+
     return parts.map((p, i) => {
-        const hit = sorted.some((k) => k.toLowerCase() === String(p).toLowerCase());
+        const hit = uniq.some((k) => k.toLowerCase() === String(p).toLowerCase());
         if (!hit) return <React.Fragment key={i}>{p}</React.Fragment>;
         return (
-            <Box component="span" key={i} sx={{ fontWeight: 900, color: "#1B2559" }}>
+            <Box component="span" key={i} sx={{ fontWeight: 800, color: "#1B2559" }}>
                 {p}
             </Box>
         );
     });
 }
 
-function BulletItems({ items, keywordPool }) {
+function GuideItems({ items, keywordPool }) {
     const list = Array.isArray(items) ? items.filter(Boolean) : [];
-    if (!list.length) return null;
+    if (!list.length) {
+        return (
+            <Typography
+                sx={{
+                    mt: 0.75,
+                    color: "#4A5568",
+                    fontWeight: 600,
+                    whiteSpace: "pre-wrap",
+                    lineHeight: 1.75,
+                    fontSize: 14.5,
+                    overflowWrap: "anywhere",
+                    wordBreak: "break-word",
+                }}
+            >
+                Chưa có nội dung.
+            </Typography>
+        );
+    }
 
     return (
-        <Stack spacing={1} sx={{ mt: 1 }}>
+        <Stack spacing={1.15} sx={{ mt: 1 }}>
             {list.map((t, idx) => (
-                <Box
-                    key={idx}
-                    sx={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: 1,
-                    }}
-                >
+                <Box key={idx} sx={{ display: "flex", alignItems: "flex-start", gap: 1.1 }}>
                     <Box
                         sx={{
                             mt: "9px",
                             width: 6,
                             height: 6,
                             borderRadius: "50%",
-                            bgcolor: "#9AA4B2",
+                            bgcolor: "#94A3B8",
                             flex: "0 0 auto",
                         }}
                     />
-                    <Typography sx={{ color: "#716f6f", fontWeight: 650, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>
+                    <Typography
+                        sx={{
+                            color: "#4A5568",
+                            fontWeight: 600,
+                            whiteSpace: "pre-wrap",
+                            lineHeight: 1.75,
+                            fontSize: 14.5,
+                            overflowWrap: "anywhere",
+                            wordBreak: "break-word",
+                        }}
+                    >
                         {highlightKeywords(t, keywordPool)}
                     </Typography>
                 </Box>
@@ -219,7 +504,7 @@ function BulletItems({ items, keywordPool }) {
     );
 }
 
-function SectionCard({ title, children }) {
+function GuideSection({ title, children }) {
     return (
         <Paper
             elevation={0}
@@ -228,167 +513,19 @@ function SectionCard({ title, children }) {
                 borderRadius: 3,
                 border: "1px solid #E3E8EF",
                 bgcolor: "#FFFFFF",
+                borderLeft: "4px solid rgba(46,45,132,0.28)",
             }}
         >
-            <Typography sx={{ fontWeight: 900, color: "#1B2559" }}>{title}</Typography>
+            <Typography sx={{ fontWeight: 800, fontSize: 15, color: "#2B3674" }}>{title}</Typography>
             {children}
         </Paper>
     );
 }
 
-/**
- * Split AI feedback into:
- * - greeting (optional)
- * - strengths
- * - weaknesses
- * - recommendations
- *
- * Robust parsing:
- * - Try JSON first (if BE ever returns structured)
- * - Else: line-by-line state machine using headings:
- *   "Điểm mạnh", "Điểm yếu", "Gợi ý ôn tập" (+ EN aliases)
- * - Headings can appear with/without ":" and can be prefixed by bullets "- • *"
- */
-function splitAiFeedback(raw) {
-    const text = String(raw || "")
-        .replace(/\r\n/g, "\n")
-        .replace(/\r/g, "\n")
-        .trim();
-
-    const empty = { greeting: "", strengths: [], weaknesses: [], recommendations: [], raw: text };
-    if (!text) return empty;
-
-    const normalizeBullet = (s) =>
-        String(s || "")
-            .replace(/^\s*[-•\u2022*]+\s*/g, "")
-            .trim();
-
-    const normalizeHeadingKey = (s) => {
-        return normalizeBullet(s)
-            .replace(/[:：]\s*$/g, "")
-            .trim()
-            .toLowerCase();
-    };
-
-    const isGreetingLine = (line) => {
-        const lower = String(line || "").trim().toLowerCase();
-        return (
-            lower.startsWith("chào ") ||
-            lower.startsWith("xin chào") ||
-            lower.startsWith("hello") ||
-            lower.startsWith("hi ") ||
-            lower.startsWith("hey ")
-        );
-    };
-
-    // 1) Try JSON parse (optional / future-proof)
-    try {
-        const maybe = JSON.parse(text);
-
-        const greeting = String(maybe?.greeting ?? maybe?.hello ?? "").trim();
-
-        const s = maybe?.strengths ?? maybe?.pros ?? [];
-        const w = maybe?.weaknesses ?? maybe?.cons ?? [];
-        const r = maybe?.recommendations ?? maybe?.suggestions ?? maybe?.studyTips ?? [];
-
-        const strengths = Array.isArray(s) ? s.map(normalizeBullet).filter(Boolean) : [];
-        const weaknesses = Array.isArray(w) ? w.map(normalizeBullet).filter(Boolean) : [];
-        const recommendations = Array.isArray(r) ? r.map(normalizeBullet).filter(Boolean) : [];
-
-        if (greeting || strengths.length || weaknesses.length || recommendations.length) {
-            return { greeting, strengths, weaknesses, recommendations, raw: text };
-        }
-    } catch {}
-
-    // 2) State machine by headings
-    const lines = text
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean);
-
-    let greeting = "";
-    let idxStart = 0;
-
-    if (lines.length && isGreetingLine(lines[0])) {
-        greeting = lines[0];
-        idxStart = 1;
-    }
-
-    const H = {
-        strengths: new Set(["điểm mạnh", "strengths", "pros", "ưu điểm"]),
-        weaknesses: new Set(["điểm yếu", "weaknesses", "cons", "nhược điểm"]),
-        recommendations: new Set([
-            "gợi ý ôn tập",
-            "gợi ý",
-            "khuyến nghị",
-            "recommendations",
-            "suggestions",
-            "study tips",
-            "study tip",
-        ]),
-    };
-
-    const out = { greeting, strengths: [], weaknesses: [], recommendations: [], raw: text };
-
-    let current = null; // "strengths" | "weaknesses" | "recommendations" | null
-
-    const pushLine = (key, line) => {
-        const cleaned = normalizeBullet(line);
-        if (!cleaned) return;
-
-        const nk = normalizeHeadingKey(cleaned);
-        if (H.strengths.has(nk) || H.weaknesses.has(nk) || H.recommendations.has(nk)) return;
-
-        out[key].push(cleaned);
-    };
-
-    for (let i = idxStart; i < lines.length; i++) {
-        const line = lines[i];
-        const key = normalizeHeadingKey(line);
-
-        if (H.strengths.has(key)) {
-            current = "strengths";
-            continue;
-        }
-        if (H.weaknesses.has(key)) {
-            current = "weaknesses";
-            continue;
-        }
-        if (H.recommendations.has(key)) {
-            current = "recommendations";
-            continue;
-        }
-
-        if (!current) {
-            const lower = line.toLowerCase();
-            const looksWeak =
-                lower.includes("lỗi") ||
-                lower.includes("chưa") ||
-                lower.includes("thiếu") ||
-                lower.includes("nhầm") ||
-                lower.includes("sai") ||
-                lower.includes("không");
-            current = looksWeak ? "weaknesses" : "recommendations";
-        }
-
-        pushLine(current, line);
-    }
-
-    if (!out.strengths.length && !out.weaknesses.length && !out.recommendations.length) {
-        const one = text.replace(/\s+/g, " ").trim();
-        if (one) out.weaknesses = [one];
-    }
-
-    return out;
-}
-
-export default function PracticeResult({
-                                           result,
-                                           numberOfQuestions,
-                                           onRetry, // start retest
-                                           onNewMaterial,
-                                           onViewReview,
-                                       }) {
+// =============================
+// Component
+// =============================
+export default function PracticeResult({ result, numberOfQuestions, onRetry, onNewMaterial, onViewReview }) {
     const earned = useMemo(() => Number(result?.earnedPoints ?? 0), [result]);
     const totalPoints = useMemo(() => Number(result?.totalPoints ?? 0), [result]);
     const { user } = useSelector((state) => state.auth);
@@ -396,7 +533,6 @@ export default function PracticeResult({
     const percent = useMemo(() => {
         const p = Number(result?.score);
         if (Number.isFinite(p)) return Math.max(0, Math.min(100, p));
-
         if (totalPoints > 0) {
             const x = (earned / totalPoints) * 100;
             return Math.max(0, Math.min(100, x));
@@ -406,48 +542,52 @@ export default function PracticeResult({
 
     const percentText = useMemo(() => `${formatNumberTrim(percent, 1)}%`, [percent]);
 
-    const score10 = useMemo(() => {
-        const s = (percent / 100) * 10;
-        return Math.max(0, Math.min(10, s));
-    }, [percent]);
-
-    const score10Text = useMemo(() => `${formatNumberTrim(score10, 2)}/10`, [score10]);
-
     const statusRaw = useMemo(() => String(result?.status ?? "").toUpperCase(), [result]);
     const isFailed = useMemo(() => statusRaw === "FAILED", [statusRaw]);
     const isPassed = useMemo(() => statusRaw === "PASSED", [statusRaw]);
-    const passedByPercent = useMemo(() => percent >= 50, [percent]);
 
     const statusLabel = useMemo(() => {
         if (isPassed) return "Đạt";
         if (isFailed) return "Trượt";
-        return passedByPercent ? "Đạt" : "Trượt";
-    }, [isPassed, isFailed, passedByPercent]);
+        return percent >= 50 ? "Đạt" : "Trượt";
+    }, [isPassed, isFailed, percent]);
 
     const statusColor = useMemo(() => (statusLabel === "Đạt" ? "#1B5E20" : "#B00020"), [statusLabel]);
 
     const feedback = useMemo(() => String(result?.feedback ?? "").trim(), [result]);
     const aiFeedback = useMemo(() => String(result?.aiFeedback ?? "").trim(), [result]);
 
-    const aiSplit = useMemo(() => splitAiFeedback(aiFeedback), [aiFeedback]);
+    // ✅ IMPORTANT: clean studyGuide text (backup) before parse
+    const [studyGuideText, setStudyGuideText] = useState(() => String(result?.studyGuide ?? "").trim());
+    useEffect(() => {
+        setStudyGuideText(String(result?.studyGuide ?? "").trim());
+    }, [result]);
 
-    const studyGuide = useMemo(() => parseStudyGuide(aiFeedback), [aiFeedback]);
-    const keywordPool = useMemo(
-        () => [...(studyGuide?.concepts ?? []), ...(studyGuide?.vocab ?? [])].filter(Boolean),
-        [studyGuide]
-    );
+    const studyGuideRawClean = useMemo(() => sanitizeStudyGuideClient(studyGuideText), [studyGuideText]);
+
+    const aiSplit = useMemo(() => splitAiFeedback(aiFeedback), [aiFeedback]);
+    const studyGuide = useMemo(() => parseStudyGuide(studyGuideRawClean), [studyGuideRawClean]);
+
+    const keywordPool = useMemo(() => {
+        const c = Array.isArray(studyGuide?.concepts) ? studyGuide.concepts : [];
+        const v = Array.isArray(studyGuide?.vocab) ? studyGuide.vocab : [];
+        const toKey = (s) => {
+            const x = String(s || "").split(":")[0]?.trim();
+            return x && x.length <= 40 ? x : "";
+        };
+        const pool = [...c.map(toKey), ...v.map(toKey)].filter(Boolean);
+        return [...new Set(pool)].slice(0, 40);
+    }, [studyGuide]);
 
     const totalQuestions = numberOfQuestions ?? 0;
-
     const attemptId = useMemo(() => result?.attemptId ?? null, [result]);
 
-    // ===== Retest display rule =====
+    // ===== Retest status =====
     const showRetest = useMemo(() => {
         if (typeof result?.showRetest === "boolean") return result.showRetest;
-        return isFailed; // fallback
+        return isFailed;
     }, [result, isFailed]);
 
-    // ===== Retest status from BE (source of truth) =====
     const [remainingSeconds, setRemainingSeconds] = useState(0);
     const [canRetestNow, setCanRetestNow] = useState(false);
     const [statusLoading, setStatusLoading] = useState(false);
@@ -519,7 +659,6 @@ export default function PracticeResult({
         if (!showRetest || !attemptId) return;
         if (remainingSeconds !== 0) return;
         if (canRetestNow) return;
-
         fetchRetestStatus();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [remainingSeconds]);
@@ -538,47 +677,67 @@ export default function PracticeResult({
         return !canRetestNow;
     }, [showRetest, attemptId, statusLoading, canRetestNow]);
 
-    const greetingText = useMemo(() => {
-        if (aiSplit.greeting) return aiSplit.greeting;
-        if (aiFeedback) return "Chào bạn,";
-        return "";
-    }, [aiFeedback, aiSplit.greeting]);
-
-    // ✅ Modal state for Study Guide
+    // ===== Study Guide modal =====
     const [openStudyGuide, setOpenStudyGuide] = useState(false);
+    const [studyGuideLoading, setStudyGuideLoading] = useState(false);
 
-    // Bạn có thể thêm một useEffect để tự động lưu mỗi khi studyGuide có dữ liệu mới
-    useEffect(() => {
-        // Thêm kiểm tra user._id thật kỹ trước khi lưu
-        if (user && user._id && studyGuide && (studyGuide.concepts?.length > 0 || studyGuide.questions?.length > 0)) {
-            const dataToSave = {
-                tips: studyGuide.tips || [],
-                concepts: studyGuide.concepts || [],
-                vocab: studyGuide.vocab || [],
-                questions: studyGuide.questions || [],
-                userId: user._id,
-                updatedAt: new Date().toISOString()
-            };
-            localStorage.setItem(`latest_study_guide_${user._id}`, JSON.stringify(dataToSave));
+    const handleOpenStudyGuide = async () => {
+        setOpenStudyGuide(true);
+        if (studyGuideLoading) return;
+        if (String(studyGuideText || "").trim()) return;
+        if (!attemptId) return;
+
+        setStudyGuideLoading(true);
+        try {
+            const res = await practiceApi.getStudyGuide(attemptId);
+            const guide = String(res?.studyGuide ?? "").trim();
+            if (guide) setStudyGuideText(guide);
+        } catch (e) {
+            // keep modal open; user can close or retry
+        } finally {
+            setStudyGuideLoading(false);
         }
-    }, [studyGuide, user]);
+    };
+
 
     const hasRecommendations = useMemo(() => {
         const g = studyGuide || {};
-        const hasAny =
+        return (
             Boolean(String(g.title || "").trim()) ||
             Boolean(String(g.subject || "").trim()) ||
             Boolean(String(g.topic || "").trim()) ||
+            Boolean(String(g.summary || "").trim()) ||
             (Array.isArray(g.tips) && g.tips.filter(Boolean).length > 0) ||
             (Array.isArray(g.concepts) && g.concepts.filter(Boolean).length > 0) ||
             (Array.isArray(g.vocab) && g.vocab.filter(Boolean).length > 0) ||
-            (Array.isArray(g.questions) && g.questions.filter(Boolean).length > 0);
-        return hasAny;
+            (Array.isArray(g.questions) && g.questions.filter(Boolean).length > 0)
+        );
     }, [studyGuide]);
+
+    // optional save
+    useEffect(() => {
+        if (!user || !user._id) return;
+        const g = studyGuide || {};
+        const ok =
+            (g?.concepts?.length ?? 0) > 0 ||
+            (g?.vocab?.length ?? 0) > 0 ||
+            (g?.tips?.length ?? 0) > 0 ||
+            (g?.questions?.length ?? 0) > 0;
+        if (!ok) return;
+
+        const dataToSave = {
+            ...g,
+            userId: user._id,
+            updatedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(`latest_study_guide_${user._id}`, JSON.stringify(dataToSave));
+    }, [studyGuide, user]);
 
     return (
         <Box>
-            <Typography sx={{ fontWeight: 900, fontSize: 18, color: "#1B2559" }}>Kết quả & Nhận xét Bài thi</Typography>
+            <Typography sx={{ fontWeight: 900, fontSize: 18, color: "#1B2559" }}>
+                Kết quả & Nhận xét Bài thi
+            </Typography>
 
             <Paper
                 elevation={0}
@@ -605,30 +764,8 @@ export default function PracticeResult({
 
                 <Divider sx={{ my: 2 }} />
 
-                <Box sx={{ display: "grid", gap: 0.75 }}>
-
-                    <Typography sx={{ fontWeight: 900, color: "#1B2559" }}>
-                        Bạn đã hoàn thành:{" "}
-                        <Box component="span" sx={{ color: "#2B3674" }}>
-                            {earned}/{totalPoints > 0 ? totalPoints : "?"}
-                        </Box>{" "}
-                        <Box component="span" sx={{ color: "#6a26f1", fontWeight: 800 }}>
-                            ({percentText})
-                        </Box>
-                    </Typography>
-
-                    <Typography sx={{ fontWeight: 900, color: "#1B2559" }}>
-                        Trạng thái:{" "}
-                        <Box component="span" sx={{ color: statusColor }}>
-                            {statusLabel}
-                        </Box>
-                    </Typography>
-                </Box>
-
-                <Divider sx={{ my: 2 }} />
-
                 <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>Đánh giá tổng quan</Typography>
-                <Typography sx={{ mt: 1, color: "#716f6f", fontWeight: 600, whiteSpace: "pre-wrap" }}>
+                <Typography sx={{ mt: 1, color: "#64748B", fontWeight: 600, whiteSpace: "pre-wrap" }}>
                     {feedback || "Chưa có nhận xét."}
                 </Typography>
 
@@ -636,9 +773,9 @@ export default function PracticeResult({
 
                 <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>Nhận xét sau khi làm bài</Typography>
 
-                {greetingText ? (
-                    <Typography sx={{ mt: 1, color: "#716f6f", fontWeight: 800, whiteSpace: "pre-wrap" }}>
-                        {greetingText}
+                {aiSplit.greeting ? (
+                    <Typography sx={{ mt: 1, color: "#64748B", fontWeight: 800, whiteSpace: "pre-wrap" }}>
+                        {aiSplit.greeting}
                     </Typography>
                 ) : null}
 
@@ -660,10 +797,7 @@ export default function PracticeResult({
                         }}
                     >
                         <Typography sx={{ fontWeight: 900, color: "#1B5E20" }}>Điểm mạnh</Typography>
-                        <BulletList
-                            items={aiSplit.strengths}
-                            emptyText={"Chưa có điểm mạnh cụ thể. (Bấm “Xem lại đáp án” để xem theo từng câu.)"}
-                        />
+                        <BulletList items={aiSplit.strengths} emptyText={"Chưa có điểm mạnh cụ thể. (Bấm “Xem lại đáp án” để xem theo từng câu.)"} />
                     </Paper>
 
                     <Paper
@@ -696,31 +830,27 @@ export default function PracticeResult({
 
                     <Button
                         variant="outlined"
-                        onClick={() => setOpenStudyGuide(true)}
-                        sx={{ fontWeight: 900, borderColor: "#2E2D84", color: "#2E2D84" }}
-                        disabled={!hasRecommendations}
+                        onClick={handleOpenStudyGuide}
+                        sx={{
+                            fontWeight: 900,
+                            borderColor: "#2E2D84",
+                            color: "#2E2D84",
+                        }}
+                        disabled={!attemptId || studyGuideLoading}
                     >
                         Hướng dẫn ôn tập
                     </Button>
 
-                    <Button
-                        variant="outlined"
-                        onClick={onViewReview}
-                        sx={{ fontWeight: 900, borderColor: "#0B5ED7", color: "#0B5ED7" }}
-                    >
+                    <Button variant="outlined" onClick={onViewReview} sx={{ fontWeight: 900, borderColor: "#0B5ED7", color: "#0B5ED7" }}>
                         Xem lại đáp án
                     </Button>
                 </Box>
             </Paper>
 
-            {/* ✅ Modal “Hướng dẫn ôn tập” theo style Gemini */}
-            <AppModal
-                open={openStudyGuide}
-                title="Hướng dẫn ôn tập"
-                onClose={() => setOpenStudyGuide(false)}
-                hideActions
-                maxWidth="md"
-            >
+            {/* =============================
+              Modal “Hướng dẫn ôn tập”
+             ============================= */}
+            <AppModal open={openStudyGuide} title="Hướng dẫn ôn tập" onClose={() => setOpenStudyGuide(false)} hideActions maxWidth="md">
                 <Box
                     sx={{
                         mt: 0.5,
@@ -728,52 +858,107 @@ export default function PracticeResult({
                         borderRadius: 3,
                         bgcolor: "#F7F9FC",
                         p: 1.5,
-                        maxHeight: "60vh",
+                        maxHeight: "62vh",
                         overflow: "auto",
                     }}
                 >
+                    {studyGuideLoading && !String(studyGuideText || "").trim() ? (
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.25 }}>
+                            <CircularProgress size={18} />
+                            <Typography sx={{ color: "#4A5568", fontWeight: 700 }}>
+                                Đang tạo hướng dẫn ôn tập...
+                            </Typography>
+                        </Box>
+                    ) : null}
                     {String(studyGuide?.title || "").trim() ? (
                         <Typography sx={{ fontWeight: 950, fontSize: 16, color: "#1B2559" }}>
                             {studyGuide.title}
                         </Typography>
                     ) : null}
 
-                    {/* Subject + Topic must be separate blocks */}
                     <Stack spacing={1.25} sx={{ mt: 1.25 }}>
-                        <SectionCard title="Môn học">
-                            <Typography sx={{ mt: 0.75, color: "#716f6f", fontWeight: 650 }}>
+                        <GuideSection title="Môn học">
+                            <Typography
+                                sx={{
+                                    mt: 0.75,
+                                    color: "#4A5568",
+                                    fontWeight: 600,
+                                    whiteSpace: "pre-wrap",
+                                    lineHeight: 1.75,
+                                    fontSize: 14.5,
+                                    overflowWrap: "anywhere",
+                                    wordBreak: "break-word",
+                                }}
+                            >
                                 {String(studyGuide?.subject || "").trim() || "Chưa có thông tin môn học."}
                             </Typography>
-                        </SectionCard>
+                        </GuideSection>
 
-                        <SectionCard title="Chủ đề">
-                            <Typography sx={{ mt: 0.75, color: "#716f6f", fontWeight: 650 }}>
+                        <GuideSection title="Chủ đề">
+                            <Typography
+                                sx={{
+                                    mt: 0.75,
+                                    color: "#4A5568",
+                                    fontWeight: 600,
+                                    whiteSpace: "pre-wrap",
+                                    lineHeight: 1.75,
+                                    fontSize: 14.5,
+                                    overflowWrap: "anywhere",
+                                    wordBreak: "break-word",
+                                }}
+                            >
                                 {String(studyGuide?.topic || "").trim() || "Chưa có thông tin chủ đề."}
                             </Typography>
-                        </SectionCard>
+                        </GuideSection>
+
+                        <GuideSection title="Tóm tắt">
+                            <Typography
+                                sx={{
+                                    mt: 0.75,
+                                    color: "#4A5568",
+                                    fontWeight: 600,
+                                    whiteSpace: "pre-wrap",
+                                    lineHeight: 1.75,
+                                    fontSize: 14.5,
+                                    overflowWrap: "anywhere",
+                                    wordBreak: "break-word",
+                                }}
+                            >
+                                {String(studyGuide?.summary || "").trim() || "Chưa có tóm tắt."}
+                            </Typography>
+                        </GuideSection>
                     </Stack>
 
                     <Stack spacing={1.25} sx={{ mt: 1.25 }}>
-                        <SectionCard title="Gợi ý ôn tập">
-                            <BulletItems items={studyGuide?.tips} keywordPool={keywordPool} />
-                        </SectionCard>
+                        <GuideSection title="Gợi ý ôn tập">
+                            <GuideItems items={studyGuide?.tips} keywordPool={keywordPool} />
+                        </GuideSection>
 
-                        <SectionCard title="Các khái niệm chính">
-                            <BulletItems items={studyGuide?.concepts} keywordPool={keywordPool} />
-                        </SectionCard>
+                        <GuideSection title="Các khái niệm chính">
+                            <GuideItems items={studyGuide?.concepts} keywordPool={keywordPool} />
+                        </GuideSection>
 
-                        <SectionCard title="Danh sách từ vựng">
-                            <BulletItems items={studyGuide?.vocab} keywordPool={keywordPool} />
-                        </SectionCard>
+                        <GuideSection title="Danh sách từ vựng">
+                            <GuideItems items={studyGuide?.vocab} keywordPool={keywordPool} />
+                        </GuideSection>
 
-                        <SectionCard title="Câu hỏi ôn tập">
-                            <BulletItems items={studyGuide?.questions} keywordPool={keywordPool} />
-                        </SectionCard>
+                        <GuideSection title="Câu hỏi ôn tập">
+                            <GuideItems items={studyGuide?.questions} keywordPool={keywordPool} />
+                        </GuideSection>
                     </Stack>
 
                     {!hasRecommendations ? (
-                        <Typography sx={{ mt: 1.25, color: "#716f6f", fontWeight: 650, whiteSpace: "pre-wrap" }}>
-                            {aiFeedback ? "Chưa có hướng dẫn ôn tập cụ thể." : "Chưa có hướng dẫn ôn tập."}
+                        <Typography
+                            sx={{
+                                mt: 1.25,
+                                color: "#4A5568",
+                                fontWeight: 600,
+                                whiteSpace: "pre-wrap",
+                                lineHeight: 1.75,
+                                fontSize: 14.5,
+                            }}
+                        >
+                            {studyGuideLoading ? "Đang tạo hướng dẫn ôn tập..." : (studyGuideRawClean ? "Chưa có hướng dẫn ôn tập cụ thể." : "Chưa có hướng dẫn ôn tập.")}
                         </Typography>
                     ) : null}
                 </Box>
@@ -785,7 +970,6 @@ export default function PracticeResult({
                 </Box>
             </AppModal>
 
-            {/* giữ prop onNewMaterial để không ảnh hưởng flow parent (không dùng nữa) */}
             {typeof onNewMaterial === "function" ? null : null}
         </Box>
     );
