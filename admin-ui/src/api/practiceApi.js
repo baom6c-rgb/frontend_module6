@@ -99,6 +99,14 @@ export const practiceApi = {
         return unwrap(res);
     },
 
+    // ✅ Lazy-load study guide (generate on demand)
+    getStudyGuide: async (attemptId) => {
+        const res = await axiosPrivate.get(
+            `/student/practice/attempts/${attemptId}/study-guide`
+        );
+        return unwrap(res);
+    },
+
     // ===== V2 (mới) =====
     generateSessionV2: async (payload) => {
         const res = await axiosPrivate.post("/student/practice/v2/generate", payload);
