@@ -586,16 +586,6 @@ export default function UserDashboard() {
                                             />
                                             <Chip
                                                 size="small"
-                                                label="Mục tiêu: Top 10"
-                                                sx={{
-                                                    bgcolor: alpha("#fff", 0.16),
-                                                    color: "#fff",
-                                                    fontWeight: 900,
-                                                    borderRadius: "999px",
-                                                }}
-                                            />
-                                            <Chip
-                                                size="small"
                                                 label={`Tiến độ: ${scorePct}%`}
                                                 sx={{
                                                     bgcolor: alpha("#fff", 0.16),

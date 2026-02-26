@@ -729,26 +729,37 @@ export default function AdminUserList() {
                         borderTop: "1px solid",
                         borderColor: "divider",
                         display: "flex",
-                        alignItems: "center",
+                        flexDirection: { xs: "column", md: "row" },
+                        alignItems: { xs: "flex-end", md: "center" },
                         justifyContent: "space-between",
                         gap: 1,
-                        flexWrap: "wrap",
                     }}
                 >
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                        <Chip label={`Tổng: ${stats.total}`} />
-                        <Chip label={`Đang hoạt động: ${stats.active}`} color="success" />
-                        <Chip label={`Chờ duyệt: ${stats.pending}`} color="warning" />
-                        <Chip label={`Bị khóa: ${stats.blocked}`} color="error" />
-                    </Stack>
+                    {/* Stats chips: 2x2 grid trên mobile/tablet, hàng ngang trên desktop */}
+                    <Box
+                        sx={{
+                            display: "grid",
+                            gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4, auto)" },
+                            gap: 0.75,
+                            width: { xs: "100%", md: "auto" },
+                        }}
+                    >
+                        <Chip label={`Tổng: ${stats.total}`} size="small" sx={{ justifyContent: "center" }} />
+                        <Chip label={`Hoạt động: ${stats.active}`} color="success" size="small" sx={{ justifyContent: "center" }} />
+                        <Chip label={`Chờ duyệt: ${stats.pending}`} color="warning" size="small" sx={{ justifyContent: "center" }} />
+                        <Chip label={`Bị khóa: ${stats.blocked}`} color="error" size="small" sx={{ justifyContent: "center" }} />
+                    </Box>
 
-                    <AppPagination
-                        page={paginationModel.page + 1}
-                        pageSize={paginationModel.pageSize}
-                        total={sortedRows.length}
-                        onPageChange={(nextPage1) => setPaginationModel((p) => ({ ...p, page: nextPage1 - 1 }))}
-                        onPageSizeChange={(nextSize) => setPaginationModel({ page: 0, pageSize: nextSize })}
-                    />
+                    {/* Pagination: căn phải trên mọi thiết bị */}
+                    <Box sx={{ alignSelf: "flex-end" }}>
+                        <AppPagination
+                            page={paginationModel.page + 1}
+                            pageSize={paginationModel.pageSize}
+                            total={sortedRows.length}
+                            onPageChange={(nextPage1) => setPaginationModel((p) => ({ ...p, page: nextPage1 - 1 }))}
+                            onPageSizeChange={(nextSize) => setPaginationModel({ page: 0, pageSize: nextSize })}
+                        />
+                    </Box>
                 </Box>
             </Paper>
 
