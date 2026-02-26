@@ -61,10 +61,41 @@ function looksLikeCode(text) {
     return strongHit && hintHit;
 }
 
+/**
+ * ✅ Tách title/body an toàn để không bị title = ```java
+ * - Nếu bắt đầu bằng code fence: title mặc định "Đọc đoạn code sau và chọn đáp án đúng"
+ * - Nếu có text trước code fence: title = text trước fence, body = từ fence trở đi
+ * - Nếu không có fence: title = dòng 1, body = phần còn lại
+ */
 function splitTitleAndBody(raw) {
     if (!raw) return { title: "Câu hỏi", body: "" };
 
-    const text = String(raw);
+    const DEFAULT_CODE_TITLE = "Đọc đoạn code sau và chọn đáp án đúng";
+
+    // ✅ normalize newline
+    const text = String(raw).replace(/\r\n/g, "\n");
+    const trimmedStart = text.trimStart();
+
+    // ✅ Case 1: bắt đầu bằng code fence => chỉ có code
+    if (trimmedStart.startsWith("```")) {
+        return {
+            title: DEFAULT_CODE_TITLE,
+            body: trimmedStart.trim(),
+        };
+    }
+
+    // ✅ Case 2: có text rồi mới tới code fence
+    const fenceIdx = text.indexOf("```");
+    if (fenceIdx > 0) {
+        const before = text.slice(0, fenceIdx).trim();
+        const after = text.slice(fenceIdx).trim();
+        return {
+            title: before || DEFAULT_CODE_TITLE,
+            body: after || "",
+        };
+    }
+
+    // ✅ Case 3: không có code fence => split dòng 1 như cũ
     const lines = text.split("\n");
 
     if (lines.length >= 2) {
@@ -195,7 +226,14 @@ export default function QuestionCard({ question, index, value, onChange }) {
     const isMcq = qType === "MCQ";
     const isEssay = qType === "ESSAY" || qType === "SHORT_ANSWER";
 
-    const rawContent = question?.content ?? question?.question ?? "Câu hỏi";
+    // ✅ fallback rộng hơn để tránh “mất câu hỏi” nếu BE trả field khác
+    const rawContent =
+        question?.content ??
+        question?.question ??
+        question?.questionText ??
+        question?.title ??
+        question?.stem ??
+        "Câu hỏi";
 
     const { title, body } = useMemo(() => splitTitleAndBody(rawContent), [rawContent]);
 
@@ -333,13 +371,13 @@ export default function QuestionCard({ question, index, value, onChange }) {
                 <Box sx={{ mt: 2, display: "grid", gap: 1.25 }}>
                     {["A", "B", "C", "D"].map((k) => {
                         const text = options?.[k];
-                        const disabled = !text;
+                        const disabled = text == null || String(text).trim() === "";
 
                         return (
                             <AnswerOption
                                 key={k}
                                 label={k}
-                                text={text || "—"}
+                                text={disabled ? "—" : text}
                                 selected={selectedAnswer === k}
                                 disabled={disabled}
                                 onSelect={() => {

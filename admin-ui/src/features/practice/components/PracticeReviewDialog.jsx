@@ -21,8 +21,8 @@ import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 function cleanAnswerText(raw) {
     if (raw == null) return "";
     return String(raw)
-        .replace(/[‘’]/g, "")
-        .replace(/[“”]/g, "")
+        .replace(/[‘’]/g, "'")
+        .replace(/[“”]/g, '"')
         .trim();
 }
 
@@ -80,16 +80,37 @@ function looksLikeCode(text) {
     return strongHit && hintHit;
 }
 
+/**
+ * ✅ Khớp với QuestionCard.jsx:
+ * - Nếu bắt đầu bằng code fence: title mặc định "Đọc đoạn code sau và chọn đáp án đúng"
+ * - Nếu có text trước code fence: title = text trước fence, body = từ fence trở đi
+ * - Nếu không có fence: title = dòng 1, body = phần còn lại
+ */
 function splitTitleAndBody(raw) {
     if (!raw) return { title: "Câu hỏi", body: "" };
 
-    const text = String(raw);
+    const DEFAULT_CODE_TITLE = "Đọc đoạn code sau và chọn đáp án đúng";
+    const text = String(raw).replace(/\r\n/g, "\n");
+    const trimmedStart = text.trimStart();
+
+    if (trimmedStart.startsWith("```")) {
+        return { title: DEFAULT_CODE_TITLE, body: trimmedStart.trim() };
+    }
+
+    const fenceIdx = text.indexOf("```");
+    if (fenceIdx > 0) {
+        const before = text.slice(0, fenceIdx).trim();
+        const after = text.slice(fenceIdx).trim();
+        return { title: before || DEFAULT_CODE_TITLE, body: after || "" };
+    }
+
     const lines = text.split("\n");
     if (lines.length >= 2) {
         const first = lines[0].trim();
         const rest = lines.slice(1).join("\n").trim();
         return { title: first || "Câu hỏi", body: rest };
     }
+
     return { title: text.trim() || "Câu hỏi", body: "" };
 }
 
@@ -165,7 +186,6 @@ function CodeBlock({ language, code }) {
                 bgcolor: "#0f172a",
             }}
         >
-            {/* Header giống IDE (không có nút copy) */}
             <Box
                 sx={{
                     px: 1.25,
@@ -178,7 +198,6 @@ function CodeBlock({ language, code }) {
                 </Typography>
             </Box>
 
-            {/* Code */}
             <Box sx={{ px: 1, pb: 1 }}>
                 <SyntaxHighlighter
                     language={language}
@@ -203,10 +222,54 @@ function CodeBlock({ language, code }) {
     );
 }
 
+/**
+ * ✅ Compact code block for MCQ options (khớp AnswerOption.jsx style)
+ */
+function CodeBlockCompact({ language, code }) {
+    const label = (language || "code").toUpperCase();
+
+    return (
+        <Box
+            sx={{
+                border: "1px solid #E3E8EF",
+                borderRadius: 2,
+                overflow: "hidden",
+                bgcolor: "#0f172a",
+                width: "100%",
+            }}
+        >
+            <Box sx={{ px: 1.25, py: 0.5, bgcolor: "rgba(255,255,255,0.06)" }}>
+                <Typography sx={{ fontSize: 11, fontWeight: 900, color: "#E5E7EB" }}>
+                    {label}
+                </Typography>
+            </Box>
+
+            <SyntaxHighlighter
+                language={language}
+                style={oneDark}
+                customStyle={{
+                    margin: 0,
+                    background: "transparent",
+                    padding: "10px 12px",
+                    fontSize: 12,
+                    lineHeight: 1.55,
+                }}
+                codeTagProps={{
+                    style: {
+                        fontFamily:
+                            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+                    },
+                }}
+            >
+                {code}
+            </SyntaxHighlighter>
+        </Box>
+    );
+}
+
 function QuestionContent({ raw }) {
     const { title, body } = useMemo(() => splitTitleAndBody(raw), [raw]);
 
-    // ✅ ưu tiên: code fence -> inline backtick -> fallback heuristic
     const fenced = useMemo(
         () =>
             parseCodeFence(body) ||
@@ -216,7 +279,6 @@ function QuestionContent({ raw }) {
         [body, raw]
     );
 
-    // ✅ fallback heuristic code (không có fence/backtick nhưng vẫn là snippet)
     const showBodyAsCode = useMemo(() => !fenced && looksLikeCode(body), [body, fenced]);
 
     return (
@@ -291,12 +353,39 @@ function QuestionContent({ raw }) {
     );
 }
 
+/**
+ * ✅ Render MCQ option text like AnswerOption.jsx:
+ * - If option contains code fence => compact SyntaxHighlighter
+ * - Else => normal Typography
+ */
+function OptionContent({ raw }) {
+    const cleaned = useMemo(() => cleanAnswerText(raw), [raw]);
+    const parsed = useMemo(() => parseCodeFence(cleaned), [cleaned]);
+    const isCode = Boolean(parsed);
+
+    if (isCode) {
+        return <CodeBlockCompact language={parsed.language} code={parsed.code} />;
+    }
+
+    return (
+        <Typography
+            sx={{
+                fontWeight: 400,
+                color: "#1B2559",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+            }}
+        >
+            {cleaned || "(trống)"}
+        </Typography>
+    );
+}
+
 export default function PracticeReviewDialog({ open, onClose, review }) {
     const [onlyWrong, setOnlyWrong] = useState(false);
 
     const items = review?.items || [];
 
-    // ✅ giữ số câu gốc trước khi lọc
     const itemsWithNo = useMemo(() => {
         return items.map((it, index) => ({
             ...it,
@@ -343,8 +432,16 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                     </Typography>
                 ) : (
                     filtered.map((q, idx) => {
-                        const type = q?.questionType || "MCQ";
-                        const rawContent = q?.content ?? q?.question ?? "Câu hỏi";
+                        const type = (q?.questionType || "MCQ").toUpperCase();
+                        const rawContent =
+                            q?.content ??
+                            q?.question ??
+                            q?.questionText ??
+                            q?.title ??
+                            q?.stem ??
+                            "Câu hỏi";
+
+                        const isMcq = type === "MCQ";
 
                         return (
                             <Box
@@ -364,11 +461,11 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
 
                                     <Chip
                                         size="small"
-                                        label={type === "MCQ" ? "MCQ" : "Tự luận ngắn"}
+                                        label={isMcq ? "MCQ" : "Tự luận ngắn"}
                                         sx={{
                                             fontWeight: 900,
-                                            bgcolor: type === "MCQ" ? "rgba(11,94,215,0.10)" : "rgba(255,140,0,0.12)",
-                                            color: type === "MCQ" ? "#0B5ED7" : "#FF8C00",
+                                            bgcolor: isMcq ? "rgba(11,94,215,0.10)" : "rgba(255,140,0,0.12)",
+                                            color: isMcq ? "#0B5ED7" : "#FF8C00",
                                         }}
                                     />
 
@@ -387,17 +484,15 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                     ) : null}
                                 </Stack>
 
-                                {/* ✅ Render content */}
+                                {/* ✅ Render question like QuestionCard */}
                                 <QuestionContent raw={rawContent} />
 
                                 <Divider sx={{ my: 1.5 }} />
 
-                                {/* ===== MCQ ===== */}
-                                {type === "MCQ" ? (
+                                {isMcq ? (
                                     <>
                                         {["A", "B", "C", "D"].map((k) => {
-                                            const raw = q.options?.[k] || "";
-                                            const text = cleanAnswerText(raw);
+                                            const rawOpt = q?.options?.[k];
                                             const isCorrect = q.correctAnswer === k;
                                             const isSelected = q.selectedAnswer === k;
                                             const isWrongSelected = isSelected && !isCorrect;
@@ -409,7 +504,11 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                                         p: 1.2,
                                                         borderRadius: 2,
                                                         border: "2px solid",
-                                                        borderColor: isCorrect ? "#1B5E20" : isWrongSelected ? "#B00020" : "#E3E8EF",
+                                                        borderColor: isCorrect
+                                                            ? "#1B5E20"
+                                                            : isWrongSelected
+                                                                ? "#B00020"
+                                                                : "#E3E8EF",
                                                         bgcolor: isCorrect
                                                             ? "rgba(27,94,32,0.08)"
                                                             : isWrongSelected
@@ -423,18 +522,9 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                                 >
                                                     <Typography sx={{ fontWeight: 900, width: 26 }}>{k}.</Typography>
 
-                                                    <Typography
-                                                        sx={{
-                                                            fontWeight: 400,
-                                                            color: "#1B2559",
-                                                            whiteSpace: "pre-wrap",
-                                                            wordBreak: "break-word",
-                                                        }}
-                                                    >
-                                                        {text || "(trống)"}
-                                                    </Typography>
-
-                                                    <Box sx={{ flex: 1 }} />
+                                                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                        <OptionContent raw={rawOpt} />
+                                                    </Box>
 
                                                     {isCorrect ? <Chip size="small" label="ĐÚNG" sx={{ fontWeight: 900 }} /> : null}
                                                 </Box>
@@ -442,7 +532,6 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                         })}
                                     </>
                                 ) : (
-                                    /* ===== ESSAY ===== */
                                     <Box sx={{ display: "grid", gap: 1.25 }}>
                                         <Box>
                                             <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
@@ -464,7 +553,6 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                     </Box>
                                 )}
 
-                                {/* feedback chung per-question */}
                                 {q.feedback ? (
                                     <Box sx={{ mt: 1.5 }}>
                                         <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
