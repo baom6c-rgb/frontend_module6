@@ -26,8 +26,6 @@ import {
     CheckCircle as CheckCircleIcon,
     Cancel as CancelIcon,
     LocalFireDepartment as FireIcon,
-    ChevronLeft as ChevronLeftIcon,
-    ChevronRight as ChevronRightIcon
 } from "@mui/icons-material";
 import { useSelector } from "react-redux";
 import { getDashboardStatsApi } from "../../api/dashboardApi";
@@ -209,8 +207,6 @@ export default function UserDashboard() {
     const [activeTab, setActiveTab] = useState(0); // 0: Gợi ý, 1: Câu hỏi
 
     // Hàm chuyển tab
-    const handleNext = () => setActiveTab((prev) => (prev === 0 ? 1 : 0));
-    const handlePrev = () => setActiveTab((prev) => (prev === 1 ? 0 : 1));
 
     // Thêm state để lưu lộ trình từ bài thi gần nhất
     const [latestStudyGuide, setLatestStudyGuide] = useState(null);
@@ -501,11 +497,10 @@ export default function UserDashboard() {
                         <CardShell
                             sx={{
                                 mb: 3,
-                                p: { xs: 2.5, md: 3.5 },
+                                p: { xs: 2, sm: 2.5, md: 3.5 },
                                 background: `linear-gradient(135deg, ${COLORS.primaryDeep} 0%, ${COLORS.primary} 45%, ${COLORS.orange} 120%)`,
                                 color: "#fff",
                                 position: "relative",
-                                minHeight: 170,
                             }}
                         >
                             <Box
@@ -523,17 +518,18 @@ export default function UserDashboard() {
                                     position: "relative",
                                     zIndex: 1,
                                     display: "flex",
-                                    alignItems: "center",
+                                    alignItems: { xs: "flex-start", md: "center" },
                                     justifyContent: "space-between",
-                                    gap: 2,
+                                    gap: { xs: 1.5, md: 2 },
                                     flexWrap: { xs: "wrap", md: "nowrap" },
                                 }}
                             >
+                                {/* Left: Avatar + text */}
                                 <Box
                                     sx={{
                                         display: "flex",
-                                        alignItems: "center",
-                                        gap: 2,
+                                        alignItems: "flex-start",
+                                        gap: { xs: 1.5, sm: 2 },
                                         minWidth: 0,
                                         flex: 1,
                                     }}
@@ -542,38 +538,43 @@ export default function UserDashboard() {
                                         src={avatarUrl || undefined}
                                         imgProps={{ referrerPolicy: "no-referrer" }}
                                         sx={{
-                                            width: 72,
-                                            height: 72,
+                                            width: { xs: 52, sm: 64, md: 72 },
+                                            height: { xs: 52, sm: 64, md: 72 },
                                             border: "4px solid rgba(255,255,255,0.45)",
                                             bgcolor: alpha("#000", 0.12),
                                             fontWeight: 950,
-                                            fontSize: "1.6rem",
+                                            fontSize: { xs: "1.2rem", md: "1.6rem" },
                                             flex: "0 0 auto",
                                         }}
                                     >
                                         {initials}
                                     </Avatar>
 
-                                    <Box sx={{ minWidth: 0 }}>
+                                    <Box sx={{ minWidth: 0, flex: 1 }}>
                                         <Typography
-                                            variant="h4"
                                             sx={{
                                                 fontWeight: 950,
-                                                lineHeight: 1.1,
+                                                lineHeight: 1.2,
                                                 mb: 0.5,
-                                                whiteSpace: "nowrap",
-                                                overflow: "hidden",
-                                                textOverflow: "ellipsis",
+                                                fontSize: { xs: '1rem', sm: '1.25rem', md: '1.5rem' },
+                                                wordBreak: "break-word",
+                                                whiteSpace: "normal",
                                             }}
                                         >
                                             {greeting}
                                         </Typography>
 
-                                        <Typography sx={{ opacity: 0.92, fontWeight: 700, mb: 1.5 }}>
+                                        <Typography sx={{
+                                            opacity: 0.92,
+                                            fontWeight: 700,
+                                            mb: 1.25,
+                                            fontSize: { xs: '0.8rem', sm: '0.9rem', md: '1rem' },
+                                            lineHeight: 1.5,
+                                        }}>
                                             Học hành là chuyện cả đời. Bắt đầu học tập chưa bao giờ là quá muộn ! 📚
                                         </Typography>
 
-                                        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                                        <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap" }}>
                                             <Chip
                                                 size="small"
                                                 label={`Điểm hiện tại: ${avgScore}/100`}
@@ -582,6 +583,8 @@ export default function UserDashboard() {
                                                     color: "#fff",
                                                     fontWeight: 900,
                                                     borderRadius: "999px",
+                                                    fontSize: { xs: '11px', sm: '12px' },
+                                                    height: { xs: 24, sm: 28 },
                                                 }}
                                             />
                                             <Chip
@@ -592,36 +595,37 @@ export default function UserDashboard() {
                                                     color: "#fff",
                                                     fontWeight: 900,
                                                     borderRadius: "999px",
+                                                    fontSize: { xs: '11px', sm: '12px' },
+                                                    height: { xs: 24, sm: 28 },
                                                 }}
                                             />
                                         </Box>
                                     </Box>
                                 </Box>
 
+                                {/* Right: Rank */}
                                 <Box
                                     sx={{
                                         display: "flex",
                                         alignItems: "center",
-                                        gap: 1.25,
+                                        gap: 1,
                                         color: alpha("#fff", 0.92),
                                         flex: "0 0 auto",
-                                        minWidth: { xs: "100%", md: 240 },
-                                        justifyContent: { xs: "flex-start", md: "flex-end" },
+                                        minWidth: { xs: "auto", md: 200 },
                                     }}
                                 >
-                                    <ProgressIcon sx={{ fontSize: 36 }} />
+                                    <ProgressIcon sx={{ fontSize: { xs: 28, md: 36 } }} />
                                     <Box>
-                                        <Typography variant="h5" sx={{ fontWeight: 950, lineHeight: 1 }}>
+                                        <Typography sx={{ fontWeight: 950, lineHeight: 1, fontSize: { xs: '1.25rem', md: '1.5rem' } }}>
                                             {rank ? `#${rank}` : "--"}
                                         </Typography>
-                                        <Typography variant="caption" sx={{ fontWeight: 800, opacity: 0.9 }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 800, opacity: 0.9, fontSize: { xs: '11px', sm: '12px' } }}>
                                             {totalStudents ? `Trên ${totalStudents} học viên` : "Bảng xếp hạng"}
                                         </Typography>
                                     </Box>
                                 </Box>
                             </Box>
                         </CardShell>
-
                         {/* ===== KPI GRID ===== */}
                         <Box sx={{ mb: 3 }}>
                             <CardShell sx={{ p: 2.5 }}>
@@ -699,100 +703,87 @@ export default function UserDashboard() {
                                     <Box sx={{p: 2.5, height: "100%", display: 'flex', flexDirection: 'column'}}>
 
                                         {/* Header with slide nav */}
+                                        {/* Header with slide nav */}
                                         <Box sx={{
                                             display: 'flex',
                                             justifyContent: 'space-between',
                                             alignItems: 'center',
-                                            mb: 1.5
+                                            flexWrap: 'nowrap',
+                                            gap: 1,
+                                            mb: 1.5,
+                                            minWidth: 0,
                                         }}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0, flex: 1, overflow: 'hidden' }}>
                                                 <Box sx={{
-                                                    width: 36, height: 36,
+                                                    width: 32, height: 32, flexShrink: 0,
                                                     borderRadius: '10px',
                                                     bgcolor: activeTab === 0 ? alpha(COLORS.orange, 0.12) : alpha(COLORS.primary, 0.1),
                                                     display: 'grid', placeItems: 'center',
                                                     transition: 'all 0.3s ease',
                                                 }}>
                                                     {activeTab === 0
-                                                        ? <LightbulbIcon sx={{ fontSize: 18, color: COLORS.orangeDeep }} />
-                                                        : <SchoolIcon sx={{ fontSize: 18, color: COLORS.primaryDeep }} />
+                                                        ? <LightbulbIcon sx={{ fontSize: 17, color: COLORS.orangeDeep }} />
+                                                        : <SchoolIcon sx={{ fontSize: 17, color: COLORS.primaryDeep }} />
                                                     }
                                                 </Box>
-                                                <Box>
-                                                    <Typography sx={{fontWeight: 950, color: COLORS.text, fontSize: '1rem', lineHeight: 1.2}}>
-                                                        {activeTab === 0 ? "Xem và không đánh giá " : "Phải bạn không - Cùng sửa nhé"}
+                                                <Box sx={{ minWidth: 0 }}>
+                                                    <Typography sx={{
+                                                        fontWeight: 950, color: COLORS.text,
+                                                        fontSize: { xs: '0.82rem', sm: '1rem' },
+                                                        lineHeight: 1.2,
+                                                        whiteSpace: 'nowrap',
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
+                                                    }}>
+                                                        {activeTab === 0 ? "Xem và không đánh giá" : "Phải bạn không - Cùng sửa nhé"}
                                                     </Typography>
                                                     <Typography variant="caption" sx={{
                                                         color: COLORS.subtext,
                                                         fontWeight: 700,
-                                                        fontSize: '12px'
+                                                        fontSize: { xs: '11px', sm: '12px' },
+                                                        display: 'block',
+                                                        whiteSpace: 'nowrap',
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
                                                     }}>
                                                         {activeTab === 0 ? "AI phân tích từ bài thi gần nhất của bạn" : "Tự trả lời để củng cố kiến thức"}
                                                     </Typography>
                                                 </Box>
                                             </Box>
 
-                                            <Stack direction="row" spacing={0.75} alignItems="center">
-                                                {/* Slide tab pills */}
-                                                <Box sx={{ display: 'flex', gap: 0.5, mr: 1 }}>
-                                                    {[
-                                                        { label: "💡 Gợi ý", idx: 0, color: COLORS.orange },
-                                                        { label: "📝 Câu hỏi", idx: 1, color: COLORS.primary },
-                                                    ].map((tab) => (
-                                                        <Box
-                                                            key={tab.idx}
-                                                            onClick={() => setActiveTab(tab.idx)}
-                                                            sx={{
-                                                                px: 1.25, py: 0.4,
-                                                                borderRadius: '20px',
-                                                                fontSize: '11px',
-                                                                fontWeight: 800,
-                                                                cursor: 'pointer',
-                                                                transition: 'all 0.25s ease',
-                                                                bgcolor: activeTab === tab.idx ? tab.color : 'transparent',
-                                                                color: activeTab === tab.idx ? '#fff' : COLORS.subtext,
-                                                                border: `1.5px solid ${activeTab === tab.idx ? tab.color : COLORS.border}`,
-                                                                userSelect: 'none',
-                                                                '&:hover': {
-                                                                    bgcolor: activeTab === tab.idx ? tab.color : alpha(tab.color, 0.07),
-                                                                    borderColor: tab.color,
-                                                                    color: activeTab === tab.idx ? '#fff' : tab.color,
-                                                                }
-                                                            }}
-                                                        >
-                                                            {tab.label}
-                                                        </Box>
-                                                    ))}
-                                                </Box>
-                                                <Button
-                                                    onClick={handlePrev}
-                                                    size="small"
-                                                    sx={{
-                                                        minWidth: 28, width: 28, height: 28,
-                                                        borderRadius: '50%',
-                                                        border: `1px solid ${COLORS.border}`,
-                                                        color: COLORS.text, p: 0,
-                                                        '&:hover': { bgcolor: alpha(COLORS.text, 0.06) }
-                                                    }}
-                                                >
-                                                    <ChevronLeftIcon sx={{ fontSize: 16 }}/>
-                                                </Button>
-                                                <Button
-                                                    onClick={handleNext}
-                                                    size="small"
-                                                    sx={{
-                                                        minWidth: 28, width: 28, height: 28,
-                                                        borderRadius: '50%',
-                                                        border: `1px solid ${COLORS.border}`,
-                                                        color: COLORS.text, p: 0,
-                                                        '&:hover': { bgcolor: alpha(COLORS.text, 0.06) }
-                                                    }}
-                                                >
-                                                    <ChevronRightIcon sx={{ fontSize: 16 }}/>
-                                                </Button>
-                                            </Stack>
+                                            {/* Slide tab pills */}
+                                            <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
+                                                {[
+                                                    { label: "💡 Gợi ý", idx: 0, color: COLORS.orange },
+                                                    { label: "📝 Câu hỏi", idx: 1, color: COLORS.primary },
+                                                ].map((tab) => (
+                                                    <Box
+                                                        key={tab.idx}
+                                                        onClick={() => setActiveTab(tab.idx)}
+                                                        sx={{
+                                                            px: { xs: 1, sm: 1.25 }, py: 0.4,
+                                                            borderRadius: '20px',
+                                                            fontSize: { xs: '10px', sm: '11px' },
+                                                            fontWeight: 800,
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.25s ease',
+                                                            whiteSpace: 'nowrap',
+                                                            bgcolor: activeTab === tab.idx ? tab.color : 'transparent',
+                                                            color: activeTab === tab.idx ? '#fff' : COLORS.subtext,
+                                                            border: `1.5px solid ${activeTab === tab.idx ? tab.color : COLORS.border}`,
+                                                            userSelect: 'none',
+                                                            '&:hover': {
+                                                                bgcolor: activeTab === tab.idx ? tab.color : alpha(tab.color, 0.07),
+                                                                borderColor: tab.color,
+                                                                color: activeTab === tab.idx ? '#fff' : tab.color,
+                                                            }
+                                                        }}
+                                                    >
+                                                        {tab.label}
+                                                    </Box>
+                                                ))}
+                                            </Box>
                                         </Box>
-
                                         <Divider/>
 
                                         {/* Slide content area */}
