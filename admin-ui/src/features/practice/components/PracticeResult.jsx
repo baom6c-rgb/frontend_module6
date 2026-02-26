@@ -106,7 +106,7 @@ function BulletList({ items, emptyText }) {
     const list = Array.isArray(items) ? items.filter(Boolean) : [];
     if (!list.length) {
         return (
-            <Typography sx={{ mt: 1, color: "#64748B", fontWeight: 650, whiteSpace: "pre-wrap" }}>
+            <Typography sx={{ mt: 1, color: "#64748B", fontWeight: 500, fontSize: "14px", whiteSpace: "pre-wrap" }}>
                 {emptyText}
             </Typography>
         );
@@ -115,7 +115,7 @@ function BulletList({ items, emptyText }) {
         <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2.2 }}>
             {list.map((t, idx) => (
                 <Box component="li" key={idx} sx={{ mb: 0.75 }}>
-                    <Typography sx={{ color: "#64748B", fontWeight: 650, whiteSpace: "pre-wrap" }}>
+                    <Typography sx={{ color: "#64748B", fontWeight: 500, fontSize: "14px", whiteSpace: "pre-wrap" }}>
                         {t}
                     </Typography>
                 </Box>
@@ -458,10 +458,10 @@ function GuideItems({ items, keywordPool }) {
                 sx={{
                     mt: 0.75,
                     color: "#4A5568",
-                    fontWeight: 600,
+                    fontWeight: 500,
                     whiteSpace: "pre-wrap",
                     lineHeight: 1.75,
-                    fontSize: 14.5,
+                    fontSize: 14,
                     overflowWrap: "anywhere",
                     wordBreak: "break-word",
                 }}
@@ -488,10 +488,10 @@ function GuideItems({ items, keywordPool }) {
                     <Typography
                         sx={{
                             color: "#4A5568",
-                            fontWeight: 600,
+                            fontWeight: 500,
                             whiteSpace: "pre-wrap",
                             lineHeight: 1.75,
-                            fontSize: 14.5,
+                            fontSize: 14,
                             overflowWrap: "anywhere",
                             wordBreak: "break-word",
                         }}
@@ -516,7 +516,7 @@ function GuideSection({ title, children }) {
                 borderLeft: "4px solid rgba(46,45,132,0.28)",
             }}
         >
-            <Typography sx={{ fontWeight: 800, fontSize: 15, color: "#2B3674" }}>{title}</Typography>
+            <Typography sx={{ fontWeight: 900, fontSize: 16, color: "#2B3674" }}>{title}</Typography>
             {children}
         </Paper>
     );
@@ -764,17 +764,23 @@ export default function PracticeResult({ result, numberOfQuestions, onRetry, onN
 
                 <Divider sx={{ my: 2 }} />
 
-                <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>Đánh giá tổng quan</Typography>
-                <Typography sx={{ mt: 1, color: "#64748B", fontWeight: 600, whiteSpace: "pre-wrap" }}>
+                <Typography sx={{ fontWeight: 900, color: "#2B3674", fontSize: "16px" }}>Đánh giá tổng quan</Typography>
+                <Typography sx={{
+                    mt: 1,
+                    color: "#64748B",
+                    fontWeight: 500,
+                    whiteSpace: "pre-wrap",
+                    fontSize: "14px"
+                }}>
                     {feedback || "Chưa có nhận xét."}
                 </Typography>
 
                 <Divider sx={{ my: 2 }} />
 
-                <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>Nhận xét sau khi làm bài</Typography>
+                <Typography sx={{ fontWeight: 900, color: "#2B3674", fontSize: "16px" }}>Nhận xét sau khi làm bài</Typography>
 
                 {aiSplit.greeting ? (
-                    <Typography sx={{ mt: 1, color: "#64748B", fontWeight: 800, whiteSpace: "pre-wrap" }}>
+                    <Typography sx={{ mt: 1, color: "#64748B", fontWeight: 500, fontSize: "14px", whiteSpace: "pre-wrap" }}>
                         {aiSplit.greeting}
                     </Typography>
                 ) : null}
@@ -796,7 +802,7 @@ export default function PracticeResult({ result, numberOfQuestions, onRetry, onN
                             bgcolor: "rgba(27,94,32,0.06)",
                         }}
                     >
-                        <Typography sx={{ fontWeight: 900, color: "#1B5E20" }}>Điểm mạnh</Typography>
+                        <Typography sx={{ fontWeight: 900, color: "#1B5E20", fontSize: "16px" }}>Điểm mạnh</Typography>
                         <BulletList items={aiSplit.strengths} emptyText={"Chưa có điểm mạnh cụ thể. (Bấm “Xem lại đáp án” để xem theo từng câu.)"} />
                     </Paper>
 
@@ -809,7 +815,7 @@ export default function PracticeResult({ result, numberOfQuestions, onRetry, onN
                             bgcolor: "rgba(176,0,32,0.06)",
                         }}
                     >
-                        <Typography sx={{ fontWeight: 900, color: "#B00020" }}>Điểm yếu</Typography>
+                        <Typography sx={{ fontWeight: 900, color: "#B00020", fontSize: "16px" }}>Điểm yếu</Typography>
                         <BulletList
                             items={aiSplit.weaknesses}
                             emptyText={
@@ -882,10 +888,10 @@ export default function PracticeResult({ result, numberOfQuestions, onRetry, onN
                                 sx={{
                                     mt: 0.75,
                                     color: "#4A5568",
-                                    fontWeight: 600,
+                                    fontWeight: 500,
                                     whiteSpace: "pre-wrap",
                                     lineHeight: 1.75,
-                                    fontSize: 14.5,
+                                    fontSize: 14,
                                     overflowWrap: "anywhere",
                                     wordBreak: "break-word",
                                 }}
@@ -899,10 +905,10 @@ export default function PracticeResult({ result, numberOfQuestions, onRetry, onN
                                 sx={{
                                     mt: 0.75,
                                     color: "#4A5568",
-                                    fontWeight: 600,
+                                    fontWeight: 500,
                                     whiteSpace: "pre-wrap",
                                     lineHeight: 1.75,
-                                    fontSize: 14.5,
+                                    fontSize: 14,
                                     overflowWrap: "anywhere",
                                     wordBreak: "break-word",
                                 }}
@@ -916,10 +922,10 @@ export default function PracticeResult({ result, numberOfQuestions, onRetry, onN
                                 sx={{
                                     mt: 0.75,
                                     color: "#4A5568",
-                                    fontWeight: 600,
+                                    fontWeight: 500,
                                     whiteSpace: "pre-wrap",
                                     lineHeight: 1.75,
-                                    fontSize: 14.5,
+                                    fontSize: 14,
                                     overflowWrap: "anywhere",
                                     wordBreak: "break-word",
                                 }}
