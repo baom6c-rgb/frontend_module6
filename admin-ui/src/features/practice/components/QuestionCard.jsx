@@ -9,12 +9,17 @@ import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 function looksLikeCode(text) {
     if (!text) return false;
-    const t = String(text);
+    const t = String(text).trim();
+    if (!t) return false;
 
-    // ✅ Nếu có code fence thì chắc chắn là code
+    // ✅ Có code fence -> chắc chắn là code
     if (t.includes("```")) return true;
 
+    // ✅ Inline code bọc bằng backtick đơn -> coi như code
+    if (t.startsWith("`") && t.endsWith("`") && t.length >= 3) return true;
+
     const hasNewline = t.includes("\n");
+
     const codeHints = [
         "{",
         "}",
@@ -38,9 +43,22 @@ function looksLikeCode(text) {
         "http",
         "JWT",
         "Bearer ",
+        "System.out",
+        "for (",
+        "if (",
+        "while (",
     ];
+
     const hintHit = codeHints.some((h) => t.includes(h));
-    return hasNewline && hintHit;
+
+    // ✅ Nếu nhiều dòng: chỉ cần có hint
+    if (hasNewline) return hintHit;
+
+    // ✅ Nếu 1 dòng: cần "strong hint"
+    const singleLineStrongHints = ["for (", "if (", "while (", "System.out", ";", "{", "}", "=>"];
+    const strongHit = singleLineStrongHints.some((h) => t.includes(h));
+
+    return strongHit && hintHit;
 }
 
 function splitTitleAndBody(raw) {
@@ -85,6 +103,36 @@ function parseCodeFence(text) {
     if (!code) return null;
 
     return { language: lang.toLowerCase(), code };
+}
+
+/**
+ * ✅ Parse inline backtick:
+ * `code...`
+ * (chỉ áp dụng khi toàn bộ text là 1 inline code)
+ */
+function parseInlineBacktick(text) {
+    if (!text) return null;
+    const t = String(text).trim();
+
+    if (t.startsWith("`") && t.endsWith("`") && t.length >= 3) {
+        const code = t.slice(1, -1).trim();
+        if (!code) return null;
+
+        const language =
+            code.includes("System.out") ||
+            code.includes("public ") ||
+            code.includes("private ") ||
+            code.includes("class ") ||
+            code.includes("for (") ||
+            code.includes("if (") ||
+            code.includes("while (")
+                ? "java"
+                : "text";
+
+        return { language, code };
+    }
+
+    return null;
 }
 
 function CodeBlock({ language, code }) {
@@ -149,18 +197,19 @@ export default function QuestionCard({ question, index, value, onChange }) {
 
     const rawContent = question?.content ?? question?.question ?? "Câu hỏi";
 
-    const { title, body } = useMemo(
-        () => splitTitleAndBody(rawContent),
-        [rawContent]
-    );
+    const { title, body } = useMemo(() => splitTitleAndBody(rawContent), [rawContent]);
 
-    // ✅ ưu tiên parse code fence (đẹp nhất)
+    // ✅ ưu tiên: code fence -> inline backtick -> fallback heuristic
     const fenced = useMemo(
-        () => parseCodeFence(body) || parseCodeFence(rawContent),
+        () =>
+            parseCodeFence(body) ||
+            parseCodeFence(rawContent) ||
+            parseInlineBacktick(body) ||
+            parseInlineBacktick(rawContent),
         [body, rawContent]
     );
 
-    // ✅ fallback heuristic code (không có fence nhưng vẫn là snippet)
+    // ✅ fallback heuristic code (không có fence/backtick nhưng vẫn là snippet)
     const showBodyAsCode = useMemo(() => !fenced && looksLikeCode(body), [body, fenced]);
 
     const options = useMemo(() => {
