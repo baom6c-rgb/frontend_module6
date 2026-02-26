@@ -353,18 +353,18 @@ export default function AdminDashboardAiInsightPanel(props) {
                         }}
                     >
                         <Box sx={{ px: 2, py: 1.75 }}>
-                            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
-                                <Box sx={{ minWidth: 0 }}>
-                                    <Typography sx={{ fontWeight: 950, color: "#1B2559", fontSize: 15 }}>
+                            <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1.5}>
+                                <Box sx={{ minWidth: 0, flex: 1 }}>
+                                    <Typography sx={{ fontWeight: 950, color: "#1B2559", fontSize: { xs: 13.5, sm: 15 } }}>
                                         {headerTitle}
                                     </Typography>
 
                                     {resolvedMode === "STUDENT" ? (
-                                        <Typography sx={{ mt: 0.4, color: "#6C757D", fontWeight: 800, fontSize: 12.5 }}>
+                                        <Typography sx={{ mt: 0.4, color: "#6C757D", fontWeight: 800, fontSize: { xs: 11.5, sm: 12.5 } }}>
                                             {student?.fullName || "Học viên"} {student?.email ? `• ${student.email}` : ""}
                                         </Typography>
                                     ) : (
-                                        <Typography sx={{ mt: 0.4, color: "#6C757D", fontWeight: 800, fontSize: 12.5 }}>
+                                        <Typography sx={{ mt: 0.4, color: "#6C757D", fontWeight: 800, fontSize: { xs: 11.5, sm: 12.5 } }}>
                                             {headerSubtitle}
                                         </Typography>
                                     )}
@@ -379,7 +379,13 @@ export default function AdminDashboardAiInsightPanel(props) {
                                         textTransform: "none",
                                         fontWeight: 900,
                                         boxShadow: "none",
+                                        flexShrink: 0,
                                         bgcolor: "#2E2D84",
+                                        fontSize: { xs: 11.5, sm: 13.5 },
+                                        px: { xs: 1.25, sm: 2 },
+                                        py: { xs: 0.6, sm: 0.9 },
+                                        minWidth: 0,
+                                        height: { xs: 32, sm: 38 },
                                         "&:hover": { bgcolor: "#1f1e5c", boxShadow: "none" },
                                     }}
                                 >
@@ -416,28 +422,34 @@ export default function AdminDashboardAiInsightPanel(props) {
                                             display: "flex",
                                             alignItems: "center",
                                             justifyContent: "space-between",
-                                            gap: 2,
+                                            gap: 1.5,
                                         }}
                                     >
-                                        <Box sx={{ minWidth: 0 }}>
-                                            <Typography sx={{ fontWeight: 950, color: "#1B2559" }}>
+                                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                                            <Typography sx={{ fontWeight: 950, color: "#1B2559", fontSize: { xs: 13.5, sm: 15 } }}>
                                                 Kết quả phân tích (AI)
                                             </Typography>
-                                            <Typography sx={{ mt: 0.35, color: "#6C757D", fontWeight: 800, fontSize: 12.5 }}>
-                                                Nhấn “Xem đánh giá” để xem chi tiết.
+                                            <Typography sx={{ mt: 0.35, color: "#6C757D", fontWeight: 800, fontSize: { xs: 11.5, sm: 12.5 } }}>
+                                                Nhấn "Xem đánh giá" để xem chi tiết.
                                             </Typography>
                                         </Box>
 
                                         <Button
                                             onClick={() => setFeedbackOpen(true)}
                                             variant="contained"
-                                            startIcon={<VisibilityRoundedIcon />}
+                                            startIcon={<VisibilityRoundedIcon sx={{ fontSize: { xs: 14, sm: 18 } }} />}
                                             sx={{
                                                 borderRadius: 999,
                                                 textTransform: "none",
                                                 fontWeight: 900,
                                                 bgcolor: "#EC5E32",
-                                                boxShadow: "0 10px 20px rgba(236,94,50,0.22)",
+                                                boxShadow: "0 6px 16px rgba(236,94,50,0.22)",
+                                                flexShrink: 0,
+                                                fontSize: { xs: 11.5, sm: 13.5 },
+                                                px: { xs: 1.25, sm: 2 },
+                                                py: { xs: 0.6, sm: 0.9 },
+                                                minWidth: 0,
+                                                height: { xs: 32, sm: 38 },
                                                 "&:hover": { bgcolor: "#d64a20" },
                                             }}
                                         >
