@@ -85,7 +85,6 @@ export default function PracticePage() {
     const [topicLoading, setTopicLoading] = useState(false);
 
     // ===== Config =====
-    // ✅ Student không được chọn count nữa -> source of truth là BE response
     const [questionCount, setQuestionCount] = useState(null); // number|null
     const [durationMinutes, setDurationMinutes] = useState(0);
 
@@ -109,7 +108,10 @@ export default function PracticePage() {
     const [attemptQuestionCount, setAttemptQuestionCount] = useState(null);
 
     // ===== UI =====
+    // READY/RESULT: toggle canvas -> chat 100% if closed
     const [isCanvasOpen, setIsCanvasOpen] = useState(true);
+    // DOING: toggle chat -> canvas 100% if closed
+    const [isChatOpen, setIsChatOpen] = useState(true);
 
     // ===== Result / review =====
     const [result, setResult] = useState(null);
@@ -200,11 +202,7 @@ export default function PracticePage() {
         let mounted = true;
 
         const pickMpq = (data) => {
-            const mpq =
-                data?.minutesPerQuestion ??
-                data?.minutes_per_question ??
-                data?.settings?.minutesPerQuestion ??
-                null;
+            const mpq = data?.minutesPerQuestion ?? data?.minutes_per_question ?? data?.settings?.minutesPerQuestion ?? null;
             const n = Number(mpq);
             return Number.isFinite(n) && n > 0 ? n : null;
         };
@@ -284,7 +282,10 @@ export default function PracticePage() {
             setMode(MODE.IDLE);
             setDurationMinutes(0);
             setQuestionCount(null);
+
+            // UI reset
             setIsCanvasOpen(true);
+            setIsChatOpen(true);
 
             setAssistantMode(ASSISTANT_MODE.GENERATE);
             resetStudyChat();
@@ -310,6 +311,7 @@ export default function PracticePage() {
                 const t = typeof data === "string" ? data : data?.text ?? data?.extractedText ?? "";
                 if (t && t.trim().length > 0) return t.trim();
             } catch {}
+            // eslint-disable-next-line no-await-in-loop
             await new Promise((r) => setTimeout(r, SLEEP_MS));
         }
         return "";
@@ -366,6 +368,10 @@ export default function PracticePage() {
                 clearActiveSession();
                 resetStudyChat();
 
+                // Upload/Paste: để user thao tác tạo đề => chat/canvas mở
+                setIsChatOpen(true);
+                setIsCanvasOpen(true);
+
                 const extracted = await waitForExtractedTextOrReady(id);
 
                 appendMessage({
@@ -379,12 +385,7 @@ export default function PracticePage() {
             } catch (e) {
                 console.error(e);
                 const status = e?.response?.status;
-                const serverMsg =
-                    e?.response?.data?.message ||
-                    e?.response?.data?.error ||
-                    e?.response?.data ||
-                    e?.message ||
-                    "Upload failed";
+                const serverMsg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Upload failed";
                 showToast(`Upload học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
                 appendMessage({ role: "assistant", text: "Không upload/đọc được file. Kiểm tra định dạng/size nhé." });
             } finally {
@@ -436,6 +437,10 @@ export default function PracticePage() {
                 clearActiveSession();
                 resetStudyChat();
 
+                // Paste: chat/canvas mở
+                setIsChatOpen(true);
+                setIsCanvasOpen(true);
+
                 const extracted = await waitForExtractedTextOrReady(id);
 
                 appendMessage({
@@ -449,12 +454,7 @@ export default function PracticePage() {
             } catch (e) {
                 console.error(e);
                 const status = e?.response?.status;
-                const serverMsg =
-                    e?.response?.data?.message ||
-                    e?.response?.data?.error ||
-                    e?.response?.data ||
-                    e?.message ||
-                    "Create material failed";
+                const serverMsg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Create material failed";
                 showToast(`Gửi học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
                 appendMessage({ role: "assistant", text: "Không tạo được học liệu từ text này. Thử lại nhé." });
             } finally {
@@ -576,14 +576,16 @@ export default function PracticePage() {
                 numberOfQuestions: dummyCount,
             });
 
-            // ✅ BE may return NEED_TOPIC when material has multiple parts
             if (data?.status === "NEED_TOPIC") {
                 setSelectionToken(data?.selectionToken || "");
                 setTopicOptions(Array.isArray(data?.topics) ? data.topics : []);
                 setTopicDialogOpen(true);
 
                 setMode(MODE.IDLE);
+
+                // canvas/chat mở để thao tác
                 setIsCanvasOpen(true);
+                setIsChatOpen(true);
 
                 appendMessage({
                     role: "assistant",
@@ -611,7 +613,10 @@ export default function PracticePage() {
             setDeadlineIso(null);
 
             setMode(MODE.READY);
+
+            // READY: canvas open, chat open
             setIsCanvasOpen(true);
+            setIsChatOpen(true);
 
             saveActiveSession({
                 mode: MODE.READY,
@@ -633,12 +638,7 @@ export default function PracticePage() {
         } catch (e) {
             console.error(e);
             const status = e?.response?.status;
-            const serverMsg =
-                e?.response?.data?.message ||
-                e?.response?.data?.error ||
-                e?.response?.data ||
-                e?.message ||
-                "Generate failed";
+            const serverMsg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Generate failed";
             showToast(`Không tạo được đề${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
             appendMessage({ role: "assistant", text: "Lỗi tạo đề (AI/Server). Thử gửi lại hoặc đổi học liệu." });
             return { ok: false };
@@ -662,6 +662,7 @@ export default function PracticePage() {
                 showToast("Bạn phải chọn ít nhất 1 phần.", "warning");
                 return;
             }
+
             setTopicLoading(true);
             setLoading(true);
             setLoadingMessage("Fly AI đang tạo đề theo phần bạn chọn…");
@@ -693,7 +694,10 @@ export default function PracticePage() {
                 setDeadlineIso(null);
 
                 setMode(MODE.READY);
+
+                // READY: canvas open, chat open
                 setIsCanvasOpen(true);
+                setIsChatOpen(true);
 
                 saveActiveSession({
                     mode: MODE.READY,
@@ -713,16 +717,8 @@ export default function PracticePage() {
             } catch (e) {
                 console.error(e);
                 const status = e?.response?.status;
-                const serverMsg =
-                    e?.response?.data?.message ||
-                    e?.response?.data?.error ||
-                    e?.response?.data ||
-                    e?.message ||
-                    "Select topic failed";
-                showToast(
-                    `Không tạo được đề theo phần đã chọn${status ? ` (${status})` : ""}: ${String(serverMsg)}`,
-                    "error"
-                );
+                const serverMsg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Select topic failed";
+                showToast(`Không tạo được đề theo phần đã chọn${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
                 appendMessage({ role: "assistant", text: "Lỗi tạo đề theo phần đã chọn. Bạn thử chọn lại hoặc bấm tạo đề lại nhé." });
             } finally {
                 setTopicLoading(false);
@@ -767,6 +763,9 @@ export default function PracticePage() {
             setDeadlineIso(deadline);
 
             setMode(MODE.DOING);
+
+            // DOING: auto hide chat => canvas 100% (but still mounted for animation)
+            setIsChatOpen(false);
             setIsCanvasOpen(true);
 
             setAssistantModeSafe(ASSISTANT_MODE.STUDY);
@@ -779,9 +778,7 @@ export default function PracticePage() {
                 attemptId: token,
                 materialId: materialIdRef.current ?? materialId,
                 questionCount: safeCount,
-                durationMinutes: Number.isFinite(Number(data?.durationMinutes))
-                    ? Number(data.durationMinutes)
-                    : Number(durationMinutes),
+                durationMinutes: Number.isFinite(Number(data?.durationMinutes)) ? Number(data.durationMinutes) : Number(durationMinutes),
                 startedAtIso: startedAt,
                 deadlineIso: deadline,
             });
@@ -796,6 +793,9 @@ export default function PracticePage() {
             const msg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Start failed";
             showToast(`Không bắt đầu được${status ? ` (${status})` : ""}: ${String(msg)}`, "error");
             appendMessage({ role: "assistant", text: "Không start được. Session có thể đã hết hạn, hãy bấm Gửi để tạo lại đề." });
+
+            // start fail => chat mở lại
+            setIsChatOpen(true);
         } finally {
             setLoading(false);
         }
@@ -827,6 +827,9 @@ export default function PracticePage() {
 
                 setResult(data);
                 setMode(MODE.RESULT);
+
+                // RESULT: mở chat + canvas open default
+                setIsChatOpen(true);
                 setIsCanvasOpen(true);
 
                 const frozenCount =
@@ -920,6 +923,9 @@ export default function PracticePage() {
                 setDeadlineIso(deadline);
 
                 setMode(MODE.DOING);
+
+                // DOING: hide chat => canvas 100% (animated)
+                setIsChatOpen(false);
                 setIsCanvasOpen(true);
 
                 setAssistantModeSafe(ASSISTANT_MODE.STUDY);
@@ -929,7 +935,7 @@ export default function PracticePage() {
                     sessionToken: token,
                     attemptId: token,
                     materialId: materialIdRef.current ?? materialId ?? null,
-                    questionCount: qLen != null ? qLen : (toPositiveIntOrNull(questionCount) ?? 0),
+                    questionCount: qLen != null ? qLen : toPositiveIntOrNull(questionCount) ?? 0,
                     durationMinutes: Number.isFinite(Number(data?.durationMinutes)) ? Number(data.durationMinutes) : Number(durationMinutes),
                     startedAtIso: startedAt,
                     deadlineIso: deadline,
@@ -941,6 +947,7 @@ export default function PracticePage() {
                 const status = e?.response?.status;
                 const msg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Retest failed";
                 showToast(`Không tạo được bài thi lại${status ? ` (${status})` : ""}: ${String(msg)}`, "error");
+                setIsChatOpen(true);
             } finally {
                 setLoading(false);
             }
@@ -970,6 +977,9 @@ export default function PracticePage() {
 
                         setResult(r);
                         setMode(MODE.RESULT);
+
+                        // RESULT: chat open + canvas open
+                        setIsChatOpen(true);
                         setIsCanvasOpen(true);
                         return;
                     }
@@ -1019,6 +1029,9 @@ export default function PracticePage() {
                         }
 
                         setMode(MODE.DOING);
+
+                        // DOING resume: hide chat
+                        setIsChatOpen(false);
                         setIsCanvasOpen(true);
 
                         setAssistantModeSafe(ASSISTANT_MODE.STUDY);
@@ -1042,7 +1055,10 @@ export default function PracticePage() {
                 } else {
                     if (!cancelled) {
                         setMode(MODE.READY);
+
+                        // READY resume: canvas open + chat open
                         setIsCanvasOpen(true);
+                        setIsChatOpen(true);
                     }
 
                     saveActiveSession({
@@ -1102,9 +1118,22 @@ export default function PracticePage() {
     const materialPresent = Boolean(materialIdRef.current ?? materialId);
 
     const isSplit = Boolean(materialId || sessionToken || attemptDetail || result);
+    const isDoing = mode === MODE.DOING;
 
-    const leftWidth = isCanvasOpen && isSplit ? "30%" : "100%";
-    const rightWidth = isCanvasOpen && isSplit ? "70%" : "0%";
+    // DOING: canvas luôn open (không cho đóng để tránh mất UX làm bài)
+    const effectiveCanvasOpen = useMemo(() => {
+        if (!isSplit) return false;
+        if (isDoing) return true;
+        return isCanvasOpen;
+    }, [isCanvasOpen, isDoing, isSplit]);
+
+    // ===== Chat visibility for animation (keep mounted) =====
+    const isChatVisible = useMemo(() => {
+        if (!isSplit) return true; // IDLE: chat full
+        if (!effectiveCanvasOpen) return true; // canvas closed => chat full
+        if (isDoing) return isChatOpen; // DOING: toggle
+        return true; // READY/RESULT: show when canvas open
+    }, [effectiveCanvasOpen, isChatOpen, isDoing, isSplit]);
 
     const allowUpload = assistantMode === ASSISTANT_MODE.GENERATE && mode !== MODE.DOING;
 
@@ -1132,6 +1161,49 @@ export default function PracticePage() {
     const handlePlayerSubmit = useCallback((answersArray, meta) => {
         return confirmRef.current?.requestSubmit?.(answersArray, meta) ?? false;
     }, []);
+
+    // ===== Layout widths =====
+    const leftWidth = useMemo(() => {
+        if (!isSplit) return "100%";
+        if (!effectiveCanvasOpen) return "100%"; // canvas closed => chat full
+        if (isDoing) return isChatOpen ? "30%" : "0%"; // doing => chat optional
+        return "30%"; // ready/result
+    }, [effectiveCanvasOpen, isChatOpen, isDoing, isSplit]);
+
+    const rightWidth = useMemo(() => {
+        if (!isSplit) return "0%";
+        if (!effectiveCanvasOpen) return "0%";
+        if (isDoing) return isChatOpen ? "70%" : "100%";
+        return "70%";
+    }, [effectiveCanvasOpen, isChatOpen, isDoing, isSplit]);
+
+    // ===== Single right arrow behavior =====
+    const handleRightArrowClick = useCallback(() => {
+        if (!isSplit) return;
+        if (isDoing) {
+            setIsChatOpen((v) => !v);
+            return;
+        }
+        setIsCanvasOpen((v) => !v);
+    }, [isDoing, isSplit]);
+
+    const rightArrowTooltip = useMemo(() => {
+        if (!isSplit) return "";
+        if (isDoing) return isChatOpen ? "Ẩn chat" : "Mở chat";
+        return isCanvasOpen ? "Đóng canvas" : "Mở canvas";
+    }, [isCanvasOpen, isChatOpen, isDoing, isSplit]);
+
+    const RightArrowIcon = useMemo(() => {
+        if (!isSplit) return ChevronRightRoundedIcon;
+
+        if (isDoing) {
+            // chat open => ">" (ẩn chat), chat closed => "<" (mở chat)
+            return isChatOpen ? ChevronRightRoundedIcon : ChevronLeftRoundedIcon;
+        }
+
+        // ready/result: canvas open => ">" (đóng canvas), canvas closed => "<" (mở canvas)
+        return isCanvasOpen ? ChevronRightRoundedIcon : ChevronLeftRoundedIcon;
+    }, [isCanvasOpen, isChatOpen, isDoing, isSplit]);
 
     return (
         <Box
@@ -1185,84 +1257,132 @@ export default function PracticePage() {
                 </Paper>
             )}
 
-            <Box sx={{ display: "flex", flex: 1, gap: 2, minHeight: 0, overflow: "hidden" }}>
-                <PracticeChatPanel
-                    width={leftWidth}
-                    minWidth={isCanvasOpen && isSplit ? 320 : 360}
-                    mode={mode}
-                    assistantMode={assistantMode}
-                    lockGenerate={lockGenerate}
-                    hideStudyWhenGenerate={hideStudyWhenGenerate}
-                    messagesToRender={messagesToRender}
-                    loading={loading}
-                    studyBooting={studyBooting}
-                    materialPresent={materialPresent}
-                    questionCount={questionCount}
-                    durationLabel={durationLabel}
-                    doingAttemptId={doingAttemptId}
-                    onSetAssistantModeSafe={setAssistantModeSafe}
-                    allowUpload={allowUpload}
-                    onUploadFile={handleUploadFile}
-                    onSendText={assistantMode === ASSISTANT_MODE.GENERATE ? handleSendText : handleAskStudy}
-                    disabledComposer={loading || (assistantMode === ASSISTANT_MODE.STUDY && !materialPresent)}
-                    helperText={
-                        assistantMode === ASSISTANT_MODE.GENERATE
-                            ? "Upload file xong bấm Gửi để Fly AI tạo đề."
-                            : "Chỉ nhập từ khóa (2–8 từ), không nhập câu hỏi dài."
-                    }
-                />
+            <Box
+                sx={{
+                    display: "flex",
+                    flex: 1,
+                    gap: isDoing && isSplit && effectiveCanvasOpen && !isChatOpen ? 0 : 2,
+                    minHeight: 0,
+                    overflow: "hidden",
+                }}
+            >
+                {/* LEFT: Chat (keep mounted for smooth animation) */}
+                <Box
+                    sx={{
+                        width: leftWidth,
+                        minWidth: !isSplit || !effectiveCanvasOpen ? 360 : 0,
+                        overflow: "hidden",
+                        flexShrink: 0,
 
-                {isSplit && (
-                    <PracticeCanvasPanel
-                        open={isCanvasOpen}
-                        width={rightWidth}
-                        minWidth={isCanvasOpen ? 420 : 0}
-                        mode={mode}
-                        loading={loading}
-                        materialPresent={materialPresent}
-                        questionCount={questionCount}
-                        durationMinutes={durationMinutes}
-                        minutesPerQuestion={minutesPerQuestion}
-                        resultQuestionCount={resultQuestionCount}
-                        attemptDetail={attemptDetail}
-                        doingAttemptId={doingAttemptId}
-                        attemptStartTs={attemptStartTs}
-                        result={result}
-                        onGenerate={generateSessionV2}
-                        onRequestStart={handleRequestStart}
-                        onRequestReset={handleRequestReset}
-                        onSubmit={handlePlayerSubmit}
-                        onRetry={async () => {
-                            const attemptId = result?.attemptId;
-                            if (attemptId) {
-                                await startRetestV2(attemptId);
-                                return;
-                            }
-
-                            setResult(null);
-                            setAttemptDetail(null);
-                            setAttemptQuestionCount(null);
-                            setStartedAtIso(null);
-                            setDeadlineIso(null);
-                            setMode(MODE.IDLE);
-
-                            setSessionToken("");
-                            sessionTokenRef.current = "";
-
-                            setDurationMinutes(0);
-                            setQuestionCount(null);
-
-                            clearActiveSession();
-                            clearPersistedResult();
-                            appendMessage({ role: "assistant", text: "Ok! Bạn có thể bấm “Tạo đề ngay” để làm lại." });
+                        transition: "width 260ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+                    }}
+                >
+                    <Box
+                        sx={{
+                            height: "100%",
+                            opacity: isChatVisible ? 1 : 0,
+                            transform: isChatVisible ? "translateX(0px)" : "translateX(-14px)",
+                            transition: "opacity 160ms ease, transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+                            pointerEvents: isChatVisible ? "auto" : "none",
                         }}
-                        onNewMaterial={() => resetPracticeState({ keepMessages: true })}
-                        onViewReview={openReview}
-                        playerRef={playerRef}
-                    />
+                    >
+                        <PracticeChatPanel
+                            width="100%"
+                            minWidth={0}
+                            mode={mode}
+                            assistantMode={assistantMode}
+                            lockGenerate={lockGenerate}
+                            hideStudyWhenGenerate={hideStudyWhenGenerate}
+                            messagesToRender={messagesToRender}
+                            loading={loading}
+                            studyBooting={studyBooting}
+                            materialPresent={materialPresent}
+                            questionCount={questionCount}
+                            durationLabel={durationLabel}
+                            doingAttemptId={doingAttemptId}
+                            onSetAssistantModeSafe={setAssistantModeSafe}
+                            allowUpload={allowUpload}
+                            onUploadFile={handleUploadFile}
+                            onSendText={assistantMode === ASSISTANT_MODE.GENERATE ? handleSendText : handleAskStudy}
+                            disabledComposer={loading || (assistantMode === ASSISTANT_MODE.STUDY && !materialPresent)}
+                            helperText={
+                                assistantMode === ASSISTANT_MODE.GENERATE
+                                    ? "Upload file xong bấm Gửi để Fly AI tạo đề."
+                                    : "Chỉ nhập từ khóa (2–8 từ), không nhập câu hỏi dài."
+                            }
+                        />
+                    </Box>
+                </Box>
+
+                {/* RIGHT: Canvas */}
+                {isSplit && effectiveCanvasOpen && (
+                    <Box
+                        sx={{
+                            width: rightWidth,
+                            minWidth: 0,
+                            overflow: "hidden",
+                            transition: "width 260ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+                        }}
+                    >
+                        <PracticeCanvasPanel
+                            open
+                            width="100%"
+                            minWidth={420}
+                            mode={mode}
+                            loading={loading}
+                            materialPresent={materialPresent}
+                            questionCount={questionCount}
+                            durationMinutes={durationMinutes}
+                            minutesPerQuestion={minutesPerQuestion}
+                            resultQuestionCount={resultQuestionCount}
+                            attemptDetail={attemptDetail}
+                            doingAttemptId={doingAttemptId}
+                            attemptStartTs={attemptStartTs}
+                            result={result}
+                            onGenerate={generateSessionV2}
+                            onRequestStart={handleRequestStart}
+                            onRequestReset={handleRequestReset}
+                            onSubmit={handlePlayerSubmit}
+                            onRetry={async () => {
+                                const attemptId = result?.attemptId;
+                                if (attemptId) {
+                                    await startRetestV2(attemptId);
+                                    return;
+                                }
+
+                                setResult(null);
+                                setAttemptDetail(null);
+                                setAttemptQuestionCount(null);
+                                setStartedAtIso(null);
+                                setDeadlineIso(null);
+                                setMode(MODE.IDLE);
+
+                                setSessionToken("");
+                                sessionTokenRef.current = "";
+
+                                setDurationMinutes(0);
+                                setQuestionCount(null);
+
+                                clearActiveSession();
+                                clearPersistedResult();
+                                appendMessage({ role: "assistant", text: "Ok! Bạn có thể bấm “Tạo đề ngay” để làm lại." });
+
+                                // quay về trạng thái thao tác
+                                setIsChatOpen(true);
+                                setIsCanvasOpen(true);
+                            }}
+                            onNewMaterial={() => resetPracticeState({ keepMessages: true })}
+                            onViewReview={openReview}
+                            playerRef={playerRef}
+                        />
+                    </Box>
                 )}
             </Box>
 
+            {/* ✅ ONE right arrow:
+                - DOING: toggle chat (smooth)
+                - READY/RESULT: toggle canvas (chat becomes 100% when canvas closed)
+            */}
             {isSplit && (
                 <Box
                     sx={{
@@ -1270,13 +1390,13 @@ export default function PracticePage() {
                         right: 18,
                         top: "50%",
                         transform: "translateY(-50%)",
-                        zIndex: 99,
+                        zIndex: 200,
                         display: { xs: "none", md: "block" },
                     }}
                 >
-                    <Tooltip title={isCanvasOpen ? "Đóng" : "Mở"}>
+                    <Tooltip title={rightArrowTooltip}>
                         <IconButton
-                            onClick={() => setIsCanvasOpen((v) => !v)}
+                            onClick={handleRightArrowClick}
                             sx={{
                                 borderRadius: 3,
                                 bgcolor: "#EC5E32",
@@ -1291,11 +1411,7 @@ export default function PracticePage() {
                                 },
                             }}
                         >
-                            {isCanvasOpen ? (
-                                <ChevronRightRoundedIcon sx={{ color: "#fff" }} />
-                            ) : (
-                                <ChevronLeftRoundedIcon sx={{ color: "#fff" }} />
-                            )}
+                            <RightArrowIcon sx={{ color: "#fff" }} />
                         </IconButton>
                     </Tooltip>
                 </Box>
@@ -1309,6 +1425,7 @@ export default function PracticePage() {
             />
 
             <PracticeReviewDialog open={reviewOpen} onClose={() => setReviewOpen(false)} review={reviewData} />
+
             <TopicSelectDialog
                 open={topicDialogOpen}
                 topics={topicOptions}
@@ -1319,6 +1436,7 @@ export default function PracticePage() {
                 }}
                 onConfirm={handleConfirmTopic}
             />
+
             <GlobalLoading open={loading} message={loadingMessage} />
         </Box>
     );
