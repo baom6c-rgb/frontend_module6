@@ -884,8 +884,7 @@ export default function PracticeResult({ result, numberOfQuestions, onRetry, onN
                         borderRadius: 3,
                         bgcolor: "#F7F9FC",
                         p: 1.5,
-                        maxHeight: "62vh",
-                        overflow: "auto",
+                        overflow: "visible",
                     }}
                 >
                     {studyGuideError ? (
@@ -996,12 +995,12 @@ export default function PracticeResult({ result, numberOfQuestions, onRetry, onN
                             {studyGuideLoading ? "Đang tạo hướng dẫn ôn tập..." : (studyGuideRawClean ? "Chưa có hướng dẫn ôn tập cụ thể." : "Chưa có hướng dẫn ôn tập.")}
                         </Typography>
                     ) : null}
-                </Box>
 
-                <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 2 }}>
-                    <Button variant="contained" onClick={() => setOpenStudyGuide(false)} sx={{ fontWeight: 900 }}>
-                        Đóng
-                    </Button>
+                    <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 2 }}>
+                        <Button variant="contained" onClick={() => setOpenStudyGuide(false)} sx={{ fontWeight: 900 }}>
+                            Đóng
+                        </Button>
+                    </Box>
                 </Box>
             </AppModal>
 

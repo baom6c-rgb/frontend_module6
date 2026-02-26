@@ -11,6 +11,8 @@ import {
     Chip,
     Stack,
     Button,
+    useMediaQuery,
+    useTheme,
 } from "@mui/material";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 
@@ -382,6 +384,9 @@ function OptionContent({ raw }) {
 }
 
 export default function PracticeReviewDialog({ open, onClose, review }) {
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down("sm")); // < 600px
+
     const [onlyWrong, setOnlyWrong] = useState(false);
 
     const items = review?.items || [];
@@ -399,33 +404,85 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
     }, [itemsWithNo, onlyWrong]);
 
     return (
-        <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-            <DialogTitle sx={{ fontWeight: 900, color: "#1B2559" }}>
+        <Dialog
+            open={open}
+            onClose={onClose}
+            fullWidth
+            fullScreen={isMobile}
+            maxWidth="md"
+            PaperProps={{
+                sx: {
+                    borderRadius: isMobile ? 0 : 3,
+                    m: isMobile ? 0 : 2,
+                },
+            }}
+        >
+            {/* ===== TITLE ===== */}
+            <DialogTitle
+                sx={{
+                    fontWeight: 900,
+                    color: "#1B2559",
+                    fontSize: { xs: "1rem", sm: "1.25rem" },
+                    pr: 6,
+                    py: { xs: 1.5, sm: 2 },
+                }}
+            >
                 Xem lại đáp án
-                <IconButton onClick={onClose} sx={{ position: "absolute", right: 10, top: 10 }}>
+                <IconButton
+                    onClick={onClose}
+                    size="small"
+                    sx={{ position: "absolute", right: 10, top: 10 }}
+                >
                     <CloseRoundedIcon />
                 </IconButton>
             </DialogTitle>
 
-            <DialogContent dividers sx={{ bgcolor: "#F7F9FC" }}>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2, flexWrap: "wrap" }}>
-                    <Chip label={`Score: ${review?.score ?? 0}/100`} sx={{ fontWeight: 900 }} />
-                    <Chip
-                        label={`Đúng: ${review?.correctCount ?? 0}/${review?.totalQuestions ?? 0}`}
-                        sx={{ fontWeight: 900 }}
-                    />
+            <DialogContent dividers sx={{ bgcolor: "#F7F9FC", p: { xs: 1.5, sm: 2 } }}>
 
-                    <Box sx={{ flex: 1 }} />
+                {/* ===== SCORE + FILTER BUTTON ===== */}
+                <Box
+                    sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: 1,
+                        mb: 2,
+                    }}
+                >
+                    {/* Chips bên trái */}
+                    <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                        <Chip
+                            size="small"
+                            label={`Score: ${review?.score ?? 0}/100`}
+                            sx={{ fontWeight: 900, fontSize: { xs: 11, sm: 13 } }}
+                        />
+                        <Chip
+                            size="small"
+                            label={`Đúng: ${review?.correctCount ?? 0}/${review?.totalQuestions ?? 0}`}
+                            sx={{ fontWeight: 900, fontSize: { xs: 11, sm: 13 } }}
+                        />
+                    </Stack>
 
+                    {/* Nút bên phải */}
                     <Button
+                        size="small"
                         variant={onlyWrong ? "contained" : "outlined"}
                         onClick={() => setOnlyWrong((v) => !v)}
-                        sx={{ fontWeight: 900 }}
+                        sx={{
+                            fontWeight: 900,
+                            fontSize: { xs: 11, sm: 13 },
+                            px: { xs: 1.25, sm: 2 },
+                            py: { xs: 0.5, sm: 0.75 },
+                            whiteSpace: "nowrap",
+                            flexShrink: 0,
+                        }}
                     >
                         {onlyWrong ? "Xem toàn bộ câu" : "Chỉ xem câu sai"}
                     </Button>
-                </Stack>
+                </Box>
 
+                {/* ===== QUESTION LIST ===== */}
                 {filtered.length === 0 ? (
                     <Typography sx={{ color: onlyWrong ? "#1B5E20" : "#ff0202", fontWeight: 800 }}>
                         {onlyWrong ? "Không có câu sai 🎉" : "Không có dữ liệu để hiển thị."}
@@ -447,44 +504,69 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                             <Box
                                 key={q.questionId || `${q._no}_${idx}`}
                                 sx={{
-                                    p: 2,
+                                    p: { xs: 1.5, sm: 2 },
                                     borderRadius: 3,
                                     border: "1px solid #E3E8EF",
                                     bgcolor: "#fff",
                                     mb: 2,
                                 }}
                             >
-                                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1, flexWrap: "wrap" }}>
-                                    <Typography sx={{ fontWeight: 900, color: "#1B2559" }}>
-                                        Câu {q._no}:
-                                    </Typography>
+                                {/* Header: Câu N + chips — 2 dòng gọn gàng trên mobile */}
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        flexWrap: "wrap",
+                                        gap: 0.75,
+                                        mb: 1,
+                                    }}
+                                >
+                                    {/* Trái: Câu N + loại + đúng/sai */}
+                                    <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                                        <Typography sx={{ fontWeight: 900, color: "#1B2559", fontSize: { xs: 13, sm: 15 }, whiteSpace: "nowrap" }}>
+                                            Câu {q._no}:
+                                        </Typography>
+                                        <Chip
+                                            size="small"
+                                            label={isMcq ? "MCQ" : "Tự luận ngắn"}
+                                            sx={{
+                                                fontWeight: 900,
+                                                fontSize: { xs: 10, sm: 12 },
+                                                height: { xs: 22, sm: 24 },
+                                                bgcolor: isMcq ? "rgba(11,94,215,0.10)" : "rgba(255,140,0,0.12)",
+                                                color: isMcq ? "#0B5ED7" : "#FF8C00",
+                                            }}
+                                        />
+                                        <Chip
+                                            size="small"
+                                            label={q.isCorrect ? "ĐÚNG" : "SAI"}
+                                            sx={{
+                                                fontWeight: 900,
+                                                fontSize: { xs: 10, sm: 12 },
+                                                height: { xs: 22, sm: 24 },
+                                                bgcolor: q.isCorrect ? "rgba(27,94,32,0.12)" : "rgba(176,0,32,0.12)",
+                                                color: q.isCorrect ? "#1B5E20" : "#B00020",
+                                            }}
+                                        />
+                                    </Stack>
 
-                                    <Chip
-                                        size="small"
-                                        label={isMcq ? "MCQ" : "Tự luận ngắn"}
-                                        sx={{
-                                            fontWeight: 900,
-                                            bgcolor: isMcq ? "rgba(11,94,215,0.10)" : "rgba(255,140,0,0.12)",
-                                            color: isMcq ? "#0B5ED7" : "#FF8C00",
-                                        }}
-                                    />
-
-                                    <Chip
-                                        size="small"
-                                        label={q.isCorrect ? "ĐÚNG" : "SAI"}
-                                        sx={{
-                                            fontWeight: 900,
-                                            bgcolor: q.isCorrect ? "rgba(27,94,32,0.12)" : "rgba(176,0,32,0.12)",
-                                            color: q.isCorrect ? "#1B5E20" : "#B00020",
-                                        }}
-                                    />
-
+                                    {/* Phải: Điểm */}
                                     {Number.isFinite(q?.score) && Number.isFinite(q?.maxScore) ? (
-                                        <Chip size="small" label={`Điểm: ${q.score}/${q.maxScore}`} sx={{ fontWeight: 900 }} />
+                                        <Chip
+                                            size="small"
+                                            label={`Điểm: ${q.score}/${q.maxScore}`}
+                                            sx={{
+                                                fontWeight: 900,
+                                                fontSize: { xs: 10, sm: 12 },
+                                                height: { xs: 22, sm: 24 },
+                                                flexShrink: 0,
+                                            }}
+                                        />
                                     ) : null}
-                                </Stack>
+                                </Box>
 
-                                {/* ✅ Render question like QuestionCard */}
+                                {/* Question content */}
                                 <QuestionContent raw={rawContent} />
 
                                 <Divider sx={{ my: 1.5 }} />
@@ -501,7 +583,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                                 <Box
                                                     key={k}
                                                     sx={{
-                                                        p: 1.2,
+                                                        p: { xs: 1, sm: 1.2 },
                                                         borderRadius: 2,
                                                         border: "2px solid",
                                                         borderColor: isCorrect
@@ -520,13 +602,26 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                                         alignItems: "flex-start",
                                                     }}
                                                 >
-                                                    <Typography sx={{ fontWeight: 900, width: 26 }}>{k}.</Typography>
+                                                    <Typography sx={{ fontWeight: 900, width: 22, fontSize: { xs: 13, sm: 14 }, flexShrink: 0 }}>
+                                                        {k}.
+                                                    </Typography>
 
                                                     <Box sx={{ flex: 1, minWidth: 0 }}>
                                                         <OptionContent raw={rawOpt} />
                                                     </Box>
 
-                                                    {isCorrect ? <Chip size="small" label="ĐÚNG" sx={{ fontWeight: 900 }} /> : null}
+                                                    {isCorrect ? (
+                                                        <Chip
+                                                            size="small"
+                                                            label="ĐÚNG"
+                                                            sx={{
+                                                                fontWeight: 900,
+                                                                fontSize: { xs: 10, sm: 12 },
+                                                                height: { xs: 20, sm: 24 },
+                                                                flexShrink: 0,
+                                                            }}
+                                                        />
+                                                    ) : null}
                                                 </Box>
                                             );
                                         })}
@@ -534,19 +629,19 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                 ) : (
                                     <Box sx={{ display: "grid", gap: 1.25 }}>
                                         <Box>
-                                            <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
+                                            <Typography sx={{ fontWeight: 900, color: "#2B3674", fontSize: { xs: 13, sm: 14 } }}>
                                                 Câu trả lời của bạn
                                             </Typography>
-                                            <Typography sx={{ mt: 0.5, color: "#000000", fontWeight: 400, whiteSpace: "pre-wrap" }}>
+                                            <Typography sx={{ mt: 0.5, color: "#000000", fontWeight: 400, whiteSpace: "pre-wrap", fontSize: { xs: 13, sm: 14 } }}>
                                                 {q.yourAnswer || "(chưa trả lời)"}
                                             </Typography>
                                         </Box>
 
                                         <Box>
-                                            <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
+                                            <Typography sx={{ fontWeight: 900, color: "#2B3674", fontSize: { xs: 13, sm: 14 } }}>
                                                 Gợi ý đáp án (sample)
                                             </Typography>
-                                            <Typography sx={{ mt: 0.5, color: "#716f6f", fontWeight: 400, whiteSpace: "pre-wrap" }}>
+                                            <Typography sx={{ mt: 0.5, color: "#716f6f", fontWeight: 400, whiteSpace: "pre-wrap", fontSize: { xs: 13, sm: 14 } }}>
                                                 {q.sampleAnswer || "(không có)"}
                                             </Typography>
                                         </Box>
@@ -555,10 +650,10 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
 
                                 {q.feedback ? (
                                     <Box sx={{ mt: 1.5 }}>
-                                        <Typography sx={{ fontWeight: 900, color: "#2B3674" }}>
+                                        <Typography sx={{ fontWeight: 900, color: "#2B3674", fontSize: { xs: 13, sm: 14 } }}>
                                             Giải thích / Gợi ý học lại
                                         </Typography>
-                                        <Typography sx={{ mt: 0.5, color: "#716f6f", fontWeight: 400, whiteSpace: "pre-wrap" }}>
+                                        <Typography sx={{ mt: 0.5, color: "#716f6f", fontWeight: 400, whiteSpace: "pre-wrap", fontSize: { xs: 13, sm: 14 } }}>
                                             {q.feedback}
                                         </Typography>
                                     </Box>
