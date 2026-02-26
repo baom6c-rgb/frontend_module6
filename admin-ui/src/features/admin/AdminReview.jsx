@@ -323,11 +323,11 @@ const AdminReview = () => {
 
         if (selectedStatus === "Đạt") {
             filtered = filtered.filter((a) =>
-                a.totalScore ? Number(a.score) / Number(a.totalScore) >= 0.5 : false
+                a.totalScore ? Number(a.score) / Number(a.totalScore) >= 0.8 : false
             );
-        } else if (selectedStatus === "Chưa đạt") {
+        } else if (selectedStatus === "Trượt") {
             filtered = filtered.filter((a) =>
-                a.totalScore ? Number(a.score) / Number(a.totalScore) < 0.5 : false
+                a.totalScore ? Number(a.score) / Number(a.totalScore) < 0.8 : false
             );
         }
 
@@ -568,8 +568,8 @@ const AdminReview = () => {
                         value: selectedStatus,
                         options: [
                             { value: ALL, label: "Tất cả" },
-                            { value: "Đạt", label: "Đạt (≥ 50%)" },
-                            { value: "Chưa đạt", label: "Chưa đạt (< 50%)" },
+                            { value: "Đạt", label: "Đạt" },
+                            { value: "Trượt", label: "Trượt" },
                         ],
                         onChange: setSelectedStatus,
                     },

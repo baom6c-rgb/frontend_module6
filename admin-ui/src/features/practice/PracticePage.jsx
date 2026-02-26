@@ -1,10 +1,12 @@
 // src/features/practice/PracticePage.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Box, IconButton, Paper, Tooltip, Typography } from "@mui/material";
+import { Box, BottomNavigation, BottomNavigationAction, IconButton, Paper, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
 
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
 import AccessTimeFilledRoundedIcon from "@mui/icons-material/AccessTimeFilledRounded";
+import ChatRoundedIcon from "@mui/icons-material/ChatRounded";
+import AssignmentRoundedIcon from "@mui/icons-material/AssignmentRounded";
 
 import { practiceApi } from "../../api/practiceApi";
 import { materialApi } from "../../api/materialApi";
@@ -46,6 +48,14 @@ const toPositiveIntOrNull = (v) => {
 
 export default function PracticePage() {
     const { showToast } = useToast();
+
+    // ===== Responsive breakpoints =====
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down("md"));      // < 900px
+    const isTablet = useMediaQuery(theme.breakpoints.between("md", "lg")); // 900–1200px
+
+    // Mobile: tab index 0=Chat, 1=Canvas
+    const [mobileTab, setMobileTab] = useState(0);
 
     // ===== Focus mode / auto hide sidebar =====
     useEffect(() => {
@@ -1103,8 +1113,18 @@ export default function PracticePage() {
 
     const isSplit = Boolean(materialId || sessionToken || attemptDetail || result);
 
-    const leftWidth = isCanvasOpen && isSplit ? "30%" : "100%";
-    const rightWidth = isCanvasOpen && isSplit ? "70%" : "0%";
+    // Responsive width logic
+    const leftWidth = useMemo(() => {
+        if (isMobile) return "100%";
+        if (isTablet) return isCanvasOpen && isSplit ? "40%" : "100%";
+        return isCanvasOpen && isSplit ? "30%" : "100%";
+    }, [isMobile, isTablet, isCanvasOpen, isSplit]);
+
+    const rightWidth = useMemo(() => {
+        if (isMobile) return "100%";
+        if (isTablet) return isCanvasOpen && isSplit ? "60%" : "0%";
+        return isCanvasOpen && isSplit ? "70%" : "0%";
+    }, [isMobile, isTablet, isCanvasOpen, isSplit]);
 
     const allowUpload = assistantMode === ASSISTANT_MODE.GENERATE && mode !== MODE.DOING;
 
@@ -1133,13 +1153,181 @@ export default function PracticePage() {
         return confirmRef.current?.requestSubmit?.(answersArray, meta) ?? false;
     }, []);
 
+
+    // ===========================
+    // Auto-switch mobile tab
+    // ===========================
+    // Khi isSplit=true lần đầu (có material), chuyển sang Canvas
+    useEffect(() => {
+        if (isMobile && isSplit) setMobileTab(1);
+    }, [isMobile, isSplit]);
+
+    // Khi đang làm bài hoặc có kết quả, chuyển sang Canvas
+    useEffect(() => {
+        if (isMobile && (mode === MODE.DOING || mode === MODE.RESULT)) setMobileTab(1);
+    }, [isMobile, mode]);
+
+    // ===========================
+    // Shared props objects
+    // ===========================
+    const sharedCanvasProps = {
+        mode,
+        loading,
+        materialPresent,
+        questionCount,
+        durationMinutes,
+        minutesPerQuestion,
+        resultQuestionCount,
+        attemptDetail,
+        doingAttemptId,
+        attemptStartTs,
+        result,
+        onGenerate: generateSessionV2,
+        onRequestStart: handleRequestStart,
+        onRequestReset: handleRequestReset,
+        onSubmit: handlePlayerSubmit,
+        onRetry: async () => {
+            const attemptId = result?.attemptId;
+            if (attemptId) {
+                await startRetestV2(attemptId);
+                return;
+            }
+            setResult(null);
+            setAttemptDetail(null);
+            setAttemptQuestionCount(null);
+            setStartedAtIso(null);
+            setDeadlineIso(null);
+            setMode(MODE.IDLE);
+            setSessionToken("");
+            sessionTokenRef.current = "";
+            setDurationMinutes(0);
+            setQuestionCount(null);
+            clearActiveSession();
+            clearPersistedResult();
+            if (isMobile) setMobileTab(0);
+            appendMessage({ role: "assistant", text: "Ok! B\u1ea1n c\u00f3 th\u1ec3 b\u1ea5m \u201cT\u1ea1o \u0111\u1ec1 ngay\u201d \u0111\u1ec3 l\u00e0m l\u1ea1i." });
+        },
+        onNewMaterial: () => {
+            resetPracticeState({ keepMessages: true });
+            if (isMobile) setMobileTab(0);
+        },
+        onViewReview: openReview,
+        playerRef,
+    };
+
+    const sharedChatProps = {
+        mode,
+        assistantMode,
+        lockGenerate,
+        hideStudyWhenGenerate,
+        messagesToRender,
+        loading,
+        studyBooting,
+        materialPresent,
+        questionCount,
+        durationLabel,
+        doingAttemptId,
+        onSetAssistantModeSafe: setAssistantModeSafe,
+        allowUpload,
+        onUploadFile: handleUploadFile,
+        onSendText: assistantMode === ASSISTANT_MODE.GENERATE ? handleSendText : handleAskStudy,
+        disabledComposer: loading || (assistantMode === ASSISTANT_MODE.STUDY && !materialPresent),
+        helperText: assistantMode === ASSISTANT_MODE.GENERATE
+            ? "Upload file xong b\u1ea5m G\u1eedi \u0111\u1ec3 Fly AI t\u1ea1o \u0111\u1ec1."
+            : "Ch\u1ec9 nh\u1eadp t\u1eeb kh\u00f3a (2\u20138 t\u1eeb), kh\u00f4ng nh\u1eadp c\u00e2u h\u1ecfi d\u00e0i.",
+    };
+
+    const sharedDialogs = (
+        <>
+            <PracticeConfirmManager
+                ref={confirmRef}
+                onStart={startSessionV2}
+                onReset={() => resetPracticeState({ keepMessages: true })}
+                onSubmit={submitSessionV2}
+            />
+            <PracticeReviewDialog open={reviewOpen} onClose={() => setReviewOpen(false)} review={reviewData} />
+            <TopicSelectDialog
+                open={topicDialogOpen}
+                topics={topicOptions}
+                loading={topicLoading}
+                onClose={() => { if (topicLoading) return; setTopicDialogOpen(false); }}
+                onConfirm={handleConfirmTopic}
+            />
+            <GlobalLoading open={loading} message={loadingMessage} />
+        </>
+    );
+
+    // ===========================
+    // MOBILE LAYOUT (< 900px)
+    // ===========================
+    if (isMobile) {
+        return (
+            <Box sx={{ height: "calc(100vh - var(--app-header-height, 72px))", width: "100%", bgcolor: COLORS.bg, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
+                {showFloatingTimer && (
+                    <Paper elevation={0} sx={{ position: "fixed", top: "calc(var(--app-header-height, 72px) + 8px)", left: "50%", transform: "translateX(-50%)", zIndex: 120, borderRadius: 3, px: 1.5, py: 0.75, display: "flex", alignItems: "center", gap: 0.75, bgcolor: "#fff", border: "1px solid #ffcdd2", boxShadow: "0 4px 20px rgba(211,47,47,0.18)", userSelect: "none" }}>
+                        <AccessTimeFilledRoundedIcon sx={{ color: "#d32f2f", fontSize: 18 }} />
+                        <Typography sx={{ fontWeight: 900, fontSize: 14, color: "#d32f2f", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+                            <CountdownTimer startTimestamp={attemptStartTs} durationSeconds={Number(durationMinutes) * 60} onExpire={() => playerRef.current?.submit?.({ timedOut: true })} />
+                        </Typography>
+                    </Paper>
+                )}
+
+                <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden", p: 1.25 }}>
+                    {mobileTab === 0 && (
+                        <PracticeChatPanel {...sharedChatProps} width="100%" minWidth={0} />
+                    )}
+                    {mobileTab === 1 && isSplit && (
+                        <PracticeCanvasPanel {...sharedCanvasProps} open width="100%" minWidth={0} />
+                    )}
+                    {mobileTab === 1 && !isSplit && (
+                        <Box sx={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, p: 3 }}>
+                            <AssignmentRoundedIcon sx={{ fontSize: 56, color: "#CBD5E1" }} />
+                            <Typography sx={{ textAlign: "center", color: "#6C757D", fontSize: 14, lineHeight: 1.6 }}>
+                                {"H\u00e3y upload h\u1ecdc li\u1ec7u v\u00e0 b\u1ea5m "}<b>{"G\u1eedi"}</b>{" \u1edf tab "}<b>{"Chat AI"}</b>{" \u0111\u1ec3 Fly AI t\u1ea1o \u0111\u1ec1 tr\u01b0\u1edbc nh\u00e9."}
+                            </Typography>
+                        </Box>
+                    )}
+                </Box>
+
+                <BottomNavigation
+                    value={mobileTab}
+                    onChange={(_, v) => setMobileTab(v)}
+                    sx={{ borderTop: "1px solid #E3E8EF", bgcolor: "#fff", flexShrink: 0, height: 58, "& .MuiBottomNavigationAction-root": { minWidth: 0, py: 0.5 } }}
+                >
+                    <BottomNavigationAction
+                        label="Chat AI"
+                        icon={<ChatRoundedIcon />}
+                        sx={{ "&.Mui-selected": { color: "#EC5E32" }, "&.Mui-selected .MuiBottomNavigationAction-label": { fontWeight: 700 } }}
+                    />
+                    <BottomNavigationAction
+                        label={mode === MODE.DOING ? "\u0110ang l\u00e0m" : mode === MODE.RESULT ? "K\u1ebft qu\u1ea3" : "Canvas"}
+                        icon={
+                            <Box sx={{ position: "relative", display: "inline-flex" }}>
+                                <AssignmentRoundedIcon />
+                                {(mode === MODE.DOING || mode === MODE.RESULT) && (
+                                    <Box sx={{ position: "absolute", top: -1, right: -3, width: 8, height: 8, borderRadius: "50%", bgcolor: mode === MODE.DOING ? "#EC5E32" : "#10B981", border: "1.5px solid #fff" }} />
+                                )}
+                            </Box>
+                        }
+                        sx={{ "&.Mui-selected": { color: "#EC5E32" }, "&.Mui-selected .MuiBottomNavigationAction-label": { fontWeight: 700 } }}
+                    />
+                </BottomNavigation>
+
+                {sharedDialogs}
+            </Box>
+        );
+    }
+
+    // ===========================
+    // TABLET + DESKTOP (>= 900px)
+    // ===========================
     return (
         <Box
             sx={{
                 height: "calc(100vh - var(--app-header-height, 72px))",
                 width: "100%",
                 bgcolor: COLORS.bg,
-                p: 2,
+                p: { md: 1.5, lg: 2 },
                 display: "flex",
                 flexDirection: "column",
                 overflow: "hidden",
@@ -1147,179 +1335,45 @@ export default function PracticePage() {
             }}
         >
             {showFloatingTimer && (
-                <Paper
-                    elevation={0}
-                    sx={{
-                        position: "fixed",
-                        top: "calc(var(--app-header-height, 72px) + 8px)",
-                        right: 18,
-                        zIndex: 120,
-                        borderRadius: 3,
-                        px: 1.5,
-                        py: 1,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1,
-                        bgcolor: "#fff",
-                        border: "1px solid #ffcdd2",
-                        boxShadow: "0 10px 30px rgba(211, 47, 47, 0.12)",
-                        userSelect: "none",
-                    }}
-                >
+                <Paper elevation={0} sx={{ position: "fixed", top: "calc(var(--app-header-height, 72px) + 8px)", right: 18, zIndex: 120, borderRadius: 3, px: 1.5, py: 1, display: "flex", alignItems: "center", gap: 1, bgcolor: "#fff", border: "1px solid #ffcdd2", boxShadow: "0 10px 30px rgba(211,47,47,0.12)", userSelect: "none" }}>
                     <AccessTimeFilledRoundedIcon sx={{ color: "#d32f2f" }} fontSize="small" />
-                    <Typography
-                        sx={{
-                            fontWeight: 900,
-                            fontSize: 15,
-                            color: "#d32f2f",
-                            fontVariantNumeric: "tabular-nums",
-                            lineHeight: 1,
-                        }}
-                    >
-                        <CountdownTimer
-                            startTimestamp={attemptStartTs}
-                            durationSeconds={Number(durationMinutes) * 60}
-                            onExpire={() => playerRef.current?.submit?.({ timedOut: true })}
-                        />
+                    <Typography sx={{ fontWeight: 900, fontSize: 15, color: "#d32f2f", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+                        <CountdownTimer startTimestamp={attemptStartTs} durationSeconds={Number(durationMinutes) * 60} onExpire={() => playerRef.current?.submit?.({ timedOut: true })} />
                     </Typography>
                 </Paper>
             )}
 
-            <Box sx={{ display: "flex", flex: 1, gap: 2, minHeight: 0, overflow: "hidden" }}>
+            <Box sx={{ display: "flex", flex: 1, gap: { md: 1.5, lg: 2 }, minHeight: 0, overflow: "hidden" }}>
                 <PracticeChatPanel
+                    {...sharedChatProps}
                     width={leftWidth}
-                    minWidth={isCanvasOpen && isSplit ? 320 : 360}
-                    mode={mode}
-                    assistantMode={assistantMode}
-                    lockGenerate={lockGenerate}
-                    hideStudyWhenGenerate={hideStudyWhenGenerate}
-                    messagesToRender={messagesToRender}
-                    loading={loading}
-                    studyBooting={studyBooting}
-                    materialPresent={materialPresent}
-                    questionCount={questionCount}
-                    durationLabel={durationLabel}
-                    doingAttemptId={doingAttemptId}
-                    onSetAssistantModeSafe={setAssistantModeSafe}
-                    allowUpload={allowUpload}
-                    onUploadFile={handleUploadFile}
-                    onSendText={assistantMode === ASSISTANT_MODE.GENERATE ? handleSendText : handleAskStudy}
-                    disabledComposer={loading || (assistantMode === ASSISTANT_MODE.STUDY && !materialPresent)}
-                    helperText={
-                        assistantMode === ASSISTANT_MODE.GENERATE
-                            ? "Upload file xong bấm Gửi để Fly AI tạo đề."
-                            : "Chỉ nhập từ khóa (2–8 từ), không nhập câu hỏi dài."
-                    }
+                    minWidth={isCanvasOpen && isSplit ? (isTablet ? 260 : 320) : 360}
                 />
 
                 {isSplit && (
                     <PracticeCanvasPanel
+                        {...sharedCanvasProps}
                         open={isCanvasOpen}
                         width={rightWidth}
-                        minWidth={isCanvasOpen ? 420 : 0}
-                        mode={mode}
-                        loading={loading}
-                        materialPresent={materialPresent}
-                        questionCount={questionCount}
-                        durationMinutes={durationMinutes}
-                        minutesPerQuestion={minutesPerQuestion}
-                        resultQuestionCount={resultQuestionCount}
-                        attemptDetail={attemptDetail}
-                        doingAttemptId={doingAttemptId}
-                        attemptStartTs={attemptStartTs}
-                        result={result}
-                        onGenerate={generateSessionV2}
-                        onRequestStart={handleRequestStart}
-                        onRequestReset={handleRequestReset}
-                        onSubmit={handlePlayerSubmit}
-                        onRetry={async () => {
-                            const attemptId = result?.attemptId;
-                            if (attemptId) {
-                                await startRetestV2(attemptId);
-                                return;
-                            }
-
-                            setResult(null);
-                            setAttemptDetail(null);
-                            setAttemptQuestionCount(null);
-                            setStartedAtIso(null);
-                            setDeadlineIso(null);
-                            setMode(MODE.IDLE);
-
-                            setSessionToken("");
-                            sessionTokenRef.current = "";
-
-                            setDurationMinutes(0);
-                            setQuestionCount(null);
-
-                            clearActiveSession();
-                            clearPersistedResult();
-                            appendMessage({ role: "assistant", text: "Ok! Bạn có thể bấm “Tạo đề ngay” để làm lại." });
-                        }}
-                        onNewMaterial={() => resetPracticeState({ keepMessages: true })}
-                        onViewReview={openReview}
-                        playerRef={playerRef}
+                        minWidth={isCanvasOpen ? (isTablet ? 300 : 420) : 0}
                     />
                 )}
             </Box>
 
             {isSplit && (
-                <Box
-                    sx={{
-                        position: "fixed",
-                        right: 18,
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        zIndex: 99,
-                        display: { xs: "none", md: "block" },
-                    }}
-                >
-                    <Tooltip title={isCanvasOpen ? "Đóng" : "Mở"}>
+                <Box sx={{ position: "fixed", right: 18, top: "50%", transform: "translateY(-50%)", zIndex: 99 }}>
+                    <Tooltip title={isCanvasOpen ? "\u0110\u00f3ng canvas" : "M\u1edf canvas"}>
                         <IconButton
                             onClick={() => setIsCanvasOpen((v) => !v)}
-                            sx={{
-                                borderRadius: 3,
-                                bgcolor: "#EC5E32",
-                                color: "#fff",
-                                border: "1px solid #EC5E32",
-                                boxShadow: "0 10px 30px rgba(236,94,50,0.35)",
-                                transition: "all 0.2s ease",
-                                "&:hover": {
-                                    bgcolor: "#d94f28",
-                                    borderColor: "#d94f28",
-                                    boxShadow: "0 12px 34px rgba(236,94,50,0.45)",
-                                },
-                            }}
+                            sx={{ borderRadius: 3, bgcolor: "#EC5E32", color: "#fff", border: "1px solid #EC5E32", boxShadow: "0 10px 30px rgba(236,94,50,0.35)", transition: "all 0.2s ease", width: { md: 34, lg: 40 }, height: { md: 34, lg: 40 }, "&:hover": { bgcolor: "#d94f28", borderColor: "#d94f28", boxShadow: "0 12px 34px rgba(236,94,50,0.45)" } }}
                         >
-                            {isCanvasOpen ? (
-                                <ChevronRightRoundedIcon sx={{ color: "#fff" }} />
-                            ) : (
-                                <ChevronLeftRoundedIcon sx={{ color: "#fff" }} />
-                            )}
+                            {isCanvasOpen ? <ChevronRightRoundedIcon sx={{ color: "#fff" }} /> : <ChevronLeftRoundedIcon sx={{ color: "#fff" }} />}
                         </IconButton>
                     </Tooltip>
                 </Box>
             )}
 
-            <PracticeConfirmManager
-                ref={confirmRef}
-                onStart={startSessionV2}
-                onReset={() => resetPracticeState({ keepMessages: true })}
-                onSubmit={submitSessionV2}
-            />
-
-            <PracticeReviewDialog open={reviewOpen} onClose={() => setReviewOpen(false)} review={reviewData} />
-            <TopicSelectDialog
-                open={topicDialogOpen}
-                topics={topicOptions}
-                loading={topicLoading}
-                onClose={() => {
-                    if (topicLoading) return;
-                    setTopicDialogOpen(false);
-                }}
-                onConfirm={handleConfirmTopic}
-            />
-            <GlobalLoading open={loading} message={loadingMessage} />
+            {sharedDialogs}
         </Box>
     );
 }

@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from "react";
 import {
     Drawer,
+    SwipeableDrawer,
     Box,
     Stack,
     Typography,
@@ -46,6 +47,7 @@ const Placeholder = ({ children }) => (
 export default function StudentQuickDrawer({ open, onClose, student, filters }) {
     const theme = useTheme();
     const downSm = useMediaQuery(theme.breakpoints.down("sm"));
+    const downMd = useMediaQuery(theme.breakpoints.down("md")); // mobile + tablet + iPad
 
     // cache AI theo từng userId để đổi qua lại học viên không bị gọi lại
     const [aiCache, setAiCache] = useState({});
@@ -80,32 +82,32 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
         textAlign: "center",
     };
 
-    return (
-        <Drawer
-            anchor="right"
-            open={open}
-            onClose={onClose}
-            PaperProps={{
-                sx: {
-                    width: { xs: "100%", sm: 650 },
-                    bgcolor: COLORS.white,
-                    borderLeft: `1px solid ${COLORS.border}`,
-                },
-            }}
-        >
-            {/* Header (gradient) */}
+    // ===========================
+    // Shared drawer content
+    // ===========================
+    const drawerContent = (
+        <>
+            {/* Mobile/Tablet: drag handle bar */}
+            {downMd && (
+                <Box sx={{ display: "flex", justifyContent: "center", pt: 1.25, pb: 0.25, flexShrink: 0 }}>
+                    <Box sx={{ width: 40, height: 4, borderRadius: 999, bgcolor: "#CBD5E1" }} />
+                </Box>
+            )}
+
+            {/* Header gradient */}
             <Box
                 sx={{
                     px: { xs: 2, sm: 2.5 },
-                    py: { xs: 1.75, sm: 2.25 },
+                    py: { xs: 1.5, sm: 2.25 },
                     color: "#fff",
                     background: `linear-gradient(135deg, ${COLORS.navy} 0%, ${COLORS.navyLight} 100%)`,
                     borderBottom: `1px solid ${COLORS.border}`,
+                    flexShrink: 0,
                 }}
             >
                 <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
                     <Box sx={{ minWidth: 0 }}>
-                        <Typography sx={{ fontWeight: 950, fontSize: 16, lineHeight: 1.15 }}>
+                        <Typography sx={{ fontWeight: 950, fontSize: { xs: 15, sm: 16 }, lineHeight: 1.15 }}>
                             Chi tiết học viên
                         </Typography>
                         <Typography sx={{ opacity: 0.85, fontWeight: 700, fontSize: 12, mt: 0.4 }}>
@@ -113,22 +115,25 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                         </Typography>
                     </Box>
 
-                    <IconButton
-                        onClick={onClose}
-                        sx={{
-                            border: "1px solid rgba(255,255,255,.25)",
-                            bgcolor: "rgba(255,255,255,.08)",
-                            color: "#fff",
-                            "&:hover": { bgcolor: "rgba(255,255,255,.14)" },
-                        }}
-                    >
-                        <CloseRounded />
-                    </IconButton>
+                    {/* Nút X — chỉ hiện trên desktop */}
+                    {!downMd && (
+                        <IconButton
+                            onClick={onClose}
+                            sx={{
+                                border: "1px solid rgba(255,255,255,.25)",
+                                bgcolor: "rgba(255,255,255,.08)",
+                                color: "#fff",
+                                "&:hover": { bgcolor: "rgba(255,255,255,.14)" },
+                            }}
+                        >
+                            <CloseRounded />
+                        </IconButton>
+                    )}
                 </Stack>
             </Box>
 
-            {/* Body */}
-            <Box sx={{ p: { xs: 2, sm: 2.5 }, overflowY: "auto" }}>
+            {/* Body — scrollable */}
+            <Box sx={{ p: { xs: 2, sm: 2.5 }, overflowY: "auto", flex: 1, minHeight: 0 }}>
                 {!student ? (
                     <Placeholder>Chọn 1 học viên trong bảng để xem chi tiết.</Placeholder>
                 ) : (
@@ -145,7 +150,6 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                             >
                                 {getInitials(student?.fullName || student?.email)}
                             </Avatar>
-
                             <Box sx={{ minWidth: 0 }}>
                                 <Typography sx={{ fontWeight: 950, color: COLORS.textPrimary, fontSize: 16, lineHeight: 1.2 }}>
                                     {student.fullName || "(Chưa có tên)"}
@@ -156,15 +160,9 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                             </Box>
                         </Stack>
 
-                        {/* KPI grid 2 cột, thêm 2 ô ĐẠT/TRƯỢT ngay dưới */}
+                        {/* KPI grid 2 cột */}
                         <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.25 }}>
-                            {/* Tổng bài làm */}
-                            <Box
-                                sx={{
-                                    ...kpiCardBaseSx,
-                                    bgcolor: COLORS.bg,
-                                }}
-                            >
+                            <Box sx={{ ...kpiCardBaseSx, bgcolor: COLORS.bg }}>
                                 <Typography sx={{ fontWeight: 950, fontSize: 22, color: COLORS.textPrimary }}>
                                     {fmtInt(summary?.attemptsCount ?? 0)}
                                 </Typography>
@@ -173,13 +171,7 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                                 </Typography>
                             </Box>
 
-                            {/* Điểm TB */}
-                            <Box
-                                sx={{
-                                    ...kpiCardBaseSx,
-                                    bgcolor: COLORS.bg,
-                                }}
-                            >
+                            <Box sx={{ ...kpiCardBaseSx, bgcolor: COLORS.bg }}>
                                 <Typography sx={{ fontWeight: 950, fontSize: 22, color: COLORS.textPrimary }}>
                                     {(summary?.avgScore ?? 0).toFixed(1)}
                                 </Typography>
@@ -188,13 +180,7 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                                 </Typography>
                             </Box>
 
-                            {/* ✅ Số bài đạt (xanh) */}
-                            <Box
-                                sx={{
-                                    ...kpiCardBaseSx,
-                                    bgcolor: COLORS.bg,
-                                }}
-                            >
+                            <Box sx={{ ...kpiCardBaseSx, bgcolor: COLORS.bg }}>
                                 <Typography sx={{ fontWeight: 950, fontSize: 22, color: COLORS.success }}>
                                     {fmtInt(summary?.passedCount ?? 0)}
                                 </Typography>
@@ -203,13 +189,7 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                                 </Typography>
                             </Box>
 
-                            {/* ✅ Số bài trượt (đỏ) */}
-                            <Box
-                                sx={{
-                                    ...kpiCardBaseSx,
-                                    bgcolor: COLORS.bg,
-                                }}
-                            >
+                            <Box sx={{ ...kpiCardBaseSx, bgcolor: COLORS.bg }}>
                                 <Typography sx={{ fontWeight: 950, fontSize: 22, color: COLORS.danger }}>
                                     {fmtInt(summary?.failedCount ?? 0)}
                                 </Typography>
@@ -219,14 +199,7 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                             </Box>
 
                             {/* Tiến độ */}
-                            <Box
-                                sx={{
-                                    p: 1.5,
-                                    borderRadius: 2,
-                                    bgcolor: COLORS.bg,
-                                    border: `1px solid ${COLORS.border}`,
-                                }}
-                            >
+                            <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
                                 <Stack spacing={0.8}>
                                     <Stack direction="row" justifyContent="space-between" alignItems="baseline">
                                         <Typography sx={{ fontWeight: 900, fontSize: 11, color: COLORS.textSecondary, letterSpacing: 0.4 }}>
@@ -236,7 +209,6 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                                             {Math.round((summary?.passRate ?? 0) * 100)}%
                                         </Typography>
                                     </Stack>
-
                                     <LinearProgress
                                         variant="determinate"
                                         value={Math.max(0, Math.min(100, Math.round((summary?.passRate ?? 0) * 100)))}
@@ -244,25 +216,14 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                                             height: 8,
                                             borderRadius: 999,
                                             bgcolor: `${COLORS.border}80`,
-                                            "& .MuiLinearProgress-bar": {
-                                                borderRadius: 999,
-                                                bgcolor: summary?.chip?.c ?? COLORS.navy,
-                                            },
+                                            "& .MuiLinearProgress-bar": { borderRadius: 999, bgcolor: summary?.chip?.c ?? COLORS.navy },
                                         }}
                                     />
                                 </Stack>
                             </Box>
 
                             {/* Mức độ */}
-                            <Box
-                                sx={{
-                                    p: 1.5,
-                                    borderRadius: 2,
-                                    bgcolor: summary?.chip?.bg ?? COLORS.bg,
-                                    border: `1px solid ${COLORS.border}`,
-                                    textAlign: "center",
-                                }}
-                            >
+                            <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: summary?.chip?.bg ?? COLORS.bg, border: `1px solid ${COLORS.border}`, textAlign: "center" }}>
                                 <Typography sx={{ fontWeight: 950, fontSize: 14, color: summary?.chip?.c ?? COLORS.textPrimary }}>
                                     {summary?.label ?? "-"}
                                 </Typography>
@@ -285,9 +246,65 @@ export default function StudentQuickDrawer({ open, onClose, student, filters }) 
                             }}
                             dense={downSm}
                         />
+
+
                     </Stack>
                 )}
             </Box>
+
+
+        </>
+    );
+
+    // ===========================
+    // MOBILE + TABLET: bottom sheet trượt lên
+    // ===========================
+    if (downMd) {
+        return (
+            <SwipeableDrawer
+                anchor="bottom"
+                open={open}
+                onClose={onClose}
+                onOpen={() => {}}
+                disableSwipeToOpen
+                ModalProps={{ keepMounted: false }}
+                PaperProps={{
+                    sx: {
+                        borderRadius: "20px 20px 0 0",
+                        maxHeight: "92dvh",
+                        height: "92dvh",
+                        bgcolor: COLORS.white,
+                        display: "flex",
+                        flexDirection: "column",
+                        overflow: "hidden",
+                    },
+                }}
+            >
+                {drawerContent}
+            </SwipeableDrawer>
+        );
+    }
+
+    // ===========================
+    // DESKTOP: Drawer bên phải (giữ nguyên)
+    // ===========================
+    return (
+        <Drawer
+            anchor="right"
+            open={open}
+            onClose={onClose}
+            PaperProps={{
+                sx: {
+                    width: 650,
+                    bgcolor: COLORS.white,
+                    borderLeft: `1px solid ${COLORS.border}`,
+                    display: "flex",
+                    flexDirection: "column",
+                    overflow: "hidden",
+                },
+            }}
+        >
+            {drawerContent}
         </Drawer>
     );
 }
