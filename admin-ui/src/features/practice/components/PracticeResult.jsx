@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { Box, Button, Paper, Typography, Divider, Chip, Stack, CircularProgress } from "@mui/material";
 import AppModal from "../../../components/common/AppModal";
+import GlobalLoading from "../../../components/common/GlobalLoading";
 import { practiceApi } from "../../../api/practiceApi";
 
 // =============================
@@ -680,22 +681,40 @@ export default function PracticeResult({ result, numberOfQuestions, onRetry, onN
     // ===== Study Guide modal =====
     const [openStudyGuide, setOpenStudyGuide] = useState(false);
     const [studyGuideLoading, setStudyGuideLoading] = useState(false);
+    const [studyGuideError, setStudyGuideError] = useState("");
 
     const handleOpenStudyGuide = async () => {
-        setOpenStudyGuide(true);
         if (studyGuideLoading) return;
-        if (String(studyGuideText || "").trim()) return;
-        if (!attemptId) return;
+        setStudyGuideError("");
 
+        // ✅ Nếu đã có sẵn (đã cache) -> mở modal ngay
+        if (String(studyGuideText || "").trim()) {
+            setOpenStudyGuide(true);
+            return;
+        }
+
+        // ✅ Nếu thiếu attemptId -> vẫn mở modal để báo lỗi
+        if (!attemptId) {
+            setStudyGuideError("Không tìm thấy attemptId để lấy hướng dẫn ôn tập.");
+            setOpenStudyGuide(true);
+            return;
+        }
+
+        // ✅ Blocking loading trước, xong mới mở modal
         setStudyGuideLoading(true);
         try {
             const res = await practiceApi.getStudyGuide(attemptId);
             const guide = String(res?.studyGuide ?? "").trim();
-            if (guide) setStudyGuideText(guide);
+            if (!guide) {
+                setStudyGuideError("Chưa nhận được hướng dẫn ôn tập. Bạn thử lại nhé.");
+            } else {
+                setStudyGuideText(guide);
+            }
         } catch (e) {
-            // keep modal open; user can close or retry
+            setStudyGuideError("Không lấy được hướng dẫn ôn tập (có thể do quota/timeout). Bạn thử lại nhé.");
         } finally {
             setStudyGuideLoading(false);
+            setOpenStudyGuide(true);
         }
     };
 
@@ -735,6 +754,7 @@ export default function PracticeResult({ result, numberOfQuestions, onRetry, onN
 
     return (
         <Box>
+            <GlobalLoading open={studyGuideLoading} message="Đang tạo hướng dẫn ôn tập..." />
             <Typography sx={{ fontWeight: 900, fontSize: 18, color: "#1B2559" }}>
                 Kết quả & Nhận xét Bài thi
             </Typography>
@@ -862,14 +882,23 @@ export default function PracticeResult({ result, numberOfQuestions, onRetry, onN
                         overflow: "auto",
                     }}
                 >
-                    {studyGuideLoading && !String(studyGuideText || "").trim() ? (
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.25 }}>
-                            <CircularProgress size={18} />
-                            <Typography sx={{ color: "#4A5568", fontWeight: 700 }}>
-                                Đang tạo hướng dẫn ôn tập...
-                            </Typography>
-                        </Box>
+                    {studyGuideError ? (
+                        <Typography
+                            sx={{
+                                mb: 1,
+                                p: 1,
+                                borderRadius: 2,
+                                bgcolor: "rgba(176,0,32,0.08)",
+                                border: "1px solid rgba(176,0,32,0.25)",
+                                color: "#B00020",
+                                fontWeight: 800,
+                                whiteSpace: "pre-wrap",
+                            }}
+                        >
+                            {studyGuideError}
+                        </Typography>
                     ) : null}
+
                     {String(studyGuide?.title || "").trim() ? (
                         <Typography sx={{ fontWeight: 950, fontSize: 16, color: "#1B2559" }}>
                             {studyGuide.title}
