@@ -2,10 +2,10 @@ import React, { forwardRef, useImperativeHandle, useMemo, useRef, useState } fro
 import AppConfirm from "../../../../components/common/AppConfirm";
 
 /**
- * Imperative confirm manager:
- * ref.current.requestStart()
- * ref.current.requestReset()
- * ref.current.requestSubmit(answersArray, meta)
+ * Imperative confirm manager (Promise-based):
+ * await ref.current.requestStart()  -> boolean (true=confirmed)
+ * await ref.current.requestReset()  -> boolean
+ * await ref.current.requestSubmit(answersArray, meta) -> boolean (false=cancel or failed)
  */
 const PracticeConfirmManager = forwardRef(function PracticeConfirmManager(
     { onStart, onReset, onSubmit },
@@ -16,32 +16,60 @@ const PracticeConfirmManager = forwardRef(function PracticeConfirmManager(
 
     const pendingSubmitRef = useRef({ answersArray: null, meta: null });
 
-    const close = () => {
-        setOpen(false);
-        setType(null);
+    // ✅ resolver để trả kết quả confirm (true/false) về caller
+    const resolverRef = useRef(null); // (value:boolean) => void
+
+    const safeResolve = (value) => {
+        const r = resolverRef.current;
+        resolverRef.current = null;
+        if (typeof r === "function") r(Boolean(value));
+    };
+
+    const resetPending = () => {
         pendingSubmitRef.current = { answersArray: null, meta: null };
     };
 
+    const close = (resolveValue = null) => {
+        setOpen(false);
+        setType(null);
+        resetPending();
+
+        // ✅ nếu caller đang await thì trả về (mặc định false khi đóng)
+        if (resolveValue !== null) safeResolve(resolveValue);
+    };
+
+    const openWithPromise = (nextType) => {
+        // nếu đang mở 1 confirm khác -> đóng cái cũ và resolve false
+        if (open) safeResolve(false);
+
+        setType(nextType);
+        setOpen(true);
+
+        return new Promise((resolve) => {
+            resolverRef.current = resolve;
+        });
+    };
+
     useImperativeHandle(ref, () => ({
-        requestStart: () => {
-            setType("START");
-            setOpen(true);
-        },
-        requestReset: () => {
-            setType("RESET");
-            setOpen(true);
-        },
-        requestSubmit: (answersArray, meta = {}) => {
+        requestStart: () => openWithPromise("START"),
+        requestReset: () => openWithPromise("RESET"),
+
+        requestSubmit: async (answersArray, meta = {}) => {
             // ✅ timedOut -> auto submit (no confirm)
             if (meta?.timedOut) {
-                onSubmit?.(answersArray, meta);
-                return;
+                try {
+                    await onSubmit?.(Array.isArray(answersArray) ? answersArray : [], meta);
+                    return true;
+                } catch {
+                    return false;
+                }
             }
+
             pendingSubmitRef.current = { answersArray, meta };
-            setType("SUBMIT");
-            setOpen(true);
+            return openWithPromise("SUBMIT");
         },
-        close,
+
+        close: () => close(false),
     }));
 
     const ui = useMemo(() => {
@@ -84,30 +112,43 @@ const PracticeConfirmManager = forwardRef(function PracticeConfirmManager(
             confirmText={ui.confirmText}
             cancelText={ui.cancelText}
             variant={ui.variant}
-            onClose={close}
-            // ✅ PracticePage tự xử lý toast -> tắt toast ở đây
+            // ✅ Cancel / backdrop / ESC => resolve false
+            onClose={() => close(false)}
             toastOnSuccess={false}
             toastOnError={false}
-            // ✅ Manager tự close để không double-close
             autoCloseOnSuccess={false}
             onConfirm={async () => {
                 try {
                     if (type === "START") {
                         await onStart?.();
-                        close();
+                        // ✅ confirm OK
+                        close(true);
                         return;
                     }
+
                     if (type === "RESET") {
                         await onReset?.();
-                        close();
+                        close(true);
                         return;
                     }
+
                     // SUBMIT
                     const { answersArray, meta } = pendingSubmitRef.current || {};
-                    close(); // đóng trước cho mượt UI
+                    // đóng trước cho mượt UI (nhưng vẫn giữ resolver để trả true/false)
+                    setOpen(false);
+
                     await onSubmit?.(Array.isArray(answersArray) ? answersArray : [], meta || {});
+
+                    // ✅ submit OK
+                    setType(null);
+                    resetPending();
+                    safeResolve(true);
                 } catch {
-                    // parent (PracticePage) sẽ toast/error handling
+                    // ✅ submit fail => mở khóa lại cho PracticePlayer
+                    setOpen(false);
+                    setType(null);
+                    resetPending();
+                    safeResolve(false);
                 }
             }}
         />

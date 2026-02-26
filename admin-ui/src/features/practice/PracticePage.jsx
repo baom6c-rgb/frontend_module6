@@ -1130,7 +1130,7 @@ export default function PracticePage() {
     }, []);
 
     const handlePlayerSubmit = useCallback((answersArray, meta) => {
-        confirmRef.current?.requestSubmit?.(answersArray, meta);
+        return confirmRef.current?.requestSubmit?.(answersArray, meta) ?? false;
     }, []);
 
     return (

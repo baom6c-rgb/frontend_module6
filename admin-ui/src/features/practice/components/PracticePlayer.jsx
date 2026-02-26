@@ -49,11 +49,19 @@ const PracticePlayer = forwardRef(function PracticePlayer(
      */
     const [answersMap, setAnswersMap] = useState({});
 
-    // submission flag (doesn't trigger re-render)
+    /**
+     * ✅ submittedRef: đã nộp bài thành công (khóa hẳn UI)
+     * ✅ submittingRef: đang submit / đang chờ confirm (khóa tạm thời)
+     *
+     * Bug cũ: set submittedRef=true trước khi user confirm -> cancel bị "đơ"
+     */
     const submittedRef = useRef(false);
+    const submittingRef = useRef(false);
 
     // ✅ tránh effect persist ghi đè answersMap={} lên localStorage ngay lúc mới restore
     const skipPersistRef = useRef(true);
+
+    const isLocked = () => submittedRef.current || submittingRef.current;
 
     const getQid = (q) => {
         const v = q?.questionId ?? q?.questionKey ?? q?.id ?? null;
@@ -100,6 +108,7 @@ const PracticePlayer = forwardRef(function PracticePlayer(
      */
     useEffect(() => {
         submittedRef.current = false;
+        submittingRef.current = false;
 
         // ✅ sau khi restore xong, bỏ qua 1 lần persist để không ghi đè answers={}
         skipPersistRef.current = true;
@@ -195,6 +204,7 @@ const PracticePlayer = forwardRef(function PracticePlayer(
     // ===== Prevent accidental reload/back (chỉ khi chưa submit) =====
     useEffect(() => {
         const handler = (e) => {
+            // ✅ chỉ chặn khi đang làm bài (chưa submit thành công)
             if (submittedRef.current) return;
             e.preventDefault();
             e.returnValue = "";
@@ -204,7 +214,6 @@ const PracticePlayer = forwardRef(function PracticePlayer(
     }, []);
 
     // ===== Anti-cheat (best-effort): chặn F12/DevTools hotkeys + chuột phải + copy/paste =====
-    // Lưu ý: Không thể chặn DevTools 100% (người dùng vẫn mở được bằng cách khác).
     useEffect(() => {
         const onKeyDown = (e) => {
             if (submittedRef.current) return;
@@ -212,28 +221,24 @@ const PracticePlayer = forwardRef(function PracticePlayer(
             const key = String(e.key || "").toLowerCase();
             const ctrlOrMeta = e.ctrlKey || e.metaKey;
 
-            // F12
             if (e.key === "F12") {
                 e.preventDefault();
                 e.stopPropagation();
                 return;
             }
 
-            // Ctrl/Meta + Shift + I/J/C (DevTools)
             if (ctrlOrMeta && e.shiftKey && ["i", "j", "c"].includes(key)) {
                 e.preventDefault();
                 e.stopPropagation();
                 return;
             }
 
-            // Ctrl/Meta + U (View source)
             if (ctrlOrMeta && key === "u") {
                 e.preventDefault();
                 e.stopPropagation();
                 return;
             }
 
-            // Optional: chặn copy/paste/select all trong lúc làm bài
             if (ctrlOrMeta && ["c", "v", "x", "a"].includes(key)) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -284,16 +289,37 @@ const PracticePlayer = forwardRef(function PracticePlayer(
         });
     };
 
+    /**
+     * ✅ doSubmit:
+     * - KHÔNG set submitted=true ngay
+     * - lock tạm bằng submittingRef trong lúc chờ confirm / gọi API
+     * - nếu cancel: onSubmit trả về false hoặc { cancelled:true } -> unlock
+     * - nếu thành công: set submitted=true
+     */
     const doSubmit = async (meta = {}) => {
         if (submittedRef.current) return;
+        if (submittingRef.current) return;
 
-        submittedRef.current = true;
+        submittingRef.current = true;
+
         const answersArray = buildAnswersArray();
 
         try {
-            await onSubmit?.(answersArray, meta);
+            const res = await onSubmit?.(answersArray, meta);
+
+            // ✅ Nếu user cancel confirm -> parent nên return false hoặc {cancelled:true}
+            const cancelled = res === false || res?.cancelled === true;
+            if (cancelled) {
+                submittingRef.current = false;
+                return;
+            }
+
+            // ✅ coi như submit thành công
+            submittedRef.current = true;
+            submittingRef.current = false;
         } catch (e) {
-            submittedRef.current = false;
+            // lỗi submit -> unlock để làm tiếp
+            submittingRef.current = false;
             throw e;
         }
     };
@@ -301,6 +327,11 @@ const PracticePlayer = forwardRef(function PracticePlayer(
     useImperativeHandle(ref, () => ({
         getAnswersArray: () => buildAnswersArray(),
         submit: (meta) => doSubmit(meta),
+        // optional: cho parent mở khóa nếu cần
+        unlock: () => {
+            submittingRef.current = false;
+            submittedRef.current = false;
+        },
     }));
 
     if (!questions.length) {
@@ -314,7 +345,7 @@ const PracticePlayer = forwardRef(function PracticePlayer(
     }
 
     const handleNavigate = (newIndex) => {
-        if (submittedRef.current) return;
+        if (isLocked()) return;
         const safeIndex = Math.max(0, Math.min(Number(newIndex) || 0, total - 1));
         setIndex(safeIndex);
     };
@@ -336,7 +367,7 @@ const PracticePlayer = forwardRef(function PracticePlayer(
                 answersMap={answersMap}
                 questionIds={questionIds}
                 onNavigate={handleNavigate}
-                disabled={submittedRef.current}
+                disabled={isLocked()}
             />
 
             <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
@@ -344,11 +375,6 @@ const PracticePlayer = forwardRef(function PracticePlayer(
                     <Typography sx={{ fontWeight: 900, color: "#1B2559", fontSize: 18 }}>
                         3) Làm bài
                     </Typography>
-
-                    {/* ❌ BỎ text tiến độ theo yêu cầu (không show “Tiến độ” ở header) */}
-                    {/* <Typography sx={{ mt: 0.5, color: "#6C757D", fontWeight: 700 }}>
-                        Tiến độ: {answeredCount}/{total}
-                    </Typography> */}
 
                     {!currentQid && (
                         <Typography sx={{ mt: 0.5, color: "#dc3545", fontWeight: 800 }}>
@@ -361,7 +387,7 @@ const PracticePlayer = forwardRef(function PracticePlayer(
                     <Button
                         variant="contained"
                         onClick={() => doSubmit({ timedOut: false })}
-                        disabled={!isAllAnswered || submittedRef.current}
+                        disabled={!isAllAnswered || isLocked()}
                         sx={{
                             background: "#EC5E32",
                             fontWeight: 900,
@@ -381,6 +407,8 @@ const PracticePlayer = forwardRef(function PracticePlayer(
                 value={currentQid ? answersMap[currentQid] : null}
                 onChange={(nextValue) => {
                     if (!currentQid) return;
+                    if (isLocked()) return;
+
                     setAnswersMap((prev) => ({
                         ...prev,
                         [currentQid]: { ...(prev[currentQid] || {}), ...nextValue },
@@ -390,7 +418,7 @@ const PracticePlayer = forwardRef(function PracticePlayer(
 
             <Box sx={{ display: "flex", justifyContent: "space-between", mt: 2, gap: 1 }}>
                 <Button
-                    disabled={index <= 0 || submittedRef.current}
+                    disabled={index <= 0 || isLocked()}
                     variant="outlined"
                     onClick={() => setIndex((i) => i - 1)}
                 >
@@ -398,7 +426,7 @@ const PracticePlayer = forwardRef(function PracticePlayer(
                 </Button>
 
                 <Button
-                    disabled={index >= total - 1 || submittedRef.current}
+                    disabled={index >= total - 1 || isLocked()}
                     variant="outlined"
                     onClick={() => setIndex((i) => i + 1)}
                 >
