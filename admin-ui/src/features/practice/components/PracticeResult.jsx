@@ -47,7 +47,12 @@ function splitAiFeedback(raw) {
             .trim();
 
     const headingKey = (s) =>
-        normalizeBullet(s).replace(/[:：]\s*$/g, "").trim().toLowerCase();
+        normalizeBullet(s)
+            .replace(/^#+\s*/g, "")          // ✅ strip markdown heading like ###
+            .replace(/\*\*/g, "")            // ✅ strip bold markers if any
+            .replace(/[:：]\s*$/g, "")        // strip trailing colon
+            .trim()
+            .toLowerCase();
 
     const isGreetingLine = (line) => {
         const lower = String(line || "").trim().toLowerCase();
@@ -70,8 +75,21 @@ function splitAiFeedback(raw) {
     const out = { greeting, strengths: [], weaknesses: [], raw: text };
 
     const H = {
-        strengths: new Set(["điểm mạnh", "strengths", "pros", "ưu điểm"]),
-        weaknesses: new Set(["điểm yếu", "weaknesses", "cons", "nhược điểm"]),
+        strengths: new Set([
+            "điểm mạnh",
+            "strengths",
+            "pros",
+            "ưu điểm",
+            "highlights",          // ✅ Gemini style
+        ]),
+        weaknesses: new Set([
+            "điểm yếu",
+            "weaknesses",
+            "cons",
+            "nhược điểm",
+            "focus areas",         // ✅ Gemini style
+            "focus area",          // ✅ sometimes singular
+        ]),
     };
 
     let current = null;
