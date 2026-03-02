@@ -26,6 +26,7 @@ import {
     CheckCircle as CheckCircleIcon,
     Cancel as CancelIcon,
     LocalFireDepartment as FireIcon,
+    TrackChanges as TrackChangesIcon,
 } from "@mui/icons-material";
 import { useSelector } from "react-redux";
 import { getDashboardStatsApi } from "../../api/dashboardApi";
@@ -705,7 +706,7 @@ export default function UserDashboard() {
                             {/* LEFT: Lộ trình ôn tập chi tiết - Slide */}
                             <Box sx={{flex: {xs: '1 1 100%', md: '7'}, display: "flex", minWidth: 0}}>
                                 <CardShell sx={{display: 'flex', flexDirection: 'column', height: '100%'}}>
-                                    <Box sx={{p: 2.5, height: "100%", display: 'flex', flexDirection: 'column'}}>
+                                    <Box sx={{p: 3, height: "100%", display: 'flex', flexDirection: 'column'}}>
 
                                         {/* Header with slide nav */}
                                         {/* Header with slide nav */}
@@ -715,7 +716,8 @@ export default function UserDashboard() {
                                             alignItems: 'center',
                                             flexWrap: 'nowrap',
                                             gap: 1,
-                                            mb: 1.5,
+                                            pb: 2,
+                                            borderBottom: `1px solid ${COLORS.border}`,
                                             minWidth: 0,
                                         }}>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0, flex: 1, overflow: 'hidden' }}>
@@ -736,16 +738,17 @@ export default function UserDashboard() {
                                                         fontWeight: 950, color: COLORS.text,
                                                         fontSize: { xs: '0.82rem', sm: '1rem' },
                                                         lineHeight: 1.2,
+                                                        mb: 0.5,
                                                         whiteSpace: 'nowrap',
                                                         overflow: 'hidden',
                                                         textOverflow: 'ellipsis',
                                                     }}>
                                                         {activeTab === 0 ? "Xem và không đánh giá" : "Phải bạn không - Cùng sửa nhé"}
                                                     </Typography>
-                                                    <Typography variant="caption" sx={{
+                                                    <Typography sx={{
                                                         color: COLORS.subtext,
                                                         fontWeight: 700,
-                                                        fontSize: { xs: '11px', sm: '12px' },
+                                                        fontSize: { xs: '12px', sm: '13px' },
                                                         display: 'block',
                                                         whiteSpace: 'nowrap',
                                                         overflow: 'hidden',
@@ -789,7 +792,6 @@ export default function UserDashboard() {
                                                 ))}
                                             </Box>
                                         </Box>
-                                        <Divider/>
 
                                         {/* Slide content area */}
                                         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', pt: 2, overflow: 'hidden', position: 'relative' }}>
@@ -993,21 +995,29 @@ export default function UserDashboard() {
                                             p: 3,
                                             display: "flex",
                                             flexDirection: "column",
-                                            gap: 2.5,
+                                            gap: 2,
                                             height: "100%",
                                             width: "100%",
                                         }}
                                     >
-                                        <Box sx={{ minWidth: 0 }}>
-                                            <Typography sx={{ fontWeight: 950, color: COLORS.text, mb: 0.5 }}>
-                                                Mục tiêu hằng ngày
-                                            </Typography>
-                                            <Typography variant="body2" sx={{ color: COLORS.subtext, fontWeight: 700 }}>
-                                                Giữ vững nhịp độ và cải thiện điểm số
-                                            </Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0, pb: 2, borderBottom: `1px solid ${COLORS.border}` }}>
+                                            <Box sx={{
+                                                width: 32, height: 32, flexShrink: 0,
+                                                borderRadius: '10px',
+                                                bgcolor: alpha(COLORS.primary, 0.1),
+                                                display: 'grid', placeItems: 'center',
+                                            }}>
+                                                <TrackChangesIcon sx={{ fontSize: 17, color: COLORS.primaryDeep }} />
+                                            </Box>
+                                            <Box sx={{ minWidth: 0 }}>
+                                                <Typography sx={{ fontWeight: 950, color: COLORS.text, mb: 0.5, fontSize: { xs: '0.82rem', sm: '1rem' }, lineHeight: 1.2 }}>
+                                                    Mục tiêu hằng ngày
+                                                </Typography>
+                                                <Typography sx={{ color: COLORS.subtext, fontWeight: 700, fontSize: { xs: '12px', sm: '13px' } }}>
+                                                    Giữ vững nhịp độ và cải thiện điểm số
+                                                </Typography>
+                                            </Box>
                                         </Box>
-
-                                        <Divider sx={{ borderColor: alpha(COLORS.border, 0.9) }} />
 
                                         {/* ── STREAK CARD – Duolingo style (muted) ── */}
                                         <Box
