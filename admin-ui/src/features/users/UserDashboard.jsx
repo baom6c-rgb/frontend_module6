@@ -378,7 +378,6 @@ export default function UserDashboard() {
         });
 
         const uniqueDates = Array.from(datesSet).sort((a, b) => b.localeCompare(a));
-        if (uniqueDates.length === 0) return { streak: 0, didTodaysExam: false };
 
         // 2. Xác định mốc thời gian Hôm nay & Hôm qua
         const now = new Date();
@@ -388,12 +387,32 @@ export default function UserDashboard() {
         yesterday.setDate(yesterday.getDate() - 1);
         const yesterdayStr = getLocalDateString(yesterday);
 
+        // Helper: tính 7 ngày gần nhất (dùng chung cho mọi trường hợp return)
+        const buildWeekDays = () => {
+            const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+            const result = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(now);
+                d.setDate(d.getDate() - i);
+                const dateStr = getLocalDateString(d);
+                result.push({
+                    label: DAY_LABELS[d.getDay()],
+                    dateStr,
+                    done: datesSet.has(dateStr),
+                    isToday: dateStr === todayStr,
+                });
+            }
+            return result;
+        };
+
+        if (uniqueDates.length === 0) return { streak: 0, didTodaysExam: false, weekDays: buildWeekDays() };
+
         const mostRecentDate = uniqueDates[0];
         const didTodaysExam = mostRecentDate === todayStr;
 
         // 3. Kiểm tra nếu chuỗi streak bị đứt (không làm hôm nay cũng không làm hôm qua)
         if (mostRecentDate !== todayStr && mostRecentDate !== yesterdayStr) {
-            return { streak: 0, didTodaysExam: false };
+            return { streak: 0, didTodaysExam: false, weekDays: buildWeekDays() };
         }
 
         // 4. Đếm streak bằng cách lùi ngày
@@ -413,21 +432,7 @@ export default function UserDashboard() {
         }
 
         // 5. Tính 7 ngày gần nhất để hiển thị dots
-        const weekDays = [];
-        const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
-        for (let i = 6; i >= 0; i--) {
-            const d = new Date(now);
-            d.setDate(d.getDate() - i);
-            const dateStr = getLocalDateString(d);
-            weekDays.push({
-                label: DAY_LABELS[d.getDay()],
-                dateStr,
-                done: datesSet.has(dateStr),
-                isToday: dateStr === todayStr,
-            });
-        }
-
-        return { streak, didTodaysExam, weekDays };
+        return { streak, didTodaysExam, weekDays: buildWeekDays() };
     }, [examAttempts]);
 
     if (loading) {
@@ -1010,13 +1015,13 @@ export default function UserDashboard() {
                                                 borderRadius: "16px",
                                                 background: streakData.streak > 0
                                                     ? `linear-gradient(135deg, #2E2D84 0%, #6B3A6E 50%, #EC5E32 100%)`
-                                                    : `linear-gradient(135deg, #B0BEC5 0%, #CFD8DC 100%)`,
+                                                    : `linear-gradient(135deg, #3D3C8E 0%, #5C3B7A 50%, #7B4B5E 100%)`,
                                                 p: 2,
                                                 position: 'relative',
                                                 overflow: 'hidden',
                                                 boxShadow: streakData.streak > 0
                                                     ? '0 4px 20px rgba(46, 45, 132, 0.25), 0 2px 10px rgba(236, 94, 50, 0.20)'
-                                                    : '0 2px 10px rgba(0,0,0,0.08)',
+                                                    : '0 4px 20px rgba(46,45,132,0.20), 0 2px 10px rgba(92,59,122,0.15)',
                                             }}
                                         >
                                             {/* Subtle glow blobs */}
@@ -1042,14 +1047,14 @@ export default function UserDashboard() {
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5, position: 'relative', zIndex: 1 }}>
                                                 <Box sx={{
                                                     width: 50, height: 50, borderRadius: '50%',
-                                                    bgcolor: '#fff',
+                                                    bgcolor: streakData.streak === 0 ? 'rgba(255,255,255,0.12)' : '#fff',
                                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                     flexShrink: 0,
-                                                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                                                    boxShadow: streakData.streak === 0 ? 'none' : '0 2px 8px rgba(0,0,0,0.15)',
                                                 }}>
                                                     <FireIcon sx={{
                                                         fontSize: 28,
-                                                        color: streakData.streak === 0 ? 'rgba(255,255,255,0.4)' : '#EC5E32',
+                                                        color: streakData.streak === 0 ? 'rgba(255,255,255,0.35)' : '#EC5E32',
                                                     }} />
                                                 </Box>
                                                 <Box>
@@ -1088,7 +1093,7 @@ export default function UserDashboard() {
                                                             border: day.isToday && !day.done ? '1.5px solid rgba(255,255,255,0.5)' : 'none',
                                                         }}>
                                                             {day.done
-                                                                ? <FireIcon sx={{ fontSize: 14, color: streakData.streak > 0 ? '#EC5E32' : '#90A4AE' }} />
+                                                                ? <FireIcon sx={{ fontSize: 14, color: '#EC5E32' }} />
                                                                 : day.isToday
                                                                     ? <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.8)' }} />
                                                                     : <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.2)' }} />
