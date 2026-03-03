@@ -26,6 +26,7 @@ import {
     SchoolRounded,
     MenuRounded,
     LogoutRounded,
+    AssignmentRounded,
 } from "@mui/icons-material";
 import QuizRoundedIcon from "@mui/icons-material/QuizRounded";
 import EmailRoundedIcon from "@mui/icons-material/EmailRounded";
@@ -395,6 +396,7 @@ export default function UserLayout() {
         { text: "Trang chủ", icon: <DashboardRounded />, path: "/users/dashboard" },
         { text: "Đánh giá học tập", icon: <SchoolRounded />, path: "/users/review" },
         { text: "Luyện tập (AI Quiz)", icon: <QuizRoundedIcon />, path: "/users/practice" },
+        { text: "Bài kiểm tra", icon: <AssignmentRounded />, path: "/users/exams" },
     ];
 
     // ===== AUTO HIDE SIDEBAR khi vào /users/practice =====
