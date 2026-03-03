@@ -13,6 +13,9 @@ import AdminDashboard from "../features/admin/AdminDashboard.jsx";
 import AdminUserList from "../features/admin/AdminUserList.jsx";
 import AdminReview from "../features/admin/AdminReview.jsx";
 import AdminSettings from "../features/admin/AdminSettings.jsx"; // ✅ NEW
+import AdminExamCreatePage from "../features/adminExams/AdminExamCreatePage.jsx";
+import AdminExamListPage from "../features/adminExams/AdminExamListPage.jsx";
+import AdminExamDetailPage from "../features/adminExams/AdminExamDetailPage.jsx";
 
 // --- PAGES USER ---
 import UserDashboard from "../features/users/UserDashboard.jsx";
@@ -21,6 +24,8 @@ import UserStudy from "../features/users/UserStudy.jsx";
 import UserReview from "../features/users/UserReview.jsx";
 import StudentMaterialsPage from "../features/users/materials/StudentMaterialsPage";
 import PracticePage from "../features/practice/PracticePage.jsx";
+import AssignedExamsPage from "../features/users/AssignedExamsPage.jsx";
+import AssignedExamPlayerPage from "../features/users/AssignedExamPlayerPage.jsx";
 
 // --- PAGES AUTH ---
 import Login from "../features/login/Login.jsx";
@@ -68,6 +73,8 @@ const router = createBrowserRouter([
                     { path: "profile", element: <UserProfile /> },
                     { path: "study", element: <UserStudy /> },
                     { path: "practice", element: <PracticePage /> },
+                    { path: "exams", element: <AssignedExamsPage /> },
+                    { path: "exams/:assignmentId", element: <AssignedExamPlayerPage /> },
                     { path: "review", element: <UserReview /> },
 
                     {
@@ -107,6 +114,11 @@ const router = createBrowserRouter([
 
                     // trang quản lý user tổng
                     { path: "users", element: <AdminUserList /> },
+
+                    // ✅ Admin Assigned Exams
+                    { path: "exams", element: <AdminExamListPage /> },
+                    { path: "exams/create", element: <AdminExamCreatePage /> },
+                    { path: "exams/:examId", element: <AdminExamDetailPage /> },
                 ],
             },
         ],

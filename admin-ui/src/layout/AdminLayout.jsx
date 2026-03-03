@@ -37,6 +37,7 @@ import {
     MenuRounded,
     ChevronLeftRounded,
     SettingsRounded,
+    AssignmentRounded,
 } from "@mui/icons-material";
 
 import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
@@ -344,6 +345,13 @@ const AdminLayout = () => {
                         icon={<SchoolRounded />}
                         text="Đánh giá học tập"
                         onClick={() => handleNav("/admin/review")}
+                    />
+                    <NavItem
+                        collapsed={!isMobile && sidebarCollapsed}
+                        active={currentPath.includes("/admin/exams")}
+                        icon={<AssignmentRounded />}
+                        text="Bài kiểm tra"
+                        onClick={() => handleNav("/admin/exams")}
                     />
                     <NavItem
                         collapsed={!isMobile && sidebarCollapsed}
