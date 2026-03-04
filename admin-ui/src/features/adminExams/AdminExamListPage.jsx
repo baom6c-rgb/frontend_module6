@@ -1,8 +1,18 @@
 // src/features/adminExams/AdminExamListPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Box, Button, Paper, Stack, Typography, IconButton, Tooltip } from "@mui/material";
+import {
+    Box,
+    Button,
+    Paper,
+    Stack,
+    Typography,
+    IconButton,
+    Tooltip,
+    Chip,
+} from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import { useNavigate } from "react-router-dom";
+import BlockRoundedIcon from "@mui/icons-material/BlockRounded";
 import DeleteRoundedIcon from "@mui/icons-material/DeleteRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
@@ -11,6 +21,7 @@ import { assignedExamApi } from "../../api/assignedExamApi";
 import GlobalLoading from "../../components/common/GlobalLoading";
 import { useToast } from "../../components/common/AppToast";
 import AppConfirm from "../../components/common/AppConfirm";
+import AppPagination from "../../components/common/AppPagination";
 
 const COLORS = {
     border: "#E3E8EF",
@@ -18,43 +29,32 @@ const COLORS = {
     textSecondary: "#6C757D",
     orange: "#EC5E32",
     orangeDeep: "#D5522B",
+    blue: "#1976d2",
+    blueDeep: "#1565c0",
+    headerBg: "#F8FAFC",
 };
 
 // ======================================================
 // ✅ DateTime utils (LOCAL-first for LocalDateTime)
-// - If BE returns ISO with timezone -> Date parses normally
-// - If BE returns LocalDateTime without timezone -> treat as LOCAL time
 // ======================================================
 function parseServerDateTime(input) {
     if (!input) return null;
     const s = String(input).trim();
     if (!s) return null;
 
-    // Has timezone (Z or +07:00) => safe parse
     if (/[zZ]$/.test(s) || /[+-]\d{2}:\d{2}$/.test(s)) {
         const d = new Date(s);
         return Number.isNaN(d.getTime()) ? null : d;
     }
 
-    // LocalDateTime: YYYY-MM-DDTHH:mm:ss(.SSS...)
     const m = s.match(
         /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,9}))?$/
     );
     if (!m) return null;
 
     const [, yy, mm, dd, hh, mi, ss, frac] = m;
-    const year = Number(yy);
-    const month = Number(mm) - 1;
-    const day = Number(dd);
-    const hour = Number(hh);
-    const minute = Number(mi);
-    const second = Number(ss || 0);
-
-    // keep only milliseconds (first 3 digits)
     const ms = frac ? Number(String(frac).padEnd(3, "0").slice(0, 3)) : 0;
-
-    // ✅ Treat as LOCAL
-    const d = new Date(year, month, day, hour, minute, second, ms);
+    const d = new Date(Number(yy), Number(mm) - 1, Number(dd), Number(hh), Number(mi), Number(ss || 0), ms);
     return Number.isNaN(d.getTime()) ? null : d;
 }
 
@@ -81,6 +81,7 @@ export default function AdminExamListPage() {
     const [loading, setLoading] = useState(false);
     const [rows, setRows] = useState([]);
     const [confirm, setConfirm] = useState({ open: false, examId: null });
+    const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
 
     const load = async () => {
         setLoading(true);
@@ -94,15 +95,12 @@ export default function AdminExamListPage() {
                 const dueAtRaw = e.dueAt ?? e.availableTo ?? null;
 
                 return {
-                    examId, // ✅ always keep examId
+                    examId,
                     title: e.title || e.name || "—",
                     assignedCount: e.assignedCount ?? e.totalAssigned ?? e.assignmentsCount ?? 0,
                     durationMinutes: e.durationMinutes ?? e.duration ?? "—",
-
                     openAtText: formatServerDateTime(openAtRaw),
                     dueAtText: formatServerDateTime(dueAtRaw),
-
-                    // keep raw for debugging
                     openAt: openAtRaw,
                     dueAt: dueAtRaw,
                 };
@@ -123,33 +121,94 @@ export default function AdminExamListPage() {
 
     const columns = useMemo(
         () => [
-            { field: "title", headerName: "Bài kiểm tra", flex: 1, minWidth: 220 },
-            { field: "assignedCount", headerName: "Đã gán", width: 100 },
-            { field: "durationMinutes", headerName: "Thời gian", width: 110 },
-            { field: "openAtText", headerName: "Mở", width: 190 },
-            { field: "dueAtText", headerName: "Đóng", width: 190 },
+            {
+                field: "title",
+                headerName: "Tên bài kiểm tra",
+                flex: 1,
+                minWidth: 220,
+            },
+            {
+                field: "assignedCount",
+                headerName: "Số học viên đã gán",
+                width: 170,
+                headerAlign: "center",
+                align: "center",
+            },
+            {
+                field: "durationMinutes",
+                headerName: "Thời gian làm bài",
+                width: 120,
+                headerAlign: "center",
+                align: "center",
+                renderCell: (params) => (
+                    <Box sx={{ width: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                        {params.value !== "—" ? `${params.value} phút` : "—"}
+                    </Box>
+                ),
+            },
+            {
+                field: "openAtText",
+                headerName: "Thời gian mở đề",
+                width: 175,
+                headerAlign: "center",
+                align: "center",
+            },
+            {
+                field: "dueAtText",
+                headerName: "Thời gian đóng đề",
+                width: 175,
+                headerAlign: "center",
+                align: "center",
+            },
             {
                 field: "actions",
-                headerName: "",
-                width: 120,
+                headerName: "Hành động",
+                width: 130,
                 sortable: false,
                 filterable: false,
+                headerAlign: "center",
+                align: "center",
                 renderCell: (params) => (
-                    <Stack direction="row" spacing={0.5}>
-                        <Tooltip title="Xem chi tiết">
-                            <IconButton size="small" onClick={() => navigate(`/admin/exams/${params.row.examId}`)}>
-                                <VisibilityRoundedIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Xóa">
-                            <IconButton
-                                size="small"
-                                onClick={() => setConfirm({ open: true, examId: params.row.examId })}
-                            >
-                                <DeleteRoundedIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    </Stack>
+                    <Box sx={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                        <Stack direction="row" spacing={0.25} alignItems="center">
+                            <Tooltip title="Xem chi tiết">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => navigate(`/admin/exams/${params.row.examId}`)}
+                                    sx={{
+                                        color: COLORS.blue,
+                                        borderRadius: "8px",
+                                        transition: "all 160ms ease",
+                                        "&:hover": {
+                                            bgcolor: "#1976d214",
+                                            transform: "translateY(-1px)",
+                                        },
+                                        "&:active": { transform: "translateY(0px)" },
+                                    }}
+                                >
+                                    <VisibilityRoundedIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Xóa bài kiểm tra">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setConfirm({ open: true, examId: params.row.examId })}
+                                    sx={{
+                                        color: "error.main",
+                                        borderRadius: "8px",
+                                        transition: "all 160ms ease",
+                                        "&:hover": {
+                                            bgcolor: "#ef444414",
+                                            transform: "translateY(-1px)",
+                                        },
+                                        "&:active": { transform: "translateY(0px)" },
+                                    }}
+                                >
+                                    <DeleteRoundedIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </Stack>
+                    </Box>
                 ),
             },
         ],
@@ -163,13 +222,11 @@ export default function AdminExamListPage() {
         setConfirm({ open: false, examId: null });
         setLoading(true);
 
-        // ✅ Optimistic remove (UI mất ngay)
         setRows((prev) => prev.filter((r) => r.examId !== examId));
 
         try {
             await assignedExamApi.adminDelete(examId);
             showToast("Đã xóa bài kiểm tra", "success");
-            // ✅ refetch để chắc chắn đồng bộ
             await load();
         } catch (e) {
             showToast(e?.response?.data?.message || e?.message || "Xóa thất bại", "error");
@@ -181,13 +238,19 @@ export default function AdminExamListPage() {
 
     return (
         <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1200, mx: "auto" }}>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ xs: "stretch", sm: "center" }}>
+            {/* ── Header ── */}
+            <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1.5}
+                alignItems={{ xs: "stretch", sm: "center" }}
+                mb={2.5}
+            >
                 <Box sx={{ flex: 1 }}>
-                    <Typography sx={{ fontSize: 24, fontWeight: 900, color: COLORS.textPrimary }}>
-                        Admin · Bài kiểm tra đã tạo
+                    <Typography sx={{ fontSize: 24, fontWeight: 900, color: COLORS.textPrimary, lineHeight: 1.2 }}>
+                        Bài kiểm tra đã tạo
                     </Typography>
-                    <Typography sx={{ mt: 0.5, color: COLORS.textSecondary, fontSize: 13.5 }}>
-                        Xem / sửa / xóa bài kiểm tra, danh sách học viên được gán và log gian lận.
+                    <Typography sx={{ fontSize: 13, color: COLORS.textSecondary, mt: 0.4 }}>
+                        Quản lý tất cả bài kiểm tra trong hệ thống
                     </Typography>
                 </Box>
 
@@ -195,22 +258,101 @@ export default function AdminExamListPage() {
                     variant="contained"
                     startIcon={<AddRoundedIcon />}
                     onClick={() => navigate("/admin/exams/create")}
-                    sx={{ borderRadius: 2, fontWeight: 900, bgcolor: COLORS.orange, "&:hover": { bgcolor: COLORS.orangeDeep } }}
+                    sx={{
+                        borderRadius: 2,
+                        fontWeight: 700,
+                        px: 2.5,
+                        py: 1,
+                        bgcolor: COLORS.orange,
+                        boxShadow: "0 2px 8px rgba(236,94,50,0.35)",
+                        "&:hover": {
+                            bgcolor: COLORS.orangeDeep,
+                            boxShadow: "0 4px 12px rgba(236,94,50,0.45)",
+                        },
+                    }}
                 >
                     Tạo bài kiểm tra
                 </Button>
             </Stack>
 
-            <Paper variant="outlined" sx={{ mt: 2, borderRadius: 3, borderColor: COLORS.border, overflow: "hidden" }}>
-                <DataGrid
-                    rows={rows}
-                    getRowId={(row) => row.examId} // ✅ key đúng
-                    columns={columns}
-                    autoHeight
-                    disableRowSelectionOnClick
-                    pageSizeOptions={[10, 20, 50]}
-                    initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
-                />
+            {/* ── Table ── */}
+            <Paper
+                elevation={0}
+                sx={{
+                    borderRadius: 3,
+                    border: "1px solid",
+                    borderColor: COLORS.border,
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                }}
+            >
+                <Box sx={{ flex: 1, minHeight: 0 }}>
+                    <DataGrid
+                        rows={rows}
+                        getRowId={(row) => row.examId}
+                        columns={columns}
+                        loading={loading}
+                        disableRowSelectionOnClick
+                        disableColumnMenu
+                        hideFooter
+                        paginationModel={paginationModel}
+                        onPaginationModelChange={setPaginationModel}
+                        pageSizeOptions={[10, 20, 50]}
+                        autoHeight
+                        sx={{
+                            border: 0,
+                            height: "100%",
+                            "& .MuiDataGrid-columnHeaders": {
+                                bgcolor: "background.paper",
+                                borderBottom: "1px solid",
+                                borderColor: "divider",
+                            },
+                            "& .MuiDataGrid-row:nth-of-type(odd)": { bgcolor: "action.hover" },
+                            "& .MuiDataGrid-cell": { display: "flex", alignItems: "center" },
+                            "& .MuiDataGrid-cell:focus, & .MuiDataGrid-columnHeader:focus": { outline: "none" },
+                        }}
+                    />
+                </Box>
+
+                {/* ── Footer / Pagination ── */}
+                <Box
+                    sx={{
+                        px: 1.5,
+                        py: 1,
+                        borderTop: "1px solid",
+                        borderColor: "divider",
+                        display: "flex",
+                        flexDirection: { xs: "column", md: "row" },
+                        alignItems: { xs: "flex-end", md: "center" },
+                        justifyContent: "space-between",
+                        gap: 1,
+                    }}
+                >
+                    {/* Stats */}
+                    <Stack direction="row" spacing={1} alignItems="center">
+                        <Chip
+                            label={`Tổng: ${rows.length}`}
+                            size="small"
+                            sx={{ fontWeight: 600, bgcolor: "#E8EDF5", color: COLORS.textPrimary }}
+                        />
+                    </Stack>
+
+                    {/* Pagination */}
+                    <Box sx={{ alignSelf: "flex-end" }}>
+                        <AppPagination
+                            page={paginationModel.page + 1}
+                            pageSize={paginationModel.pageSize}
+                            total={rows.length}
+                            onPageChange={(nextPage1) =>
+                                setPaginationModel((p) => ({ ...p, page: nextPage1 - 1 }))
+                            }
+                            onPageSizeChange={(nextSize) =>
+                                setPaginationModel({ page: 0, pageSize: nextSize })
+                            }
+                        />
+                    </Box>
+                </Box>
             </Paper>
 
             <GlobalLoading open={loading} message="Đang xử lý..." />
@@ -218,7 +360,7 @@ export default function AdminExamListPage() {
             <AppConfirm
                 open={confirm.open}
                 title="Xóa bài kiểm tra?"
-                message="Bài kiểm tra và dữ liệu liên quan sẽ bị xóa."
+                message="Bài kiểm tra và dữ liệu liên quan sẽ bị xóa vĩnh viễn. Bạn có chắc chắn muốn tiếp tục?"
                 onClose={() => setConfirm({ open: false, examId: null })}
                 onConfirm={handleDelete}
                 confirmText="Xóa"
