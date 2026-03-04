@@ -383,6 +383,60 @@ function OptionContent({ raw }) {
     );
 }
 
+// =====================
+// ✅ Assigned-exam compatibility helpers (không ảnh hưởng practice)
+// =====================
+function pickTextAnswer(q) {
+    const v =
+        q?.yourAnswer ??
+        q?.answerText ??
+        q?.studentAnswer ??
+        q?.userAnswer ??
+        q?.submittedAnswer ??
+        q?.answer ??
+        "";
+    return v == null ? "" : String(v);
+}
+
+function pickSampleAnswer(q) {
+    const v =
+        q?.sampleAnswer ??
+        q?.expectedAnswer ??
+        q?.referenceAnswer ??
+        q?.correctAnswerText ??
+        q?.correctText ??
+        "";
+
+    // ⚠️ nếu correctAnswer là string dài (tự luận) thì dùng luôn
+    if (!v && q?.correctAnswer && typeof q.correctAnswer === "string" && q.correctAnswer.length > 2) {
+        return q.correctAnswer;
+    }
+    return v == null ? "" : String(v);
+}
+
+function detectQuestionType(q) {
+    const rawType = (q?.questionType ?? q?.type ?? "").toString().toUpperCase();
+    if (rawType) return rawType;
+
+    const hasOptionsObject =
+        q?.options && typeof q.options === "object" && Object.keys(q.options).length > 0;
+
+    const selected = q?.selectedAnswer;
+    const selectedLooksLikeChoice =
+        typeof selected === "string" && ["A", "B", "C", "D", "E"].includes(selected.toUpperCase());
+
+    if (hasOptionsObject || selectedLooksLikeChoice) return "MCQ";
+
+    return "SHORT_ANSWER";
+}
+
+function typeLabel(type, isMcq) {
+    if (isMcq) return "MCQ";
+    const t = String(type || "").toUpperCase();
+    if (t.includes("ESSAY")) return "Tự luận";
+    return "Tự luận ngắn";
+}
+
 export default function PracticeReviewDialog({ open, onClose, review }) {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down("sm")); // < 600px
@@ -390,6 +444,26 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
     const [onlyWrong, setOnlyWrong] = useState(false);
 
     const items = review?.items || [];
+
+    // ✅ FE source-of-truth for count (fix assigned-exam trả totalQuestions thiếu)
+    const computedTotal = useMemo(() => items.length, [items]);
+    const computedCorrect = useMemo(() => {
+        return items.reduce((acc, it) => acc + (it?.isCorrect === true ? 1 : 0), 0);
+    }, [items]);
+
+    const totalQuestionsSafe = useMemo(() => {
+        const apiTotal = Number(review?.totalQuestions);
+        if (!Number.isFinite(apiTotal) || apiTotal <= 0) return computedTotal;
+        if (apiTotal !== computedTotal) return computedTotal;
+        return apiTotal;
+    }, [review?.totalQuestions, computedTotal]);
+
+    const correctCountSafe = useMemo(() => {
+        const apiCorrect = Number(review?.correctCount);
+        if (!Number.isFinite(apiCorrect) || apiCorrect < 0) return computedCorrect;
+        if (apiCorrect !== computedCorrect) return computedCorrect;
+        return apiCorrect;
+    }, [review?.correctCount, computedCorrect]);
 
     const itemsWithNo = useMemo(() => {
         return items.map((it, index) => ({
@@ -438,7 +512,6 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
             </DialogTitle>
 
             <DialogContent dividers sx={{ bgcolor: "#F7F9FC", p: { xs: 1.5, sm: 2 } }}>
-
                 {/* ===== SCORE + FILTER BUTTON ===== */}
                 <Box
                     sx={{
@@ -459,7 +532,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                         />
                         <Chip
                             size="small"
-                            label={`Đúng: ${review?.correctCount ?? 0}/${review?.totalQuestions ?? 0}`}
+                            label={`Đúng: ${correctCountSafe}/${totalQuestionsSafe}`}
                             sx={{ fontWeight: 900, fontSize: { xs: 11, sm: 13 } }}
                         />
                     </Stack>
@@ -489,7 +562,8 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                     </Typography>
                 ) : (
                     filtered.map((q, idx) => {
-                        const type = (q?.questionType || "MCQ").toUpperCase();
+                        // ✅ robust type detect (không làm hỏng practice)
+                        const type = detectQuestionType(q);
                         const rawContent =
                             q?.content ??
                             q?.question ??
@@ -498,7 +572,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                             q?.stem ??
                             "Câu hỏi";
 
-                        const isMcq = type === "MCQ";
+                        const isMcq = String(type).toUpperCase() === "MCQ";
 
                         return (
                             <Box
@@ -523,13 +597,27 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                     }}
                                 >
                                     {/* Trái: Câu N + loại + đúng/sai */}
-                                    <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
-                                        <Typography sx={{ fontWeight: 900, color: "#1B2559", fontSize: { xs: 13, sm: 15 }, whiteSpace: "nowrap" }}>
+                                    <Stack
+                                        direction="row"
+                                        spacing={0.75}
+                                        alignItems="center"
+                                        flexWrap="wrap"
+                                        useFlexGap
+                                    >
+                                        <Typography
+                                            sx={{
+                                                fontWeight: 900,
+                                                color: "#1B2559",
+                                                fontSize: { xs: 13, sm: 15 },
+                                                whiteSpace: "nowrap",
+                                            }}
+                                        >
                                             Câu {q._no}:
                                         </Typography>
+
                                         <Chip
                                             size="small"
-                                            label={isMcq ? "MCQ" : "Tự luận ngắn"}
+                                            label={typeLabel(type, isMcq)}
                                             sx={{
                                                 fontWeight: 900,
                                                 fontSize: { xs: 10, sm: 12 },
@@ -538,6 +626,7 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                                 color: isMcq ? "#0B5ED7" : "#FF8C00",
                                             }}
                                         />
+
                                         <Chip
                                             size="small"
                                             label={q.isCorrect ? "ĐÚNG" : "SAI"}
@@ -575,8 +664,8 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                     <>
                                         {["A", "B", "C", "D"].map((k) => {
                                             const rawOpt = q?.options?.[k];
-                                            const isCorrect = q.correctAnswer === k;
-                                            const isSelected = q.selectedAnswer === k;
+                                            const isCorrect = q?.correctAnswer === k;
+                                            const isSelected = q?.selectedAnswer === k;
                                             const isWrongSelected = isSelected && !isCorrect;
 
                                             return (
@@ -602,7 +691,14 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                                         alignItems: "flex-start",
                                                     }}
                                                 >
-                                                    <Typography sx={{ fontWeight: 900, width: 22, fontSize: { xs: 13, sm: 14 }, flexShrink: 0 }}>
+                                                    <Typography
+                                                        sx={{
+                                                            fontWeight: 900,
+                                                            width: 22,
+                                                            fontSize: { xs: 13, sm: 14 },
+                                                            flexShrink: 0,
+                                                        }}
+                                                    >
                                                         {k}.
                                                     </Typography>
 
@@ -629,31 +725,73 @@ export default function PracticeReviewDialog({ open, onClose, review }) {
                                 ) : (
                                     <Box sx={{ display: "grid", gap: 1.25 }}>
                                         <Box>
-                                            <Typography sx={{ fontWeight: 900, color: "#2B3674", fontSize: { xs: 13, sm: 14 } }}>
+                                            <Typography
+                                                sx={{
+                                                    fontWeight: 900,
+                                                    color: "#2B3674",
+                                                    fontSize: { xs: 13, sm: 14 },
+                                                }}
+                                            >
                                                 Câu trả lời của bạn
                                             </Typography>
-                                            <Typography sx={{ mt: 0.5, color: "#000000", fontWeight: 400, whiteSpace: "pre-wrap", fontSize: { xs: 13, sm: 14 } }}>
-                                                {q.yourAnswer || "(chưa trả lời)"}
+                                            <Typography
+                                                sx={{
+                                                    mt: 0.5,
+                                                    color: "#000000",
+                                                    fontWeight: 400,
+                                                    whiteSpace: "pre-wrap",
+                                                    fontSize: { xs: 13, sm: 14 },
+                                                }}
+                                            >
+                                                {pickTextAnswer(q) ? pickTextAnswer(q) : "(chưa trả lời)"}
                                             </Typography>
                                         </Box>
 
                                         <Box>
-                                            <Typography sx={{ fontWeight: 900, color: "#2B3674", fontSize: { xs: 13, sm: 14 } }}>
+                                            <Typography
+                                                sx={{
+                                                    fontWeight: 900,
+                                                    color: "#2B3674",
+                                                    fontSize: { xs: 13, sm: 14 },
+                                                }}
+                                            >
                                                 Gợi ý đáp án (sample)
                                             </Typography>
-                                            <Typography sx={{ mt: 0.5, color: "#716f6f", fontWeight: 400, whiteSpace: "pre-wrap", fontSize: { xs: 13, sm: 14 } }}>
-                                                {q.sampleAnswer || "(không có)"}
+                                            <Typography
+                                                sx={{
+                                                    mt: 0.5,
+                                                    color: "#716f6f",
+                                                    fontWeight: 400,
+                                                    whiteSpace: "pre-wrap",
+                                                    fontSize: { xs: 13, sm: 14 },
+                                                }}
+                                            >
+                                                {pickSampleAnswer(q) ? pickSampleAnswer(q) : "(không có)"}
                                             </Typography>
                                         </Box>
                                     </Box>
                                 )}
 
-                                {q.feedback ? (
+                                {q?.feedback ? (
                                     <Box sx={{ mt: 1.5 }}>
-                                        <Typography sx={{ fontWeight: 900, color: "#2B3674", fontSize: { xs: 13, sm: 14 } }}>
+                                        <Typography
+                                            sx={{
+                                                fontWeight: 900,
+                                                color: "#2B3674",
+                                                fontSize: { xs: 13, sm: 14 },
+                                            }}
+                                        >
                                             Giải thích / Gợi ý học lại
                                         </Typography>
-                                        <Typography sx={{ mt: 0.5, color: "#716f6f", fontWeight: 400, whiteSpace: "pre-wrap", fontSize: { xs: 13, sm: 14 } }}>
+                                        <Typography
+                                            sx={{
+                                                mt: 0.5,
+                                                color: "#716f6f",
+                                                fontWeight: 400,
+                                                whiteSpace: "pre-wrap",
+                                                fontSize: { xs: 13, sm: 14 },
+                                            }}
+                                        >
                                             {q.feedback}
                                         </Typography>
                                     </Box>

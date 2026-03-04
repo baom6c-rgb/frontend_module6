@@ -28,7 +28,6 @@ import { toLocalDateTimeOrNull } from "../../utils/datetime";
 
 // ── Icons ──────────────────────────────────────────────
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
-import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import PeopleAltRoundedIcon from "@mui/icons-material/PeopleAltRounded";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
@@ -47,9 +46,20 @@ const COLORS = {
     orangeDeep: "#D5522B",
     primary: "#2E2D84",
     primaryLight: "#EEEEF8",
-    blue: "#1976d2",
     green: "#16A34A",
     greenLight: "#DCFCE7",
+};
+
+const clampInt = (v, min, max) => {
+    const n = Number.parseInt(String(v ?? ""), 10);
+    if (!Number.isFinite(n)) return null;
+    return Math.max(min, Math.min(max, n));
+};
+
+const toNonNegativeIntOrZero = (v) => {
+    const n = Number.parseInt(String(v ?? ""), 10);
+    if (!Number.isFinite(n) || n < 0) return 0;
+    return n;
 };
 
 const toPositiveIntOrNull = (v) => {
@@ -86,13 +96,23 @@ function SectionBadge({ number, label }) {
 }
 
 // ── Field label with icon ─────────────────────────────
-function FieldLabel({ icon, label }) {
+function FieldLabel({ icon, label, right }) {
     return (
         <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.5 }}>
             <Box sx={{ color: COLORS.textSecondary, display: "flex" }}>{icon}</Box>
-            <Typography sx={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            <Typography
+                sx={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: COLORS.textSecondary,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                    flex: 1,
+                }}
+            >
                 {label}
             </Typography>
+            {right}
         </Stack>
     );
 }
@@ -114,11 +134,24 @@ function StepRow({ step, label, done, active }) {
                     justifyContent: "center",
                 }}
             >
-                <Typography sx={{ fontSize: 11, fontWeight: 800, color: done || active ? "#fff" : COLORS.textSecondary }}>
+                <Typography
+                    sx={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        color: done || active ? "#fff" : COLORS.textSecondary,
+                    }}
+                >
                     {step}
                 </Typography>
             </Box>
-            <Typography sx={{ fontSize: 13, color: done ? COLORS.green : active ? COLORS.textPrimary : COLORS.textSecondary, fontWeight: done || active ? 600 : 400, lineHeight: 1.6 }}>
+            <Typography
+                sx={{
+                    fontSize: 13,
+                    color: done ? COLORS.green : active ? COLORS.textPrimary : COLORS.textSecondary,
+                    fontWeight: done || active ? 600 : 400,
+                    lineHeight: 1.6,
+                }}
+            >
                 {label}
             </Typography>
         </Stack>
@@ -137,8 +170,14 @@ export default function AdminExamCreatePage() {
     const [materialId, setMaterialId] = useState(null);
 
     const [title, setTitle] = useState("Bài kiểm tra AI");
-    const [questionCount, setQuestionCount] = useState(10);
+
+    // ✅ Admin chọn cơ cấu câu hỏi
+    const [mcqCount, setMcqCount] = useState(8);
+    const [essayCount, setEssayCount] = useState(2);
+
+    // ✅ duration do admin chọn (BE yêu cầu required)
     const [durationMinutes, setDurationMinutes] = useState(20);
+
     const [openAt, setOpenAt] = useState("");
     const [dueAt, setDueAt] = useState("");
 
@@ -150,6 +189,25 @@ export default function AdminExamCreatePage() {
     const materialPresent =
         Boolean(materialId) || Boolean(String(inputText).trim()) || Boolean(file);
 
+    const totalQuestions = useMemo(() => {
+        const mcq = toNonNegativeIntOrZero(mcqCount);
+        const essay = toNonNegativeIntOrZero(essayCount);
+        return mcq + essay;
+    }, [mcqCount, essayCount]);
+
+    const isQuestionMixValid = useMemo(() => {
+        return totalQuestions >= 1 && totalQuestions <= 30;
+    }, [totalQuestions]);
+
+    const isTimeWindowValid = useMemo(() => {
+        // datetime-local string compare is not reliable across formats, convert to Date
+        const o = openAt ? new Date(openAt) : null;
+        const d = dueAt ? new Date(dueAt) : null;
+        if (!o || !d) return true; // allow missing
+        if (Number.isNaN(o.getTime()) || Number.isNaN(d.getTime())) return true;
+        return o.getTime() <= d.getTime();
+    }, [openAt, dueAt]);
+
     const resetAll = () => {
         setFile(null);
         setInputText("");
@@ -160,6 +218,12 @@ export default function AdminExamCreatePage() {
         setAssignedUserIds([]);
         setOpenAt("");
         setDueAt("");
+
+        // reset config
+        setTitle("Bài kiểm tra AI");
+        setMcqCount(8);
+        setEssayCount(2);
+        setDurationMinutes(20);
     };
 
     const handleUpload = async () => {
@@ -175,7 +239,11 @@ export default function AdminExamCreatePage() {
             showToast("Upload học liệu thành công", "success");
             return id;
         } catch (e) {
-            const msg = e?.response?.data?.message || JSON.stringify(e?.response?.data) || e?.message || "Upload thất bại";
+            const msg =
+                e?.response?.data?.message ||
+                JSON.stringify(e?.response?.data) ||
+                e?.message ||
+                "Upload thất bại";
             showToast(msg, "error");
             return null;
         } finally {
@@ -184,15 +252,32 @@ export default function AdminExamCreatePage() {
     };
 
     const handleGeneratePreview = useCallback(async () => {
-        const qc = toPositiveIntOrNull(questionCount) ?? 10;
-        const dur = toPositiveIntOrNull(durationMinutes) ?? 20;
         const text = String(inputText || "").trim();
         let resolvedMaterialId = materialId;
+
+        const mcq = toNonNegativeIntOrZero(mcqCount);
+        const essay = toNonNegativeIntOrZero(essayCount);
+        const total = mcq + essay;
+
+        const dur = toPositiveIntOrNull(durationMinutes);
 
         if (!resolvedMaterialId && !text && !file) {
             showToast("Cần upload file hoặc paste text trước", "warning");
             return;
         }
+        if (!dur) {
+            showToast("Thời gian làm bài (phút) phải > 0", "warning");
+            return;
+        }
+        if (total < 1 || total > 30) {
+            showToast("Tổng số câu phải từ 1 đến 30", "warning");
+            return;
+        }
+        if (!isTimeWindowValid) {
+            showToast("Thời gian mở đề phải <= thời gian đóng đề", "warning");
+            return;
+        }
+
         if (file && !resolvedMaterialId) {
             const newId = await handleUpload();
             resolvedMaterialId = newId;
@@ -202,11 +287,12 @@ export default function AdminExamCreatePage() {
             return;
         }
 
+        // ✅ BE mới: preview nhận mcqCount + essayCount
         const payload = {
             materialId: resolvedMaterialId || null,
             inputText: resolvedMaterialId ? null : text || null,
-            numberOfQuestions: qc,
-            durationMinutes: dur,
+            mcqCount: mcq,
+            essayCount: essay,
         };
 
         setLoading(true);
@@ -216,12 +302,25 @@ export default function AdminExamCreatePage() {
             setPreview(p);
             setPreviewOpen(true);
         } catch (e) {
-            const msg = e?.response?.data?.message || JSON.stringify(e?.response?.data) || e?.message || "Tạo bài kiểm tra thất bại";
+            const msg =
+                e?.response?.data?.message ||
+                JSON.stringify(e?.response?.data) ||
+                e?.message ||
+                "Tạo bài kiểm tra thất bại";
             showToast(msg, "error");
         } finally {
             setLoading(false);
         }
-    }, [questionCount, durationMinutes, inputText, file, materialId, showToast]);
+    }, [
+        inputText,
+        file,
+        materialId,
+        mcqCount,
+        essayCount,
+        durationMinutes,
+        isTimeWindowValid,
+        showToast,
+    ]);
 
     const questions = useMemo(() => {
         const q = preview?.questions || preview?.items || preview?.data?.questions || [];
@@ -229,18 +328,37 @@ export default function AdminExamCreatePage() {
     }, [preview]);
 
     const canCreate = useMemo(() => {
-        const token = preview?.previewToken || preview?.sessionToken || preview?.selectionToken || preview?.token;
-        return Boolean(token) && Array.isArray(assignedUserIds) && assignedUserIds.length > 0;
-    }, [preview, assignedUserIds]);
+        const token =
+            preview?.previewToken ||
+            preview?.sessionToken ||
+            preview?.selectionToken ||
+            preview?.token;
+        const dur = toPositiveIntOrNull(durationMinutes);
+        return Boolean(token) && Boolean(dur) && Array.isArray(assignedUserIds) && assignedUserIds.length > 0;
+    }, [preview, assignedUserIds, durationMinutes]);
 
     const handleCreate = async () => {
         if (!canCreate) {
-            showToast("Chọn học viên trước khi tạo", "warning");
+            showToast("Chọn học viên + đảm bảo có preview trước khi tạo", "warning");
             return;
         }
-        const qc = toPositiveIntOrNull(questionCount) ?? 10;
-        const dur = toPositiveIntOrNull(durationMinutes) ?? 20;
-        const previewToken = preview?.previewToken || preview?.sessionToken || preview?.selectionToken || preview?.token;
+
+        const dur = toPositiveIntOrNull(durationMinutes);
+        if (!dur) {
+            showToast("Thời gian làm bài (phút) phải > 0", "warning");
+            return;
+        }
+        if (!isQuestionMixValid) {
+            showToast("Tổng số câu phải từ 1 đến 30", "warning");
+            return;
+        }
+        if (!isTimeWindowValid) {
+            showToast("Thời gian mở đề phải <= thời gian đóng đề", "warning");
+            return;
+        }
+
+        const previewToken =
+            preview?.previewToken || preview?.sessionToken || preview?.selectionToken || preview?.token;
 
         if (!previewToken) {
             showToast("Thiếu previewToken (hãy tạo lại bài kiểm tra)", "error");
@@ -263,12 +381,13 @@ export default function AdminExamCreatePage() {
             return;
         }
 
+        // ✅ BE create mới: durationMinutes required, KHÔNG cần numberOfQuestions
+        // ✅ mcq/essay cũng KHÔNG cần gửi (đã nằm trong preview cached questions)
         const payload = {
             title: String(title || "Bài kiểm tra").trim(),
             previewToken,
             materialId: resolvedMaterialId || null,
             inputText: resolvedMaterialId ? null : text || null,
-            numberOfQuestions: qc,
             durationMinutes: dur,
             openAt: toLocalDateTimeOrNull(openAt),
             dueAt: toLocalDateTimeOrNull(dueAt),
@@ -285,7 +404,11 @@ export default function AdminExamCreatePage() {
             if (examId) navigate(`/admin/exams/${examId}`);
             else navigate("/admin/exams");
         } catch (e) {
-            const msg = e?.response?.data?.message || JSON.stringify(e?.response?.data) || e?.message || "Tạo bài kiểm tra thất bại";
+            const msg =
+                e?.response?.data?.message ||
+                JSON.stringify(e?.response?.data) ||
+                e?.message ||
+                "Tạo bài kiểm tra thất bại";
             showToast(msg, "error");
         } finally {
             setLoading(false);
@@ -297,9 +420,21 @@ export default function AdminExamCreatePage() {
     const step2Done = Boolean(preview);
     const step3Done = assignedUserIds.length > 0;
 
+    const mixChip = (
+        <Chip
+            size="small"
+            label={`Tổng: ${totalQuestions}`}
+            sx={{
+                height: 22,
+                fontWeight: 800,
+                bgcolor: isQuestionMixValid ? COLORS.greenLight : "#FEE2E2",
+                color: isQuestionMixValid ? COLORS.green : "#B91C1C",
+            }}
+        />
+    );
+
     return (
         <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1200, mx: "auto" }}>
-
             {/* ── Page Header ─────────────────────────────── */}
             <Stack
                 direction={{ xs: "column", sm: "row" }}
@@ -333,7 +468,6 @@ export default function AdminExamCreatePage() {
 
             {/* ── Main Layout ──────────────────────────────── */}
             <Stack direction={{ xs: "column", md: "row" }} spacing={2.5} alignItems="flex-start">
-
                 {/* ════ LEFT PANEL ════ */}
                 <Paper
                     elevation={0}
@@ -346,14 +480,20 @@ export default function AdminExamCreatePage() {
                         overflow: "hidden",
                     }}
                 >
-                    {/* Panel header bar */}
-                    <Box sx={{ px: 3, py: 2, borderBottom: "1px solid", borderColor: COLORS.border, bgcolor: "background.paper" }}>
+                    <Box
+                        sx={{
+                            px: 3,
+                            py: 2,
+                            borderBottom: "1px solid",
+                            borderColor: COLORS.border,
+                            bgcolor: "background.paper",
+                        }}
+                    >
                         <SectionBadge number="1" label="Học liệu & Cấu hình đề" />
                     </Box>
 
                     <Box sx={{ p: 3 }}>
                         <Stack spacing={2.5}>
-
                             {/* ── Tên bài kiểm tra ── */}
                             <Box>
                                 <FieldLabel icon={<TitleRoundedIcon sx={{ fontSize: 15 }} />} label="Tên bài kiểm tra" />
@@ -367,38 +507,68 @@ export default function AdminExamCreatePage() {
                                 />
                             </Box>
 
-                            {/* ── Số câu + Thời gian ── */}
+                            {/* ── MCQ + ESSAY + Duration ── */}
                             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
                                 <Box sx={{ flex: 1 }}>
-                                    <FieldLabel icon={<AccessTimeRoundedIcon sx={{ fontSize: 15 }} />} label="Số câu hỏi" />
+                                    <FieldLabel
+                                        icon={<AccessTimeRoundedIcon sx={{ fontSize: 15 }} />}
+                                        label="Số câu TRẮC NGHIỆM (MCQ)"
+                                        right={mixChip}
+                                    />
                                     <TextField
                                         fullWidth
-                                        value={questionCount}
-                                        onChange={(e) => setQuestionCount(e.target.value)}
+                                        value={mcqCount}
+                                        onChange={(e) => setMcqCount(clampInt(e.target.value, 0, 30) ?? 0)}
                                         size="small"
                                         type="number"
-                                        inputProps={{ min: 1 }}
+                                        inputProps={{ min: 0, max: 30 }}
                                         sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
                                     />
                                 </Box>
+
                                 <Box sx={{ flex: 1 }}>
-                                    <FieldLabel icon={<AccessTimeRoundedIcon sx={{ fontSize: 15 }} />} label="Thời gian làm bài (phút)" />
+                                    <FieldLabel
+                                        icon={<AccessTimeRoundedIcon sx={{ fontSize: 15 }} />}
+                                        label="Số câu TỰ LUẬN (ESSAY)"
+                                    />
                                     <TextField
                                         fullWidth
-                                        value={durationMinutes}
-                                        onChange={(e) => setDurationMinutes(e.target.value)}
+                                        value={essayCount}
+                                        onChange={(e) => setEssayCount(clampInt(e.target.value, 0, 30) ?? 0)}
                                         size="small"
                                         type="number"
-                                        inputProps={{ min: 1 }}
+                                        inputProps={{ min: 0, max: 30 }}
                                         sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
                                     />
                                 </Box>
                             </Stack>
 
+                            <Box>
+                                <FieldLabel
+                                    icon={<AccessTimeRoundedIcon sx={{ fontSize: 15 }} />}
+                                    label="Thời gian làm bài (phút)"
+                                />
+                                <TextField
+                                    fullWidth
+                                    value={durationMinutes}
+                                    onChange={(e) => setDurationMinutes(e.target.value)}
+                                    size="small"
+                                    type="number"
+                                    inputProps={{ min: 1, max: 180 }}
+                                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                                />
+                                <Typography sx={{ fontSize: 12, color: COLORS.textSecondary, mt: 0.75 }}>
+                                    Gợi ý: tối thiểu {MINUTES_HINT()} phút, tối đa 180 phút.
+                                </Typography>
+                            </Box>
+
                             {/* ── Thời gian mở / đóng ── */}
                             <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ width: "100%" }}>
                                 <Box sx={{ flex: 1 }}>
-                                    <FieldLabel icon={<CalendarMonthRoundedIcon sx={{ fontSize: 15 }} />} label="Thời gian mở đề" />
+                                    <FieldLabel
+                                        icon={<CalendarMonthRoundedIcon sx={{ fontSize: 15 }} />}
+                                        label="Thời gian mở đề"
+                                    />
                                     <TextField
                                         fullWidth
                                         type="datetime-local"
@@ -410,7 +580,10 @@ export default function AdminExamCreatePage() {
                                     />
                                 </Box>
                                 <Box sx={{ flex: 1 }}>
-                                    <FieldLabel icon={<CalendarMonthRoundedIcon sx={{ fontSize: 15 }} />} label="Thời gian đóng đề" />
+                                    <FieldLabel
+                                        icon={<CalendarMonthRoundedIcon sx={{ fontSize: 15 }} />}
+                                        label="Thời gian đóng đề"
+                                    />
                                     <TextField
                                         fullWidth
                                         type="datetime-local"
@@ -422,6 +595,12 @@ export default function AdminExamCreatePage() {
                                     />
                                 </Box>
                             </Stack>
+
+                            {!isTimeWindowValid && (
+                                <Typography sx={{ fontSize: 12, color: "#B91C1C", fontWeight: 700 }}>
+                                    Thời gian mở đề phải nhỏ hơn hoặc bằng thời gian đóng đề.
+                                </Typography>
+                            )}
 
                             {/* ── Upload file ── */}
                             <Box>
@@ -445,7 +624,16 @@ export default function AdminExamCreatePage() {
                                 >
                                     <UploadFileRoundedIcon sx={{ fontSize: 22, color: file ? COLORS.green : COLORS.textSecondary }} />
                                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                                        <Typography sx={{ fontSize: 13, fontWeight: 600, color: file ? COLORS.green : COLORS.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        <Typography
+                                            sx={{
+                                                fontSize: 13,
+                                                fontWeight: 600,
+                                                color: file ? COLORS.green : COLORS.textPrimary,
+                                                overflow: "hidden",
+                                                textOverflow: "ellipsis",
+                                                whiteSpace: "nowrap",
+                                            }}
+                                        >
                                             {file ? file.name : "Chọn file để upload"}
                                         </Typography>
                                         <Typography sx={{ fontSize: 11, color: COLORS.textSecondary, mt: 0.25 }}>
@@ -486,8 +674,6 @@ export default function AdminExamCreatePage() {
                 {/* ════ RIGHT PANEL ════ */}
                 <Box sx={{ width: { xs: "100%", md: 360 }, flexShrink: 0 }}>
                     <Stack spacing={2}>
-
-                        {/* Progress card */}
                         <Paper
                             elevation={0}
                             sx={{
@@ -497,12 +683,19 @@ export default function AdminExamCreatePage() {
                                 overflow: "hidden",
                             }}
                         >
-                            <Box sx={{ px: 3, py: 2, borderBottom: "1px solid", borderColor: COLORS.border, bgcolor: "background.paper" }}>
+                            <Box
+                                sx={{
+                                    px: 3,
+                                    py: 2,
+                                    borderBottom: "1px solid",
+                                    borderColor: COLORS.border,
+                                    bgcolor: "background.paper",
+                                }}
+                            >
                                 <SectionBadge number="2" label="Tạo & Gán học viên" />
                             </Box>
 
                             <Box sx={{ p: 3 }}>
-                                {/* Step indicators */}
                                 <Stack spacing={1.5} sx={{ mb: 3 }}>
                                     <StepRow step="1" label="Cung cấp học liệu hoặc nội dung" done={step1Done} active={!step1Done} />
                                     <StepRow step="2" label='Bấm "Xem trước đề bài" để AI tạo câu hỏi' done={step2Done} active={step1Done && !step2Done} />
@@ -510,22 +703,28 @@ export default function AdminExamCreatePage() {
                                     <StepRow step="4" label='Bấm "Tạo & gửi" để hoàn tất' done={false} active={step3Done} />
                                 </Stack>
 
-                                {/* Action buttons */}
                                 <Stack spacing={1.25}>
                                     <Button
                                         fullWidth
                                         variant="contained"
                                         startIcon={<PreviewRoundedIcon />}
                                         onClick={handleGeneratePreview}
-                                        disabled={!materialPresent || loading}
+                                        disabled={!materialPresent || loading || !isQuestionMixValid}
                                         sx={{
                                             borderRadius: 2,
                                             fontWeight: 700,
                                             py: 1.1,
                                             bgcolor: COLORS.orange,
                                             boxShadow: "0 2px 8px rgba(236,94,50,0.35)",
-                                            "&:hover": { bgcolor: COLORS.orangeDeep, boxShadow: "0 4px 12px rgba(236,94,50,0.45)" },
-                                            "&.Mui-disabled": { bgcolor: "#E2E8F0", color: "#94A3B8", boxShadow: "none" },
+                                            "&:hover": {
+                                                bgcolor: COLORS.orangeDeep,
+                                                boxShadow: "0 4px 12px rgba(236,94,50,0.45)",
+                                            },
+                                            "&.Mui-disabled": {
+                                                bgcolor: "#E2E8F0",
+                                                color: "#94A3B8",
+                                                boxShadow: "none",
+                                            },
                                         }}
                                     >
                                         Xem trước đề bài
@@ -553,7 +752,12 @@ export default function AdminExamCreatePage() {
                                                 label={assignedUserIds.length}
                                                 size="small"
                                                 color="success"
-                                                sx={{ ml: 1, height: 20, fontWeight: 800, "& .MuiChip-label": { px: 0.75 } }}
+                                                sx={{
+                                                    ml: 1,
+                                                    height: 20,
+                                                    fontWeight: 800,
+                                                    "& .MuiChip-label": { px: 0.75 },
+                                                }}
                                             />
                                         )}
                                     </Button>
@@ -577,10 +781,27 @@ export default function AdminExamCreatePage() {
                                         Tạo bài kiểm tra & gửi cho học viên
                                     </Button>
                                 </Stack>
+
+                                <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                                    <Chip
+                                        size="small"
+                                        label={`MCQ: ${toNonNegativeIntOrZero(mcqCount)}`}
+                                        sx={{ fontWeight: 800, bgcolor: "#E0F2FE" }}
+                                    />
+                                    <Chip
+                                        size="small"
+                                        label={`ESSAY: ${toNonNegativeIntOrZero(essayCount)}`}
+                                        sx={{ fontWeight: 800, bgcolor: "#F3E8FF" }}
+                                    />
+                                    <Chip
+                                        size="small"
+                                        label={`Tổng: ${totalQuestions}`}
+                                        sx={{ fontWeight: 900, bgcolor: isQuestionMixValid ? COLORS.greenLight : "#FEE2E2", color: isQuestionMixValid ? COLORS.green : "#B91C1C" }}
+                                    />
+                                </Stack>
                             </Box>
                         </Paper>
 
-                        {/* Reset card */}
                         <Paper
                             elevation={0}
                             sx={{
@@ -622,7 +843,6 @@ export default function AdminExamCreatePage() {
                                 Tạo lại
                             </Button>
                         </Paper>
-
                     </Stack>
                 </Box>
             </Stack>
@@ -632,6 +852,11 @@ export default function AdminExamCreatePage() {
                 <DialogTitle sx={{ fontWeight: 900, pb: 1 }}>
                     <Stack direction="row" spacing={1} alignItems="center">
                         <span>Xem trước đề bài</span>
+                        <Chip
+                            size="small"
+                            label={`MCQ ${toNonNegativeIntOrZero(mcqCount)} • ESSAY ${toNonNegativeIntOrZero(essayCount)} • Tổng ${totalQuestions}`}
+                            sx={{ ml: 1, fontWeight: 800 }}
+                        />
                     </Stack>
                 </DialogTitle>
                 <DialogContent>
@@ -661,7 +886,10 @@ export default function AdminExamCreatePage() {
                         Đóng
                     </Button>
                     <Button
-                        onClick={() => { setPreviewOpen(false); setAssignOpen(true); }}
+                        onClick={() => {
+                            setPreviewOpen(false);
+                            setAssignOpen(true);
+                        }}
                         variant="contained"
                         startIcon={<PeopleAltRoundedIcon />}
                         sx={{
@@ -686,4 +914,12 @@ export default function AdminExamCreatePage() {
             <GlobalLoading open={loading} message={loadingMessage} />
         </Box>
     );
+}
+
+/**
+ * Hint text: giữ gọn, tránh hardcode quá nhiều.
+ * (BE clamp 5..180, nhưng FE chỉ gợi ý)
+ */
+function MINUTES_HINT() {
+    return 5;
 }
