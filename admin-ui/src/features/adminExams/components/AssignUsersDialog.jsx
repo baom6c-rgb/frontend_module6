@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
     Button,
     Checkbox,
+    Chip,
     Dialog,
     DialogActions,
     DialogContent,
@@ -11,10 +12,12 @@ import {
     Stack,
     TextField,
     Typography,
+    Box,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 
 import { adminUserApi } from "../../../api/adminUserApi";
+import AppPagination from "../../../components/common/AppPagination";
 
 const unwrap = (resOrData) => {
     const d = resOrData?.data ?? resOrData;
@@ -22,15 +25,16 @@ const unwrap = (resOrData) => {
 };
 
 export default function AssignUsersDialog({
-    open,
-    onClose,
-    initialSelectedIds = [],
-    onConfirm,
-}) {
+                                              open,
+                                              onClose,
+                                              initialSelectedIds = [],
+                                              onConfirm,
+                                          }) {
     const [loading, setLoading] = useState(false);
     const [rows, setRows] = useState([]);
     const [search, setSearch] = useState("");
     const [selectedIds, setSelectedIds] = useState(() => new Set(initialSelectedIds));
+    const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
 
     useEffect(() => {
         if (!open) return;
@@ -109,8 +113,8 @@ export default function AssignUsersDialog({
             },
             { field: "fullName", headerName: "Họ tên", flex: 1, minWidth: 180 },
             { field: "email", headerName: "Email", flex: 1, minWidth: 220 },
-            { field: "className", headerName: "Lớp", width: 150 },
-            { field: "moduleName", headerName: "Module", width: 160 },
+            { field: "className", headerName: "Lớp", width: 150, headerAlign: "center", align: "center" },
+            { field: "moduleName", headerName: "Module", width: 160, headerAlign: "center", align: "center" },
         ],
         [selectedIds]
     );
@@ -137,16 +141,69 @@ export default function AssignUsersDialog({
                         size="small"
                     />
 
-                    <Paper variant="outlined" sx={{ height: 420, borderRadius: 2, overflow: "hidden" }}>
-                        <DataGrid
-                            rows={filteredRows}
-                            columns={columns}
-                            loading={loading}
-                            disableRowSelectionOnClick
-                            hideFooterSelectedRowCount
-                            pageSizeOptions={[10, 20, 50]}
-                            initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
-                        />
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            borderRadius: 2,
+                            border: "1px solid",
+                            borderColor: "divider",
+                            overflow: "hidden",
+                            display: "flex",
+                            flexDirection: "column",
+                        }}
+                    >
+                        <Box sx={{ flex: 1, minHeight: 0 }}>
+                            <DataGrid
+                                rows={filteredRows}
+                                columns={columns}
+                                loading={loading}
+                                disableRowSelectionOnClick
+                                disableColumnMenu
+                                hideFooter
+                                hideFooterSelectedRowCount
+                                autoHeight
+                                paginationModel={paginationModel}
+                                onPaginationModelChange={setPaginationModel}
+                                pageSizeOptions={[10, 25, 50]}
+                                sx={{
+                                    border: 0,
+                                    "& .MuiDataGrid-columnHeaders": {
+                                        bgcolor: "background.paper",
+                                        borderBottom: "1px solid",
+                                        borderColor: "divider",
+                                    },
+                                    "& .MuiDataGrid-row:nth-of-type(odd)": { bgcolor: "action.hover" },
+                                    "& .MuiDataGrid-cell": { display: "flex", alignItems: "center" },
+                                    "& .MuiDataGrid-cell:focus, & .MuiDataGrid-columnHeader:focus": { outline: "none" },
+                                }}
+                            />
+                        </Box>
+                        <Box
+                            sx={{
+                                px: 1.5,
+                                py: 1,
+                                borderTop: "1px solid",
+                                borderColor: "divider",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: 1,
+                                flexWrap: "wrap",
+                            }}
+                        >
+                            <Chip label={`Đã chọn: ${selectedIds.size}`} size="small" color={selectedIds.size > 0 ? "primary" : "default"} sx={{ fontWeight: 600 }} />
+                            <AppPagination
+                                page={paginationModel.page + 1}
+                                pageSize={paginationModel.pageSize}
+                                total={filteredRows.length}
+                                onPageChange={(nextPage) =>
+                                    setPaginationModel((p) => ({ ...p, page: nextPage - 1 }))
+                                }
+                                onPageSizeChange={(nextSize) => setPaginationModel({ page: 0, pageSize: nextSize })}
+                                pageSizeOptions={[10, 25, 50]}
+                                loading={loading}
+                            />
+                        </Box>
                     </Paper>
                 </Stack>
             </DialogContent>
