@@ -1,14 +1,16 @@
 // src/features/users/AssignedExamsPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Box, Button, Chip, Paper, Stack, Typography } from "@mui/material";
+import { Box, Button, Chip, Paper, Stack, Tooltip, Typography } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import { useNavigate } from "react-router-dom";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 
 import { assignedExamApi } from "../../api/assignedExamApi";
 import GlobalLoading from "../../components/common/GlobalLoading";
 import { useToast } from "../../components/common/AppToast";
 import AppConfirm from "../../components/common/AppConfirm";
 import AppPagination from "../../components/common/AppPagination";
+import FilterPanel from "../../components/common/FilterPanel";
 
 
 // ✅ Reuse dialog xem lại đáp án của practice
@@ -117,6 +119,28 @@ function normalizeReviewPayload(payload) {
     return payload;
 }
 
+// ✅ Map status sang tiếng Việt + màu sắc (giống AdminUserList)
+function statusChip(status) {
+    const s = String(status || "").toUpperCase();
+    const commonSx = {
+        my: 0.25,
+        px: 0.5,
+        height: 26,
+        "& .MuiChip-label": { px: 1, fontWeight: 700, lineHeight: 1, textTransform: "none" },
+    };
+    switch (s) {
+        case "ASSIGNED":  return <Chip label="Chưa làm"   color="warning" size="small" sx={commonSx} />;
+        case "STARTED":   return <Chip label="Đang làm"   size="small" sx={{ ...commonSx, bgcolor: "#1976D2", color: "#fff", "& .MuiChip-label": { px: 1, fontWeight: 700, lineHeight: 1, textTransform: "none" } }} />;
+        case "SUBMITTED":
+        case "COMPLETED":
+        case "GRADED":
+        case "FINISHED":
+        case "DONE":      return <Chip label="Đã nộp" color="success" size="small" sx={commonSx} />;
+        case "EXPIRED":   return <Chip label="Quá hạn"    color="error"   size="small" sx={commonSx} />;
+        default:          return <Chip label={status || "—"} size="small" sx={commonSx} />;
+    }
+}
+
 export default function AssignedExamsPage() {
     const navigate = useNavigate();
     const { showToast } = useToast();
@@ -124,6 +148,14 @@ export default function AssignedExamsPage() {
     const [loading, setLoading] = useState(false);
     const [rows, setRows] = useState([]);
     const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
+
+    const ALL = "Tất cả";
+    const [searchText, setSearchText] = useState("");
+    const [selectedStatus, setSelectedStatus] = useState("Tất cả");
+    const [showFilters, setShowFilters] = useState(false);
+    const [dateRange, setDateRange] = useState("all"); // "all" | "7d" | "30d" | "custom"
+    const [customFrom, setCustomFrom] = useState("");
+    const [customTo, setCustomTo] = useState("");
 
     // ✅ confirm start
     const [confirmOpen, setConfirmOpen] = useState(false);
@@ -146,6 +178,66 @@ export default function AssignedExamsPage() {
     const closeReview = () => {
         setReviewOpen(false);
         setReviewData(null);
+    };
+
+    // ✅ Lọc theo tên bài và trạng thái
+    const filteredRows = useMemo(() => {
+        let result = [...rows];
+
+        if (searchText.trim()) {
+            const q = searchText.trim().toLowerCase();
+            result = result.filter((r) => r.title.toLowerCase().includes(q));
+        }
+
+        if (selectedStatus !== ALL) {
+            result = result.filter((r) => {
+                // tính effective status giống renderCell
+                const effectiveStatus =
+                    r.isExpired && !r.isCompleted ? "EXPIRED" : r.status;
+                return effectiveStatus === selectedStatus;
+            });
+        }
+
+        if (dateRange === "7d" || dateRange === "30d") {
+            const days = dateRange === "7d" ? 7 : 30;
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - days);
+            result = result.filter((r) => {
+                const d = parseServerDateTime(r.openAt);
+                return d && d >= cutoff;
+            });
+        } else if (dateRange === "custom") {
+            if (customFrom) {
+                const from = new Date(customFrom);
+                result = result.filter((r) => {
+                    const d = parseServerDateTime(r.openAt);
+                    return d && d >= from;
+                });
+            }
+            if (customTo) {
+                const to = new Date(customTo);
+                to.setHours(23, 59, 59, 999);
+                result = result.filter((r) => {
+                    const d = parseServerDateTime(r.openAt);
+                    return d && d <= to;
+                });
+            }
+        }
+
+        return result;
+    }, [rows, searchText, selectedStatus, dateRange, customFrom, customTo]);
+
+    // Reset về trang 1 khi filter thay đổi
+    useEffect(() => {
+        setPaginationModel((p) => ({ ...p, page: 0 }));
+    }, [searchText, selectedStatus, dateRange, customFrom, customTo]);
+
+    const handleResetFilters = () => {
+        setSearchText("");
+        setSelectedStatus(ALL);
+        setDateRange("all");
+        setCustomFrom("");
+        setCustomTo("");
     };
 
     const load = async () => {
@@ -239,8 +331,29 @@ export default function AssignedExamsPage() {
     const columns = useMemo(
         () => [
             { field: "title", headerName: "Tên bài kiểm tra", flex: 1, minWidth: 220 },
-            { field: "status", headerName: "Trạng thái", width: 140, headerAlign: "center", align: "center" },
-            { field: "durationMinutes", headerName: "Thời gian làm bài", width: 150, headerAlign: "center", align: "center" },
+            {
+                field: "status",
+                headerName: "Trạng thái",
+                width: 150,
+                headerAlign: "center",
+                align: "center",
+                renderCell: (params) => {
+                    const row = params.row;
+                    // Nếu quá hạn và chưa hoàn thành => hiển thị "Quá hạn"
+                    if (row.isExpired && !row.isCompleted) {
+                        return statusChip("EXPIRED");
+                    }
+                    return statusChip(params.value);
+                },
+            },
+            {
+                field: "durationMinutes",
+                headerName: "Thời gian làm bài",
+                width: 150,
+                headerAlign: "center",
+                align: "center",
+                renderCell: (params) => params.value !== "—" ? `${params.value} phút` : "—",
+            },
             { field: "openAtText", headerName: "Thời gian mở đề", width: 180, headerAlign: "center", align: "center" },
             { field: "dueAtText", headerName: "Thời gian đóng đề", width: 180, headerAlign: "center", align: "center" },
             {
@@ -347,6 +460,7 @@ export default function AssignedExamsPage() {
                 direction={{ xs: "column", sm: "row" }}
                 spacing={1.5}
                 alignItems={{ xs: "stretch", sm: "center" }}
+                mb={2.5}
             >
                 <Box sx={{ flex: 1 }}>
                     <Typography sx={{ fontSize: 24, fontWeight: 900, color: COLORS.textPrimary }}>
@@ -356,8 +470,82 @@ export default function AssignedExamsPage() {
                         Chọn một bài để bắt đầu làm. Khi làm bài, hệ thống sẽ ghi nhận các hành vi gian lận.
                     </Typography>
                 </Box>
-                <Chip label={`Tổng: ${rows.length}`} />
+                <Tooltip title="Làm mới danh sách">
+                    <Button
+                        variant="contained"
+                        startIcon={<RefreshRoundedIcon />}
+                        onClick={load}
+                        disabled={loading}
+                        sx={{
+                            borderRadius: 2,
+                            fontWeight: 700,
+                            bgcolor: COLORS.orange,
+                            boxShadow: "none",
+                            "&:hover": { bgcolor: COLORS.orangeDeep, boxShadow: "none" },
+                        }}
+                    >
+                        Làm mới
+                    </Button>
+                </Tooltip>
             </Stack>
+
+            <FilterPanel
+                search={{
+                    placeholder: "Tìm kiếm theo tên bài kiểm tra...",
+                    value: searchText,
+                    onChange: setSearchText,
+                }}
+                showFilters={showFilters}
+                onToggleFilters={() => setShowFilters(!showFilters)}
+                onReset={handleResetFilters}
+                resetTooltip="Xóa bộ lọc"
+                fields={{
+                    status: {
+                        enabled: true,
+                        label: "Trạng thái",
+                        value: selectedStatus,
+                        options: [
+                            { value: ALL, label: "Tất cả" },
+                            { value: "ASSIGNED", label: "Chưa làm" },
+                            { value: "STARTED",  label: "Đang làm" },
+                            { value: "SUBMITTED", label: "Đã nộp" },
+                            { value: "EXPIRED",  label: "Quá hạn" },
+                        ],
+                        onChange: setSelectedStatus,
+                        loading: false,
+                    },
+                    result: {
+                        enabled: true,
+                        label: "Khoảng thời gian mở đề",
+                        value: dateRange,
+                        options: [
+                            { value: "all",    label: "Tất cả" },
+                            { value: "7d",     label: "7 ngày gần nhất" },
+                            { value: "30d",    label: "30 ngày gần nhất" },
+                            { value: "custom", label: "Tùy chọn" },
+                        ],
+                        onChange: (val) => {
+                            setDateRange(val);
+                            if (val !== "custom") { setCustomFrom(""); setCustomTo(""); }
+                        },
+                        loading: false,
+                    },
+                    ...(dateRange === "custom" ? {
+                        startDate: {
+                            enabled: true,
+                            label: "Từ ngày",
+                            value: customFrom,
+                            onChange: setCustomFrom,
+                        },
+                        endDate: {
+                            enabled: true,
+                            label: "Đến ngày",
+                            value: customTo,
+                            onChange: setCustomTo,
+                        },
+                    } : {}),
+                }}
+            />
 
             <Paper
                 elevation={0}
@@ -374,7 +562,7 @@ export default function AssignedExamsPage() {
             >
                 <Box sx={{ flex: 1, minHeight: 0 }}>
                     <DataGrid
-                        rows={rows}
+                        rows={filteredRows}
                         getRowId={(row) => row.assignmentId}
                         columns={columns}
                         autoHeight
@@ -407,15 +595,16 @@ export default function AssignedExamsPage() {
                         borderColor: "divider",
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "flex-end",
+                        justifyContent: "space-between",
                         gap: 1,
                         flexWrap: "wrap",
                     }}
                 >
+                    <Chip label={`Tổng: ${filteredRows.length}`} size="small" sx={{ fontWeight: 600 }} />
                     <AppPagination
                         page={paginationModel.page + 1}
                         pageSize={paginationModel.pageSize}
-                        total={rows.length}
+                        total={filteredRows.length}
                         onPageChange={(nextPage) =>
                             setPaginationModel((p) => ({ ...p, page: nextPage - 1 }))
                         }

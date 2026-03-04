@@ -7,6 +7,7 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
+    IconButton,
     Paper,
     Stack,
     TextField,
@@ -29,6 +30,7 @@ import { toLocalDateTimeOrNull } from "../../utils/datetime";
 // ── Icons ──────────────────────────────────────────────
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
+import ClearRoundedIcon from "@mui/icons-material/ClearRounded";
 import PeopleAltRoundedIcon from "@mui/icons-material/PeopleAltRounded";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
@@ -71,7 +73,7 @@ const toPositiveIntOrNull = (v) => {
 // ── Reusable section label ────────────────────────────
 function SectionBadge({ number, label }) {
     return (
-        <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 2.5 }}>
+        <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 0 }}>
             <Box
                 sx={{
                     width: 28,
@@ -496,7 +498,7 @@ export default function AdminExamCreatePage() {
                         <Stack spacing={2.5}>
                             {/* ── Tên bài kiểm tra ── */}
                             <Box>
-                                <FieldLabel icon={<TitleRoundedIcon sx={{ fontSize: 15 }} />} label="Tên bài kiểm tra" />
+                                <FieldLabel label="Tên bài kiểm tra" />
                                 <TextField
                                     fullWidth
                                     value={title}
@@ -512,7 +514,7 @@ export default function AdminExamCreatePage() {
                                 <Box sx={{ flex: 1 }}>
                                     <FieldLabel
                                         icon={<AccessTimeRoundedIcon sx={{ fontSize: 15 }} />}
-                                        label="Số câu TRẮC NGHIỆM (MCQ)"
+                                        label="Số câu TRẮC NGHIỆM"
                                         right={mixChip}
                                     />
                                     <TextField
@@ -529,7 +531,7 @@ export default function AdminExamCreatePage() {
                                 <Box sx={{ flex: 1 }}>
                                     <FieldLabel
                                         icon={<AccessTimeRoundedIcon sx={{ fontSize: 15 }} />}
-                                        label="Số câu TỰ LUẬN (ESSAY)"
+                                        label="Số câu TỰ LUẬN"
                                     />
                                     <TextField
                                         fullWidth
@@ -641,7 +643,22 @@ export default function AdminExamCreatePage() {
                                         </Typography>
                                     </Box>
                                     {file && (
-                                        <Chip label="Đã chọn" size="small" color="success" sx={{ height: 22, fontWeight: 700 }} />
+                                        <IconButton
+                                            size="small"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setFile(null);
+                                                setMaterialId(null);
+                                            }}
+                                            sx={{
+                                                color: COLORS.textSecondary,
+                                                "&:hover": { color: "error.main", bgcolor: "#FEE2E2" },
+                                                flexShrink: 0,
+                                            }}
+                                        >
+                                            <ClearRoundedIcon fontSize="small" />
+                                        </IconButton>
                                     )}
                                     <input
                                         type="file"
@@ -785,17 +802,17 @@ export default function AdminExamCreatePage() {
                                 <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
                                     <Chip
                                         size="small"
-                                        label={`MCQ: ${toNonNegativeIntOrZero(mcqCount)}`}
+                                        label={`Trắc nghiệm: ${toNonNegativeIntOrZero(mcqCount)}`}
                                         sx={{ fontWeight: 800, bgcolor: "#E0F2FE" }}
                                     />
                                     <Chip
                                         size="small"
-                                        label={`ESSAY: ${toNonNegativeIntOrZero(essayCount)}`}
+                                        label={`Tự luận: ${toNonNegativeIntOrZero(essayCount)}`}
                                         sx={{ fontWeight: 800, bgcolor: "#F3E8FF" }}
                                     />
                                     <Chip
                                         size="small"
-                                        label={`Tổng: ${totalQuestions}`}
+                                        label={`Tổng số câu: ${totalQuestions}`}
                                         sx={{ fontWeight: 900, bgcolor: isQuestionMixValid ? COLORS.greenLight : "#FEE2E2", color: isQuestionMixValid ? COLORS.green : "#B91C1C" }}
                                     />
                                 </Stack>
@@ -854,7 +871,7 @@ export default function AdminExamCreatePage() {
                         <span>Xem trước đề bài</span>
                         <Chip
                             size="small"
-                            label={`MCQ ${toNonNegativeIntOrZero(mcqCount)} • ESSAY ${toNonNegativeIntOrZero(essayCount)} • Tổng ${totalQuestions}`}
+                            label={`Trắc nghiệm ${toNonNegativeIntOrZero(mcqCount)} • Tự luận ${toNonNegativeIntOrZero(essayCount)} • Tổng số câu ${totalQuestions}`}
                             sx={{ ml: 1, fontWeight: 800 }}
                         />
                     </Stack>

@@ -456,10 +456,6 @@ const PracticePlayer = forwardRef(function PracticePlayer(
                     >
                         Nộp bài
                     </Button>
-
-                    <Typography sx={{ color: "#6C757D", fontWeight: 800, fontSize: 13 }}>
-                        Đã trả lời: {answeredCount}/{total}
-                    </Typography>
                 </Box>
             </Box>
 

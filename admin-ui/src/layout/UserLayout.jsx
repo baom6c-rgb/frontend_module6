@@ -395,7 +395,7 @@ export default function UserLayout() {
     const menuItems = [
         { text: "Trang chủ", icon: <DashboardRounded />, path: "/users/dashboard" },
         { text: "Đánh giá học tập", icon: <SchoolRounded />, path: "/users/review" },
-        { text: "Luyện tập (AI Quiz)", icon: <QuizRoundedIcon />, path: "/users/practice" },
+        { text: "Bumblefly (AI Quiz)", icon: <QuizRoundedIcon />, path: "/users/practice" },
         { text: "Bài kiểm tra", icon: <AssignmentRounded />, path: "/users/exams" },
     ];
 

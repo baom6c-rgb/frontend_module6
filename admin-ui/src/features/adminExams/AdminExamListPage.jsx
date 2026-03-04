@@ -9,6 +9,7 @@ import {
     IconButton,
     Tooltip,
     Chip,
+    TextField,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import { useNavigate } from "react-router-dom";
@@ -22,6 +23,7 @@ import GlobalLoading from "../../components/common/GlobalLoading";
 import { useToast } from "../../components/common/AppToast";
 import AppConfirm from "../../components/common/AppConfirm";
 import AppPagination from "../../components/common/AppPagination";
+import FilterPanel from "../../components/common/FilterPanel";
 
 const COLORS = {
     border: "#E3E8EF",
@@ -82,6 +84,52 @@ export default function AdminExamListPage() {
     const [rows, setRows] = useState([]);
     const [confirm, setConfirm] = useState({ open: false, examId: null });
     const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
+    const [searchText, setSearchText] = useState("");
+    const [dateRange, setDateRange] = useState("all"); // "all" | "7d" | "30d" | "custom"
+    const [customFrom, setCustomFrom] = useState("");
+    const [customTo, setCustomTo] = useState("");
+    const [showFilters, setShowFilters] = useState(false);
+
+    const filteredRows = useMemo(() => {
+        let result = rows;
+
+        if (searchText.trim()) {
+            const q = searchText.trim().toLowerCase();
+            result = result.filter((r) => r.title.toLowerCase().includes(q));
+        }
+
+        if (dateRange === "7d" || dateRange === "30d") {
+            const days = dateRange === "7d" ? 7 : 30;
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - days);
+            result = result.filter((r) => {
+                const d = parseServerDateTime(r.openAt);
+                return d && d >= cutoff;
+            });
+        } else if (dateRange === "custom") {
+            if (customFrom) {
+                const from = new Date(customFrom);
+                result = result.filter((r) => {
+                    const d = parseServerDateTime(r.openAt);
+                    return d && d >= from;
+                });
+            }
+            if (customTo) {
+                const to = new Date(customTo);
+                to.setHours(23, 59, 59, 999);
+                result = result.filter((r) => {
+                    const d = parseServerDateTime(r.openAt);
+                    return d && d <= to;
+                });
+            }
+        }
+
+        return result;
+    }, [rows, searchText, dateRange, customFrom, customTo]);
+
+    useEffect(() => {
+        setPaginationModel((p) => ({ ...p, page: 0 }));
+    }, [searchText, dateRange, customFrom, customTo]);
 
     const load = async () => {
         setLoading(true);
@@ -275,10 +323,59 @@ export default function AdminExamListPage() {
                 </Button>
             </Stack>
 
-            {/* ── Table ── */}
+            <FilterPanel
+                search={{
+                    placeholder: "Tìm kiếm theo tên bài kiểm tra...",
+                    value: searchText,
+                    onChange: setSearchText,
+                }}
+                showFilters={showFilters}
+                onToggleFilters={() => setShowFilters((v) => !v)}
+                onReset={() => {
+                    setSearchText("");
+                    setDateRange("all");
+                    setCustomFrom("");
+                    setCustomTo("");
+                    setShowFilters(false);
+                }}
+                resetTooltip="Xóa bộ lọc"
+                fields={{
+                    result: {
+                        enabled: true,
+                        label: "Khoảng thời gian mở đề",
+                        value: dateRange,
+                        options: [
+                            { value: "all",    label: "Tất cả" },
+                            { value: "7d",     label: "7 ngày gần nhất" },
+                            { value: "30d",    label: "30 ngày gần nhất" },
+                            { value: "custom", label: "Tùy chọn" },
+                        ],
+                        onChange: (val) => {
+                            setDateRange(val);
+                            if (val !== "custom") { setCustomFrom(""); setCustomTo(""); }
+                        },
+                        loading: false,
+                    },
+                    ...(dateRange === "custom" ? {
+                        startDate: {
+                            enabled: true,
+                            label: "Từ ngày",
+                            value: customFrom,
+                            onChange: setCustomFrom,
+                        },
+                        endDate: {
+                            enabled: true,
+                            label: "Đến ngày",
+                            value: customTo,
+                            onChange: setCustomTo,
+                        },
+                    } : {}),
+                }}
+            />
             <Paper
                 elevation={0}
                 sx={{
+                    mt: 2,
                     borderRadius: 3,
                     border: "1px solid",
                     borderColor: COLORS.border,
@@ -289,7 +386,7 @@ export default function AdminExamListPage() {
             >
                 <Box sx={{ flex: 1, minHeight: 0 }}>
                     <DataGrid
-                        rows={rows}
+                        rows={filteredRows}
                         getRowId={(row) => row.examId}
                         columns={columns}
                         loading={loading}
@@ -332,7 +429,7 @@ export default function AdminExamListPage() {
                     {/* Stats */}
                     <Stack direction="row" spacing={1} alignItems="center">
                         <Chip
-                            label={`Tổng: ${rows.length}`}
+                            label={`Tổng: ${filteredRows.length}`}
                             size="small"
                             sx={{ fontWeight: 600, bgcolor: "#E8EDF5", color: COLORS.textPrimary }}
                         />
@@ -343,7 +440,7 @@ export default function AdminExamListPage() {
                         <AppPagination
                             page={paginationModel.page + 1}
                             pageSize={paginationModel.pageSize}
-                            total={rows.length}
+                            total={filteredRows.length}
                             onPageChange={(nextPage1) =>
                                 setPaginationModel((p) => ({ ...p, page: nextPage1 - 1 }))
                             }
