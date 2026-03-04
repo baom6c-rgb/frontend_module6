@@ -2,7 +2,7 @@
 import axiosPrivate from "./axiosPrivate";
 
 /**
- * ✅ Backend of your project (current):
+ * ✅ Backend routes (current):
  * Admin:   /api/admin/assigned-exams/**
  * Student: /api/student/assigned-exams/**
  *
@@ -32,6 +32,10 @@ const pickFirstPositive = (...vals) => {
 
 const ensureLeadingSlash = (p) => (p?.startsWith("/") ? p : `/${p || ""}`);
 
+// =====================
+// ✅ Normalizers
+// =====================
+
 // Similar to practiceApi.normalizeGenerateSessionV2 (for Admin preview)
 const normalizePreview = (raw) => {
     const d = unwrap(raw);
@@ -51,11 +55,7 @@ const normalizePreview = (raw) => {
         d?.count
     );
 
-    const durationMinutes = pickFirstPositive(
-        d?.durationMinutes,
-        d?.duration,
-        d?.minutes
-    );
+    const durationMinutes = pickFirstPositive(d?.durationMinutes, d?.duration, d?.minutes);
 
     return {
         ...d,
@@ -66,37 +66,75 @@ const normalizePreview = (raw) => {
 };
 
 /**
- * ✅ Review normalize to match PracticeReviewDialog:
+ * ✅ Normalize review to match PracticeReviewDialog:
  * {
  *   score, correctCount, totalQuestions,
  *   items: [...]
  * }
+ *
+ * Also robust for Admin review response which might have:
+ * - scorePct (0..100)
+ * - items with "correct" (boolean) instead of "isCorrect"
+ * - selectedAnswer might be null if BE not saving answersJson
  */
 const normalizeReview = (raw) => {
     const d = unwrap(raw);
 
-    // already ok
-    if (d?.items && Array.isArray(d.items)) return d;
-
-    // wrapped forms
-    const candidate = d?.review ?? d?.result ?? d?.data ?? d;
-    if (candidate?.items && Array.isArray(candidate.items)) return candidate;
-
-    // fallback mapping
-    const items =
+    // candidate wrapper
+    const candidate = d?.review ?? d?.result ?? d?.data ?? d ?? {};
+    const itemsRaw =
         (Array.isArray(candidate?.items) && candidate.items) ||
         (Array.isArray(candidate?.questions) && candidate.questions) ||
         [];
 
+    // normalize items: ensure isCorrect + questionId keys
+    const items = itemsRaw.map((it) => {
+        const isCorrect =
+            typeof it?.isCorrect === "boolean"
+                ? it.isCorrect
+                : typeof it?.correct === "boolean"
+                    ? it.correct
+                    : false;
+
+        return {
+            ...it,
+            questionId: it?.questionId ?? it?.id ?? null,
+            isCorrect,
+        };
+    });
+
+    // derive correctCount if missing / unreliable
+    const computedCorrect = items.reduce((acc, it) => acc + (it?.isCorrect === true ? 1 : 0), 0);
+    const total = items.length;
+
+    const score =
+        candidate?.score ??
+        candidate?.scorePct ??
+        candidate?.scorePercent ??
+        candidate?.resultScore ??
+        0;
+
+    const correctCount =
+        Number.isFinite(Number(candidate?.correctCount)) && Number(candidate?.correctCount) >= 0
+            ? Number(candidate.correctCount)
+            : Number.isFinite(Number(candidate?.correct)) && Number(candidate?.correct) >= 0
+                ? Number(candidate.correct)
+                : computedCorrect;
+
+    const totalQuestions =
+        Number.isFinite(Number(candidate?.totalQuestions)) && Number(candidate?.totalQuestions) > 0
+            ? Number(candidate.totalQuestions)
+            : Number.isFinite(Number(candidate?.total)) && Number(candidate?.total) > 0
+                ? Number(candidate.total)
+                : Number.isFinite(Number(candidate?.questionCount)) && Number(candidate?.questionCount) > 0
+                    ? Number(candidate.questionCount)
+                    : total;
+
     return {
-        score: candidate?.score ?? candidate?.scorePct ?? 0,
-        correctCount: candidate?.correctCount ?? candidate?.correct ?? 0,
-        totalQuestions:
-            candidate?.totalQuestions ??
-            candidate?.total ??
-            candidate?.questionCount ??
-            items.length ??
-            0,
+        ...candidate,
+        score,
+        correctCount,
+        totalQuestions,
         items,
     };
 };
@@ -114,6 +152,9 @@ const normalizeStudyGuide = (raw) => {
     return { studyGuide: guide || "" };
 };
 
+// =====================
+// ✅ Base paths (override-able)
+// =====================
 const API = {
     admin: "/admin/assigned-exams",
     student: "/student/assigned-exams",
@@ -158,6 +199,20 @@ export const assignedExamApi = {
         return unwrap(res);
     },
 
+    /**
+     * ✅ ADMIN REVIEW (BY EXAM + ASSIGNMENT)
+     * GET /api/admin/assigned-exams/{examId}/assignments/{assignmentId}/review
+     *
+     * Return normalized shape for UI compatibility:
+     * { score, correctCount, totalQuestions, items: [...] }
+     */
+    adminAssignmentReview: async (examId, assignmentId) => {
+        const res = await axiosPrivate.get(
+            `${API.admin}/${examId}/assignments/${assignmentId}/review`
+        );
+        return normalizeReview(res);
+    },
+
     // =====================
     // STUDENT
     // =====================
@@ -171,6 +226,11 @@ export const assignedExamApi = {
         return unwrap(res);
     },
 
+    /**
+     * payload recommended:
+     * - For MCQ: { answers: { [questionId]: "A" | "B" | "C" | "D" } }
+     * - Or direct map: { [questionId]: "A" }
+     */
     studentSubmit: async (assignmentId, payload) => {
         const res = await axiosPrivate.post(
             `${API.student}/${assignmentId}/submit`,
@@ -188,7 +248,7 @@ export const assignedExamApi = {
     },
 
     /**
-     * ✅ REVIEW (BY ASSIGNMENT) — matches your BE
+     * ✅ STUDENT REVIEW (BY ASSIGNMENT)
      * GET /api/student/assigned-exams/{assignmentId}/review
      */
     studentGetReview: async (assignmentId) => {
@@ -197,12 +257,12 @@ export const assignedExamApi = {
     },
 
     /**
-     * ✅ STUDY GUIDE (BY ASSIGNMENT) — matches your BE
+     * ✅ STUDY GUIDE (BY ASSIGNMENT)
      * GET /api/student/assigned-exams/{assignmentId}/study-guide
      */
     studentGetStudyGuide: async (assignmentId) => {
         const res = await axiosPrivate.get(`${API.student}/${assignmentId}/study-guide`);
-        return unwrap(res);
+        return normalizeStudyGuide(res);
     },
 
     /**
