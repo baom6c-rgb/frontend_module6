@@ -8,6 +8,8 @@ import { assignedExamApi } from "../../api/assignedExamApi";
 import GlobalLoading from "../../components/common/GlobalLoading";
 import { useToast } from "../../components/common/AppToast";
 import AppConfirm from "../../components/common/AppConfirm";
+import AppPagination from "../../components/common/AppPagination";
+
 
 // ✅ Reuse dialog xem lại đáp án của practice
 import PracticeReviewDialog from "../practice/components/PracticeReviewDialog";
@@ -121,6 +123,7 @@ export default function AssignedExamsPage() {
 
     const [loading, setLoading] = useState(false);
     const [rows, setRows] = useState([]);
+    const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
 
     // ✅ confirm start
     const [confirmOpen, setConfirmOpen] = useState(false);
@@ -212,7 +215,7 @@ export default function AssignedExamsPage() {
             try {
                 setReviewLoading(true);
 
-                // ưu tiên attemptId nếu có, không thì dùng assignmentId
+                // dùng assignmentId để lấy kết quả xem lại
                 const reviewRaw = await assignedExamApi.studentGetReview(row.assignmentId);
 
                 const normalized = normalizeReviewPayload(reviewRaw);
@@ -235,17 +238,19 @@ export default function AssignedExamsPage() {
 
     const columns = useMemo(
         () => [
-            { field: "title", headerName: "Bài kiểm tra", flex: 1, minWidth: 220 },
-            { field: "status", headerName: "Trạng thái", width: 140 },
-            { field: "durationMinutes", headerName: "Thời gian", width: 110 },
-            { field: "openAtText", headerName: "Mở", width: 180 },
-            { field: "dueAtText", headerName: "Đóng", width: 180 },
+            { field: "title", headerName: "Tên bài kiểm tra", flex: 1, minWidth: 220 },
+            { field: "status", headerName: "Trạng thái", width: 140, headerAlign: "center", align: "center" },
+            { field: "durationMinutes", headerName: "Thời gian làm bài", width: 150, headerAlign: "center", align: "center" },
+            { field: "openAtText", headerName: "Thời gian mở đề", width: 180, headerAlign: "center", align: "center" },
+            { field: "dueAtText", headerName: "Thời gian đóng đề", width: 180, headerAlign: "center", align: "center" },
             {
                 field: "start",
-                headerName: "",
+                headerName: "Hành động",
                 width: 230,
                 sortable: false,
                 filterable: false,
+                headerAlign: "center",
+                align: "center",
                 renderCell: (params) => {
                     const row = params.row;
                     const done = Boolean(row?.isCompleted);
@@ -333,7 +338,7 @@ export default function AssignedExamsPage() {
             },
         ],
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        []
+        [handlePrimaryAction]
     );
 
     return (
@@ -345,29 +350,80 @@ export default function AssignedExamsPage() {
             >
                 <Box sx={{ flex: 1 }}>
                     <Typography sx={{ fontSize: 24, fontWeight: 900, color: COLORS.textPrimary }}>
-                        Bài kiểm tra được gán
+                        Bài kiểm tra được giao
                     </Typography>
                     <Typography sx={{ mt: 0.5, color: COLORS.textSecondary, fontSize: 13.5 }}>
-                        Chọn một bài để bắt đầu làm. Khi làm bài, hệ thống sẽ ghi nhận các hành vi gian lận
-                        (tab/copy/paste/devtools).
+                        Chọn một bài để bắt đầu làm. Khi làm bài, hệ thống sẽ ghi nhận các hành vi gian lận.
                     </Typography>
                 </Box>
                 <Chip label={`Tổng: ${rows.length}`} />
             </Stack>
 
             <Paper
-                variant="outlined"
-                sx={{ mt: 2, borderRadius: 3, borderColor: COLORS.border, overflow: "hidden" }}
+                elevation={0}
+                sx={{
+                    mt: 2,
+                    borderRadius: 3,
+                    border: "1px solid",
+                    borderColor: "divider",
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                    minHeight: 420,
+                }}
             >
-                <DataGrid
-                    rows={rows}
-                    getRowId={(row) => row.assignmentId}
-                    columns={columns}
-                    autoHeight
-                    disableRowSelectionOnClick
-                    pageSizeOptions={[10, 20, 50]}
-                    initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
-                />
+                <Box sx={{ flex: 1, minHeight: 0 }}>
+                    <DataGrid
+                        rows={rows}
+                        getRowId={(row) => row.assignmentId}
+                        columns={columns}
+                        autoHeight
+                        disableRowSelectionOnClick
+                        disableColumnMenu
+                        hideFooter
+                        paginationModel={paginationModel}
+                        onPaginationModelChange={setPaginationModel}
+                        pageSizeOptions={[10, 25, 50]}
+                        sx={{
+                            border: 0,
+                            height: "100%",
+                            "& .MuiDataGrid-columnHeaders": {
+                                bgcolor: "background.paper",
+                                borderBottom: "1px solid",
+                                borderColor: "divider",
+                            },
+                            "& .MuiDataGrid-row:nth-of-type(odd)": { bgcolor: "action.hover" },
+                            "& .MuiDataGrid-cell": { display: "flex", alignItems: "center" },
+                            "& .MuiDataGrid-cell:focus, & .MuiDataGrid-columnHeader:focus": { outline: "none" },
+                        }}
+                    />
+                </Box>
+
+                <Box
+                    sx={{
+                        px: { xs: 1, sm: 1.5 },
+                        py: 1,
+                        borderTop: "1px solid",
+                        borderColor: "divider",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "flex-end",
+                        gap: 1,
+                        flexWrap: "wrap",
+                    }}
+                >
+                    <AppPagination
+                        page={paginationModel.page + 1}
+                        pageSize={paginationModel.pageSize}
+                        total={rows.length}
+                        onPageChange={(nextPage) =>
+                            setPaginationModel((p) => ({ ...p, page: nextPage - 1 }))
+                        }
+                        onPageSizeChange={(nextSize) => setPaginationModel({ page: 0, pageSize: nextSize })}
+                        pageSizeOptions={[10, 25, 50]}
+                        loading={loading}
+                    />
+                </Box>
             </Paper>
 
             <GlobalLoading open={loading} message="Đang tải..." />

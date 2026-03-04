@@ -463,7 +463,7 @@ export default function AssignedExamPlayerPage() {
                         Làm bài kiểm tra
                     </Typography>
                     <Typography sx={{ mt: 0.5, color: "#6C757D", fontSize: 13.5 }}>
-                        Không thoát tab, không copy/paste, không mở DevTools.
+                        Làm bài nghiêm túc và không gian lận
                     </Typography>
                 </Box>
 
@@ -477,14 +477,6 @@ export default function AssignedExamPlayerPage() {
                             dangerThreshold={30}
                         />
                     ) : null}
-
-                    <Button
-                        variant="outlined"
-                        onClick={() => navigate("/users/exams")}
-                        sx={{ borderRadius: 2, fontWeight: 900 }}
-                    >
-                        Quay lại danh sách
-                    </Button>
                 </Stack>
             </Stack>
 
@@ -495,10 +487,7 @@ export default function AssignedExamPlayerPage() {
                             {startError ? (
                                 <Box>
                                     <Typography sx={{ color: "#D32F2F", fontWeight: 900 }}>
-                                        Không thể bắt đầu bài kiểm tra
-                                    </Typography>
-                                    <Typography sx={{ mt: 0.5, color: "#6C757D", fontWeight: 700 }}>
-                                        {startError}
+                                        Bạn đã nộp bài! Không thể bắt đầu bài kiểm tra
                                     </Typography>
                                 </Box>
                             ) : !hasQuestions ? (
