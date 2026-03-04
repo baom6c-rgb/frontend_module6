@@ -22,6 +22,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import GlobalLoading from "../../components/common/GlobalLoading";
 import { useToast } from "../../components/common/AppToast";
 import AppConfirm from "../../components/common/AppConfirm";
+import AppPagination from "../../components/common/AppPagination";
 
 import { assignedExamApi } from "../../api/assignedExamApi";
 import AssignUsersDialog from "./components/AssignUsersDialog";
@@ -154,6 +155,10 @@ export default function AdminExamDetailPage() {
     const [editOpen, setEditOpen] = useState(false);
     const [assignOpen, setAssignOpen] = useState(false);
     const [confirmDel, setConfirmDel] = useState(false);
+
+    // pagination
+    const [assignPagination, setAssignPagination] = useState({ page: 0, pageSize: 10 });
+    const [cheatingPagination, setCheatingPagination] = useState({ page: 0, pageSize: 10 });
 
     // editable fields
     const [title, setTitle] = useState("");
@@ -409,7 +414,7 @@ export default function AdminExamDetailPage() {
                         <Stack spacing={1.25}>
                             {questions.length === 0 ? (
                                 <Typography sx={{ color: COLORS.textSecondary }}>
-                                    Chưa có danh sách câu hỏi (BE trả DTO khác hoặc exam rỗng).
+                                    Chưa có danh sách câu hỏi.
                                 </Typography>
                             ) : (
                                 questions.map((q, idx) => (
@@ -420,28 +425,116 @@ export default function AdminExamDetailPage() {
                     )}
 
                     {tab === 1 && (
-                        <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
-                            <DataGrid
-                                rows={assignmentRows}
-                                columns={assignmentColumns}
-                                autoHeight
-                                disableRowSelectionOnClick
-                                pageSizeOptions={[10, 20, 50]}
-                                initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
-                            />
+                        <Paper
+                            elevation={0}
+                            sx={{ borderRadius: 2, border: "1px solid", borderColor: COLORS.border, overflow: "hidden", display: "flex", flexDirection: "column" }}
+                        >
+                            <Box sx={{ flex: 1, minHeight: 0 }}>
+                                <DataGrid
+                                    rows={assignmentRows}
+                                    columns={assignmentColumns}
+                                    autoHeight
+                                    disableRowSelectionOnClick
+                                    disableColumnMenu
+                                    hideFooter
+                                    paginationModel={assignPagination}
+                                    onPaginationModelChange={setAssignPagination}
+                                    pageSizeOptions={[10, 25, 50]}
+                                    sx={{
+                                        border: 0,
+                                        height: "100%",
+                                        "& .MuiDataGrid-columnHeaders": {
+                                            bgcolor: "background.paper",
+                                            borderBottom: "1px solid",
+                                            borderColor: "divider",
+                                        },
+                                        "& .MuiDataGrid-row:nth-of-type(odd)": { bgcolor: "action.hover" },
+                                        "& .MuiDataGrid-cell": { display: "flex", alignItems: "center" },
+                                        "& .MuiDataGrid-cell:focus, & .MuiDataGrid-columnHeader:focus": { outline: "none" },
+                                    }}
+                                />
+                            </Box>
+                            <Box
+                                sx={{
+                                    px: 1.5,
+                                    py: 1,
+                                    borderTop: "1px solid",
+                                    borderColor: "divider",
+                                    display: "flex",
+                                    flexDirection: { xs: "column", md: "row" },
+                                    alignItems: { xs: "flex-end", md: "center" },
+                                    justifyContent: "space-between",
+                                    gap: 1,
+                                }}
+                            >
+                                <Chip label={`Tổng: ${assignmentRows.length}`} size="small" sx={{ justifyContent: "center" }} />
+                                <Box sx={{ alignSelf: "flex-end" }}>
+                                    <AppPagination
+                                        page={assignPagination.page + 1}
+                                        pageSize={assignPagination.pageSize}
+                                        total={assignmentRows.length}
+                                        onPageChange={(p) => setAssignPagination((prev) => ({ ...prev, page: p - 1 }))}
+                                        onPageSizeChange={(s) => setAssignPagination({ page: 0, pageSize: s })}
+                                    />
+                                </Box>
+                            </Box>
                         </Paper>
                     )}
 
                     {tab === 2 && (
-                        <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
-                            <DataGrid
-                                rows={cheatingRows}
-                                columns={cheatingColumns}
-                                autoHeight
-                                disableRowSelectionOnClick
-                                pageSizeOptions={[10, 20, 50]}
-                                initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
-                            />
+                        <Paper
+                            elevation={0}
+                            sx={{ borderRadius: 2, border: "1px solid", borderColor: COLORS.border, overflow: "hidden", display: "flex", flexDirection: "column" }}
+                        >
+                            <Box sx={{ flex: 1, minHeight: 0 }}>
+                                <DataGrid
+                                    rows={cheatingRows}
+                                    columns={cheatingColumns}
+                                    autoHeight
+                                    disableRowSelectionOnClick
+                                    disableColumnMenu
+                                    hideFooter
+                                    paginationModel={cheatingPagination}
+                                    onPaginationModelChange={setCheatingPagination}
+                                    pageSizeOptions={[10, 25, 50]}
+                                    sx={{
+                                        border: 0,
+                                        height: "100%",
+                                        "& .MuiDataGrid-columnHeaders": {
+                                            bgcolor: "background.paper",
+                                            borderBottom: "1px solid",
+                                            borderColor: "divider",
+                                        },
+                                        "& .MuiDataGrid-row:nth-of-type(odd)": { bgcolor: "action.hover" },
+                                        "& .MuiDataGrid-cell": { display: "flex", alignItems: "center" },
+                                        "& .MuiDataGrid-cell:focus, & .MuiDataGrid-columnHeader:focus": { outline: "none" },
+                                    }}
+                                />
+                            </Box>
+                            <Box
+                                sx={{
+                                    px: 1.5,
+                                    py: 1,
+                                    borderTop: "1px solid",
+                                    borderColor: "divider",
+                                    display: "flex",
+                                    flexDirection: { xs: "column", md: "row" },
+                                    alignItems: { xs: "flex-end", md: "center" },
+                                    justifyContent: "space-between",
+                                    gap: 1,
+                                }}
+                            >
+                                <Chip label={`Tổng: ${cheatingRows.length}`} size="small" sx={{ justifyContent: "center" }} />
+                                <Box sx={{ alignSelf: "flex-end" }}>
+                                    <AppPagination
+                                        page={cheatingPagination.page + 1}
+                                        pageSize={cheatingPagination.pageSize}
+                                        total={cheatingRows.length}
+                                        onPageChange={(p) => setCheatingPagination((prev) => ({ ...prev, page: p - 1 }))}
+                                        onPageSizeChange={(s) => setCheatingPagination({ page: 0, pageSize: s })}
+                                    />
+                                </Box>
+                            </Box>
                         </Paper>
                     )}
                 </Box>
@@ -481,7 +574,7 @@ export default function AdminExamDetailPage() {
                             onClick={() => setAssignOpen(true)}
                             sx={{ borderRadius: 2, fontWeight: 900 }}
                         >
-                            Chỉnh học viên được gán ({assignedUserIds.length})
+                            Chọn lại học viên được gán ({assignedUserIds.length})
                         </Button>
                     </Stack>
                 </DialogContent>
