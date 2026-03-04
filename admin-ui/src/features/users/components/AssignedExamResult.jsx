@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import { Box, Button, Paper, Typography, Divider, Chip, Stack } from "@mui/material";
 
 import AppModal from "../../../components/common/AppModal";
@@ -385,6 +386,7 @@ export default function AssignedExamResult({
     const earned = useMemo(() => Number(result?.earnedPoints ?? 0), [result]);
     const totalPoints = useMemo(() => Number(result?.totalPoints ?? 0), [result]);
     const { user } = useSelector((state) => state.auth);
+    const navigate = useNavigate();
 
     const percent = useMemo(() => {
         const p = Number(result?.score);
@@ -608,6 +610,14 @@ export default function AssignedExamResult({
                         sx={{ fontWeight: 900, borderColor: "#0B5ED7", color: "#0B5ED7" }}
                     >
                         Xem lại đáp án
+                    </Button>
+
+                    <Button
+                        variant="contained"
+                        onClick={() => navigate("/users/exams")}
+                        sx={{ fontWeight: 900, bgcolor: "#2E2D84", color: "#fff", "&:hover": { bgcolor: "#25247a" } }}
+                    >
+                        Quay lại
                     </Button>
                 </Box>
             </Paper>
