@@ -1,6 +1,6 @@
 // src/features/users/AssignedExamPlayerPage.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Box, Paper, Stack, Typography, Button } from "@mui/material";
+import { Box, Paper, Stack, Typography } from "@mui/material";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { assignedExamApi } from "../../api/assignedExamApi";
@@ -109,8 +109,11 @@ function safeParseJson(text) {
     }
 }
 
-// draft item shape (MCQ): { questionId, selectedAnswer }
-// draft item shape (SHORT_ANSWER / others): { questionId, yourAnswer }
+// Normalize any answers array into a safe shape for local draft/ref.
+// Accepts:
+// - practice style: {questionId, selectedAnswer, textAnswer}
+// - assigned style: {questionId, selectedAnswer, yourAnswer}
+// Output keeps BOTH text fields for compatibility.
 function normalizeDraftArray(draft) {
     if (!Array.isArray(draft)) return [];
     return draft
@@ -118,12 +121,38 @@ function normalizeDraftArray(draft) {
             if (!x) return null;
             const qid = x.questionId ?? x.id;
             if (qid == null) return null;
-            const out = { questionId: qid };
+
+            const out = { questionId: String(qid) };
+
             if (x.selectedAnswer != null) out.selectedAnswer = String(x.selectedAnswer);
-            if (x.yourAnswer != null) out.yourAnswer = String(x.yourAnswer);
+
+            const text =
+                x.yourAnswer != null && String(x.yourAnswer).trim() !== ""
+                    ? String(x.yourAnswer)
+                    : x.textAnswer != null
+                        ? String(x.textAnswer)
+                        : "";
+
+            if (text.trim() !== "") {
+                out.yourAnswer = text;
+                out.textAnswer = text;
+            }
+
             return out;
         })
         .filter(Boolean);
+}
+
+// ✅ Normalize submit payload (send BOTH fields to be safe)
+function normalizeSubmitAnswers(arr) {
+    const normalized = normalizeDraftArray(arr);
+
+    return normalized.map((a) => ({
+        questionId: a.questionId,
+        selectedAnswer: a.selectedAnswer ?? null,
+        yourAnswer: a.yourAnswer ?? a.textAnswer ?? "",
+        textAnswer: a.textAnswer ?? a.yourAnswer ?? "",
+    }));
 }
 
 export default function AssignedExamPlayerPage() {
@@ -151,6 +180,9 @@ export default function AssignedExamPlayerPage() {
     // ✅ draft answers (persist on reload)
     const [draftAnswers, setDraftAnswers] = useState([]);
 
+    // ✅ IMPORTANT: keep latest draft answers in ref to avoid stale state on timer expire
+    const latestDraftRef = useRef([]);
+
     // ✅ confirm submit bridge
     const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
     const [submitLoading, setSubmitLoading] = useState(false);
@@ -175,7 +207,10 @@ export default function AssignedExamPlayerPage() {
 
         const parsed = safeParseJson(raw);
         const restored = normalizeDraftArray(parsed?.answers ?? parsed);
-        if (restored.length) setDraftAnswers(restored);
+        if (restored.length) {
+            setDraftAnswers(restored);
+            latestDraftRef.current = restored;
+        }
     }, [attemptId, draftKey]);
 
     // ====== persist draft to localStorage
@@ -200,6 +235,8 @@ export default function AssignedExamPlayerPage() {
             localStorage.removeItem(draftKey);
         } catch {
             // ignore
+        } finally {
+            latestDraftRef.current = [];
         }
     }, [attemptId, draftKey]);
 
@@ -210,6 +247,7 @@ export default function AssignedExamPlayerPage() {
         setAttemptDetail(null);
         setAttemptId(null);
         setDraftAnswers([]);
+        latestDraftRef.current = [];
         setResult(null);
         setMode(MODE.DOING);
 
@@ -258,35 +296,30 @@ export default function AssignedExamPlayerPage() {
             const ctrl = e.ctrlKey || e.metaKey;
             const shift = e.shiftKey;
 
-            // F12
             if (e.key === "F12") {
                 e.preventDefault();
                 reportCheat("DEVTOOLS_KEY", { key: "F12" });
                 return;
             }
 
-            // Ctrl+Shift+I/J/C (DevTools)
             if (ctrl && shift && ["i", "j", "c"].includes(key)) {
                 e.preventDefault();
                 reportCheat("DEVTOOLS_KEY", { key: `Ctrl+Shift+${key.toUpperCase()}` });
                 return;
             }
 
-            // Ctrl+U (view source)
             if (ctrl && key === "u") {
                 e.preventDefault();
                 reportCheat("VIEW_SOURCE", { key: "Ctrl+U" });
                 return;
             }
 
-            // Ctrl+S (save)
             if (ctrl && key === "s") {
                 e.preventDefault();
                 reportCheat("SAVE_PAGE", { key: "Ctrl+S" });
                 return;
             }
 
-            // Copy/Cut/Paste
             if (ctrl && ["c", "x", "v"].includes(key)) {
                 e.preventDefault();
                 reportCheat("CLIPBOARD_KEY", { key: `Ctrl+${key.toUpperCase()}` });
@@ -358,7 +391,9 @@ export default function AssignedExamPlayerPage() {
     // ✅ Draft answers update helper (called by PracticePlayer)
     // =====================
     const handleDraftChange = useCallback((nextDraftArray) => {
-        setDraftAnswers(normalizeDraftArray(nextDraftArray));
+        const normalized = normalizeDraftArray(nextDraftArray);
+        latestDraftRef.current = normalized;
+        setDraftAnswers(normalized);
     }, []);
 
     // =====================
@@ -373,7 +408,6 @@ export default function AssignedExamPlayerPage() {
 
     const closeSubmitConfirm = useCallback(() => {
         setSubmitConfirmOpen(false);
-        // cancel submit => resolve false
         if (pendingSubmitRef.current?.resolve) {
             pendingSubmitRef.current.resolve(false);
         }
@@ -386,12 +420,12 @@ export default function AssignedExamPlayerPage() {
             setLoading(true);
             setLoadingMessage("Đang nộp bài...");
             try {
-                const payload = { answers: answersArray };
+                const payload = { answers: normalizeSubmitAnswers(answersArray) };
+
                 const res = await assignedExamApi.studentSubmit(assignmentId, payload);
                 setResult(res);
                 setMode(MODE.RESULT);
 
-                // ✅ nộp xong thì clear draft để khỏi “đè” lần sau
                 clearDraft();
                 return true;
             } catch (e) {
@@ -419,15 +453,28 @@ export default function AssignedExamPlayerPage() {
     );
 
     // ✅ auto-submit when timer expires (KHÔNG confirm)
+    // IMPORTANT: lấy trực tiếp từ PracticePlayer ref để chắc chắn lấy được textAnswer đang gõ
     const handleExpire = useCallback(async () => {
         if (mode !== MODE.DOING) return;
 
         reportCheat("TIME_EXPIRED");
 
-        // ✅ submit ngay bằng draft (không confirm)
-        const payloadAnswers = Array.isArray(draftAnswers) ? draftAnswers : [];
+        let fromPlayer = null;
+        try {
+            // ✅ PracticePlayer exposes getAnswersArray (the source of truth)
+            fromPlayer = playerRef.current?.getAnswersArray?.() || null;
+        } catch {
+            fromPlayer = null;
+        }
+
+        const payloadAnswers = Array.isArray(fromPlayer)
+            ? fromPlayer
+            : Array.isArray(latestDraftRef.current)
+                ? latestDraftRef.current
+                : [];
+
         await submitNow(payloadAnswers);
-    }, [mode, reportCheat, draftAnswers, submitNow]);
+    }, [mode, reportCheat, submitNow]);
 
     // ✅ xem lại đáp án: gọi endpoint review của assigned-exams
     const handleViewReview = useCallback(async () => {
@@ -468,7 +515,6 @@ export default function AssignedExamPlayerPage() {
                 </Box>
 
                 <Stack direction="row" spacing={1} alignItems="center">
-                    {/* ✅ Timer giống Practice */}
                     {mode === MODE.DOING && durationSeconds > 0 ? (
                         <CountdownTimer
                             startTimestamp={attemptStartTs}
@@ -480,7 +526,10 @@ export default function AssignedExamPlayerPage() {
                 </Stack>
             </Stack>
 
-            <Paper variant="outlined" sx={{ mt: 2, borderRadius: 3, borderColor: "#E3E8EF", overflow: "hidden" }}>
+            <Paper
+                variant="outlined"
+                sx={{ mt: 2, borderRadius: 3, borderColor: "#E3E8EF", overflow: "hidden" }}
+            >
                 <Box sx={{ p: 2.5 }}>
                     {mode === MODE.DOING && (
                         <>
@@ -501,7 +550,7 @@ export default function AssignedExamPlayerPage() {
                                     attemptId={attemptId}
                                     attemptStartTs={attemptStartTs}
                                     onSubmit={handleSubmit}
-                                    // ✅ giữ đáp án khi reload (PracticePlayer cần support 2 props này)
+                                    // ✅ persist answers (reload)
                                     initialAnswers={draftAnswers}
                                     onAnswersChange={handleDraftChange}
                                 />
@@ -520,7 +569,11 @@ export default function AssignedExamPlayerPage() {
                 </Box>
             </Paper>
 
-            <PracticeReviewDialog open={reviewOpen} onClose={() => setReviewOpen(false)} review={reviewData} />
+            <PracticeReviewDialog
+                open={reviewOpen}
+                onClose={() => setReviewOpen(false)}
+                review={reviewData}
+            />
 
             {/* ✅ Confirm submit */}
             <AppConfirm
@@ -555,7 +608,6 @@ export default function AssignedExamPlayerPage() {
                         pendingSubmitRef.current = null;
 
                         if (ok) setSubmitConfirmOpen(false);
-                        // fail => giữ dialog mở để user thử lại / hủy
                     } finally {
                         setSubmitLoading(false);
                     }

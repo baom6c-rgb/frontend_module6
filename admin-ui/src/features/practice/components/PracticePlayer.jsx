@@ -14,11 +14,10 @@ import QuizProgressBar from "./QuizProgressBar";
 /**
  * V2 NOTE:
  * - attemptId nên = sessionToken (unique per session)
- * - answersMap key nên dùng questionId ổn định (ở PracticePage đã set questionId = questionKey)
+ * - answersMap key nên dùng questionId ổn định
  * - timer: startTs lấy từ BE (attemptStartTs) và persist để reload không reset
  */
 const buildStorageKey = (attemptId, attemptDetail) => {
-    // ✅ V2: token là ID chuẩn nhất
     const token = attemptDetail?.sessionToken || attemptDetail?.token || null;
     if (token && String(token).trim()) return `practice_v2_attempt_${String(token).trim()}`;
 
@@ -28,7 +27,16 @@ const buildStorageKey = (attemptId, attemptDetail) => {
 };
 
 const PracticePlayer = forwardRef(function PracticePlayer(
-    { attemptDetail, attemptId, attemptStartTs, onSubmit },
+    {
+        attemptDetail,
+        attemptId,
+        attemptStartTs,
+        onSubmit,
+
+        // ✅ NEW (optional) - for AssignedExamPlayerPage
+        initialAnswers,     // array: [{questionId, selectedAnswer?, yourAnswer?/textAnswer?}]
+        onAnswersChange,    // fn(array)
+    },
     ref
 ) {
     const questions = attemptDetail?.questions || [];
@@ -49,29 +57,25 @@ const PracticePlayer = forwardRef(function PracticePlayer(
      */
     const [answersMap, setAnswersMap] = useState({});
 
-    /**
-     * ✅ submittedRef: đã nộp bài thành công (khóa hẳn UI)
-     * ✅ submittingRef: đang submit / đang chờ confirm (khóa tạm thời)
-     *
-     * Bug cũ: set submittedRef=true trước khi user confirm -> cancel bị "đơ"
-     */
     const submittedRef = useRef(false);
     const submittingRef = useRef(false);
 
     // ✅ tránh effect persist ghi đè answersMap={} lên localStorage ngay lúc mới restore
     const skipPersistRef = useRef(true);
 
+    // ✅ tránh emit onAnswersChange ngay lúc restore (spam)
+    const skipEmitRef = useRef(true);
+
     const isLocked = () => submittedRef.current || submittingRef.current;
 
     const getQid = (q) => {
         const v = q?.questionId ?? q?.questionKey ?? q?.id ?? null;
-        return v == null ? null : String(v); // ✅ key localStorage luôn stable
+        return v == null ? null : String(v);
     };
 
     const currentQuestion = questions[index];
     const currentQid = useMemo(() => getQid(currentQuestion), [currentQuestion]);
 
-    // ✅ Danh sách ID để ProgressBar map trạng thái answered/pending
     const questionIds = useMemo(() => questions.map((q) => getQid(q)), [questions]);
 
     const answeredCount = useMemo(() => {
@@ -101,28 +105,87 @@ const PracticePlayer = forwardRef(function PracticePlayer(
         });
     }, [questions, answersMap]);
 
-    /**
-     * ✅ Restore answers/index + startTs on mount OR when storageKey changes
-     * - startTs ưu tiên attemptStartTs (BE) để timer không reset
-     * - nếu local chưa có startTs, set lần đầu
-     */
+    // =====================
+    // ✅ helpers: convert initialAnswers(array) -> answersMap
+    // =====================
+    const toAnswersMapFromArray = (arr) => {
+        if (!Array.isArray(arr)) return {};
+        const out = {};
+        for (const it of arr) {
+            if (!it) continue;
+            const qid = it.questionId ?? it.id;
+            if (qid == null) continue;
+            const key = String(qid);
+
+            const selected = it.selectedAnswer != null ? String(it.selectedAnswer) : undefined;
+            const text =
+                it.textAnswer != null
+                    ? String(it.textAnswer)
+                    : it.yourAnswer != null
+                        ? String(it.yourAnswer)
+                        : undefined;
+
+            out[key] = {
+                ...(selected ? { selectedAnswer: selected } : {}),
+                ...(text ? { textAnswer: text } : {}),
+            };
+        }
+        return out;
+    };
+
+    // =====================
+    // ✅ Build answers array (emit + submit)
+    // - MCQ: selectedAnswer
+    // - Non-MCQ: textAnswer + yourAnswer (compat assigned-exam)
+    // =====================
+    const buildAnswersArray = () => {
+        return questions.map((q) => {
+            const qid = getQid(q);
+            const type = String(q?.questionType || "").toUpperCase();
+            const a = qid ? answersMap[qid] : null;
+
+            if (type === "MCQ") {
+                return {
+                    questionId: qid,
+                    selectedAnswer: a?.selectedAnswer ?? null,
+                    // keep both for compatibility
+                    textAnswer: "",
+                    yourAnswer: "",
+                };
+            }
+
+            const text = a?.textAnswer ?? "";
+            return {
+                questionId: qid,
+                selectedAnswer: null,
+                textAnswer: text,
+                yourAnswer: text, // ✅ important for assigned-exam payload
+            };
+        });
+    };
+
+    // =====================
+    // ✅ Restore: localStorage + initialAnswers (initialAnswers ưu tiên)
+    // =====================
     useEffect(() => {
         submittedRef.current = false;
         submittingRef.current = false;
 
-        // ✅ sau khi restore xong, bỏ qua 1 lần persist để không ghi đè answers={}
         skipPersistRef.current = true;
+        skipEmitRef.current = true;
 
         try {
             const raw = localStorage.getItem(storageKey);
             const parsed = raw ? JSON.parse(raw) : null;
 
             const savedAnswers = parsed?.answers;
-            if (savedAnswers && typeof savedAnswers === "object") {
-                setAnswersMap(savedAnswers);
-            } else {
-                setAnswersMap({});
-            }
+            const savedMap = savedAnswers && typeof savedAnswers === "object" ? savedAnswers : {};
+
+            // ✅ overlay initialAnswers (priority)
+            const initMap = toAnswersMapFromArray(initialAnswers);
+            const merged = { ...savedMap, ...initMap };
+
+            setAnswersMap(merged);
 
             const savedIndex = Number(parsed?.index);
             if (!Number.isNaN(savedIndex) && savedIndex >= 0) {
@@ -131,7 +194,6 @@ const PracticePlayer = forwardRef(function PracticePlayer(
                 setIndex(0);
             }
 
-            // ✅ startTs: ưu tiên BE startTs, fallback local, cuối cùng Date.now
             const beTs = Number.isFinite(Number(attemptStartTs)) ? Number(attemptStartTs) : null;
             const localTs = Number.isFinite(Number(parsed?.startTs)) ? Number(parsed.startTs) : null;
             const finalTs = beTs ?? localTs ?? Date.now();
@@ -140,22 +202,22 @@ const PracticePlayer = forwardRef(function PracticePlayer(
                 storageKey,
                 JSON.stringify({
                     startTs: finalTs,
-                    answers: savedAnswers || {},
+                    answers: merged,
                     index: !Number.isNaN(savedIndex) && savedIndex >= 0 ? savedIndex : 0,
                 })
             );
         } catch {
-            setAnswersMap({});
+            const initMap = toAnswersMapFromArray(initialAnswers);
+            setAnswersMap(initMap);
             setIndex(0);
 
-            // best-effort write startTs
             try {
                 const beTs = Number.isFinite(Number(attemptStartTs)) ? Number(attemptStartTs) : null;
                 localStorage.setItem(
                     storageKey,
                     JSON.stringify({
                         startTs: beTs ?? Date.now(),
-                        answers: {},
+                        answers: initMap,
                         index: 0,
                     })
                 );
@@ -163,6 +225,7 @@ const PracticePlayer = forwardRef(function PracticePlayer(
                 // ignore
             }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [storageKey, attemptStartTs]);
 
     // clamp index when questions load
@@ -171,11 +234,10 @@ const PracticePlayer = forwardRef(function PracticePlayer(
         setIndex((i) => Math.max(0, Math.min(i, total - 1)));
     }, [total]);
 
-    /**
-     * ✅ Persist answers + index (keep startTs stable)
-     */
+    // =====================
+    // ✅ Persist answers + index (keep startTs stable)
+    // =====================
     useEffect(() => {
-        // ✅ tránh ghi đè answersMap={} lên localStorage ngay lúc mới mount/restore
         if (skipPersistRef.current) {
             skipPersistRef.current = false;
             return;
@@ -201,10 +263,32 @@ const PracticePlayer = forwardRef(function PracticePlayer(
         }
     }, [storageKey, answersMap, index, attemptStartTs]);
 
+    // =====================
+    // ✅ Emit to parent (AssignedExam draft sync)
+    // =====================
+    useEffect(() => {
+        if (typeof onAnswersChange !== "function") return;
+
+        if (skipEmitRef.current) {
+            skipEmitRef.current = false;
+            // vẫn emit 1 lần sau restore để parent có data
+            try {
+                onAnswersChange(buildAnswersArray());
+            } catch {}
+            return;
+        }
+
+        try {
+            onAnswersChange(buildAnswersArray());
+        } catch {
+            // ignore
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [answersMap, questions, onAnswersChange]);
+
     // ===== Prevent accidental reload/back (chỉ khi chưa submit) =====
     useEffect(() => {
         const handler = (e) => {
-            // ✅ chỉ chặn khi đang làm bài (chưa submit thành công)
             if (submittedRef.current) return;
             e.preventDefault();
             e.returnValue = "";
@@ -213,7 +297,7 @@ const PracticePlayer = forwardRef(function PracticePlayer(
         return () => window.removeEventListener("beforeunload", handler);
     }, []);
 
-    // ===== Anti-cheat (best-effort): chặn F12/DevTools hotkeys + chuột phải + copy/paste =====
+    // ===== Anti-cheat (best-effort) =====
     useEffect(() => {
         const onKeyDown = (e) => {
             if (submittedRef.current) return;
@@ -271,29 +355,10 @@ const PracticePlayer = forwardRef(function PracticePlayer(
         };
     }, []);
 
-    // ===== Build answers array =====
-    const buildAnswersArray = () => {
-        return questions.map((q) => {
-            const qid = getQid(q);
-            const type = String(q?.questionType || "").toUpperCase();
-            const a = qid ? answersMap[qid] : null;
-
-            if (type === "MCQ") {
-                return {
-                    questionId: qid,
-                    selectedAnswer: a?.selectedAnswer ?? null,
-                    textAnswer: "",
-                };
-            }
-            return { questionId: qid, textAnswer: a?.textAnswer ?? "", selectedAnswer: null };
-        });
-    };
-
     /**
      * ✅ doSubmit:
-     * - KHÔNG set submitted=true ngay
      * - lock tạm bằng submittingRef trong lúc chờ confirm / gọi API
-     * - nếu cancel: onSubmit trả về false hoặc { cancelled:true } -> unlock
+     * - nếu cancel: unlock
      * - nếu thành công: set submitted=true
      */
     const doSubmit = async (meta = {}) => {
@@ -307,18 +372,15 @@ const PracticePlayer = forwardRef(function PracticePlayer(
         try {
             const res = await onSubmit?.(answersArray, meta);
 
-            // ✅ Nếu user cancel confirm -> parent nên return false hoặc {cancelled:true}
             const cancelled = res === false || res?.cancelled === true;
             if (cancelled) {
                 submittingRef.current = false;
                 return;
             }
 
-            // ✅ coi như submit thành công
             submittedRef.current = true;
             submittingRef.current = false;
         } catch (e) {
-            // lỗi submit -> unlock để làm tiếp
             submittingRef.current = false;
             throw e;
         }
@@ -327,7 +389,6 @@ const PracticePlayer = forwardRef(function PracticePlayer(
     useImperativeHandle(ref, () => ({
         getAnswersArray: () => buildAnswersArray(),
         submit: (meta) => doSubmit(meta),
-        // optional: cho parent mở khóa nếu cần
         unlock: () => {
             submittingRef.current = false;
             submittedRef.current = false;
@@ -360,7 +421,6 @@ const PracticePlayer = forwardRef(function PracticePlayer(
                 bgcolor: "#fff",
             }}
         >
-            {/* ✅ PROGRESS BAR (Navigation) */}
             <QuizProgressBar
                 total={total}
                 currentIndex={index}
@@ -396,6 +456,10 @@ const PracticePlayer = forwardRef(function PracticePlayer(
                     >
                         Nộp bài
                     </Button>
+
+                    <Typography sx={{ color: "#6C757D", fontWeight: 800, fontSize: 13 }}>
+                        Đã trả lời: {answeredCount}/{total}
+                    </Typography>
                 </Box>
             </Box>
 
