@@ -9,8 +9,8 @@ import { useToast } from "../../components/common/AppToast";
 import AppConfirm from "../../components/common/AppConfirm";
 
 import PracticePlayer from "../practice/components/PracticePlayer";
-import PracticeResult from "../practice/components/PracticeResult";
 import PracticeReviewDialog from "../practice/components/PracticeReviewDialog";
+import AssignedExamResult from "./components/AssignedExamResult";
 
 import CountdownTimer from "../../components/common/CountdownTimer";
 import { parseServerDateTime } from "../../utils/datetime";
@@ -176,8 +176,7 @@ export default function AssignedExamPlayerPage() {
         const parsed = safeParseJson(raw);
         const restored = normalizeDraftArray(parsed?.answers ?? parsed);
         if (restored.length) setDraftAnswers(restored);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [attemptId]);
+    }, [attemptId, draftKey]);
 
     // ====== persist draft to localStorage
     useEffect(() => {
@@ -204,7 +203,7 @@ export default function AssignedExamPlayerPage() {
         }
     }, [attemptId, draftKey]);
 
-    const boot = async () => {
+    const boot = useCallback(async () => {
         if (!assignmentId) return;
 
         setStartError(null);
@@ -241,12 +240,11 @@ export default function AssignedExamPlayerPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [assignmentId, showToast]);
 
     useEffect(() => {
         boot();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [assignmentId]);
+    }, [boot]);
 
     // =====================
     // ✅ Anti-cheat: chặn F12/devtools hotkeys + copy/paste + contextmenu
@@ -426,36 +424,28 @@ export default function AssignedExamPlayerPage() {
 
         reportCheat("TIME_EXPIRED");
 
-        // ưu tiên gọi submit nội bộ nếu PracticePlayer có expose
-        const didCallInternal = (() => {
-            try {
-                if (typeof playerRef.current?.submit === "function") {
-                    playerRef.current.submit(); // PracticePlayer tự gọi onSubmit -> sẽ bật confirm, nên không dùng
-                    return true;
-                }
-            } catch {}
-            return false;
-        })();
-
-        // ⚠️ không dùng internal submit vì sẽ bật confirm
-        if (didCallInternal) {
-            // fallback: vẫn cố submit ngay bằng draft
-            // (nếu playerRef.submit() đã chạy confirm thì bỏ qua)
-        }
-
+        // ✅ submit ngay bằng draft (không confirm)
         const payloadAnswers = Array.isArray(draftAnswers) ? draftAnswers : [];
         await submitNow(payloadAnswers);
     }, [mode, reportCheat, draftAnswers, submitNow]);
 
-    const handleViewReview = async () => {
-        const r = result?.review || result?.items || result?.data?.review || null;
-        if (Array.isArray(r)) {
-            setReviewData(r);
+    // ✅ xem lại đáp án: gọi endpoint review của assigned-exams
+    const handleViewReview = useCallback(async () => {
+        if (!assignmentId) return;
+
+        try {
+            setLoading(true);
+            setLoadingMessage("Đang tải đáp án...");
+            const review = await assignedExamApi.studentGetReview(assignmentId);
+            setReviewData(review);
             setReviewOpen(true);
-            return;
+        } catch (e) {
+            const msg = extractApiError(e);
+            showToast(msg, "error");
+        } finally {
+            setLoading(false);
         }
-        showToast("BE chưa trả review (hoặc chưa có endpoint review).", "info");
-    };
+    }, [assignmentId, showToast]);
 
     const hasQuestions = useMemo(() => {
         return Array.isArray(attemptDetail?.questions) && attemptDetail.questions.length > 0;
@@ -495,22 +485,10 @@ export default function AssignedExamPlayerPage() {
                     >
                         Quay lại danh sách
                     </Button>
-
-                    <Button
-                        variant="contained"
-                        onClick={boot}
-                        sx={{ borderRadius: 2, fontWeight: 900 }}
-                        disabled={loading}
-                    >
-                        Thử lại
-                    </Button>
                 </Stack>
             </Stack>
 
-            <Paper
-                variant="outlined"
-                sx={{ mt: 2, borderRadius: 3, borderColor: "#E3E8EF", overflow: "hidden" }}
-            >
+            <Paper variant="outlined" sx={{ mt: 2, borderRadius: 3, borderColor: "#E3E8EF", overflow: "hidden" }}>
                 <Box sx={{ p: 2.5 }}>
                     {mode === MODE.DOING && (
                         <>
@@ -543,12 +521,10 @@ export default function AssignedExamPlayerPage() {
                     )}
 
                     {mode === MODE.RESULT && (
-                        <PracticeResult
+                        <AssignedExamResult
+                            assignmentId={assignmentId}
                             result={result}
-                            attemptId={attemptId}
-                            attemptStartTs={attemptStartTs}
-                            onRetry={() => boot()}
-                            onNewMaterial={() => navigate("/users/exams")}
+                            numberOfQuestions={attemptDetail?.questions?.length || 0}
                             onViewReview={handleViewReview}
                         />
                     )}

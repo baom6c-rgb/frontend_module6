@@ -2,11 +2,13 @@
 import axiosPrivate from "./axiosPrivate";
 
 /**
- * NOTE:
- * - Endpoint paths follow BE convention in your backend:
- *   Admin:   /api/admin/assigned-exams/**
- *   Student: /api/student/assigned-exams/**
- * - If BE changes, update only strings here.
+ * ✅ Backend of your project (current):
+ * Admin:   /api/admin/assigned-exams/**
+ * Student: /api/student/assigned-exams/**
+ *
+ * Student review/study-guide are BY assignmentId:
+ * - GET /api/student/assigned-exams/{assignmentId}/review
+ * - GET /api/student/assigned-exams/{assignmentId}/study-guide
  */
 
 const unwrap = (resOrData) => {
@@ -30,7 +32,7 @@ const pickFirstPositive = (...vals) => {
 
 const ensureLeadingSlash = (p) => (p?.startsWith("/") ? p : `/${p || ""}`);
 
-// Similar to practiceApi.normalizeGenerateSessionV2
+// Similar to practiceApi.normalizeGenerateSessionV2 (for Admin preview)
 const normalizePreview = (raw) => {
     const d = unwrap(raw);
 
@@ -64,26 +66,28 @@ const normalizePreview = (raw) => {
 };
 
 /**
- * Review payload normalize:
- * PracticeReviewDialog expects:
+ * ✅ Review normalize to match PracticeReviewDialog:
  * {
  *   score, correctCount, totalQuestions,
- *   items: [{ questionId, questionType, content, options, correctAnswer, selectedAnswer, isCorrect, feedback, ... }]
+ *   items: [...]
  * }
- *
- * Nếu BE trả key khác, ta normalize "nhẹ" ở đây để FE khỏi vỡ.
  */
 const normalizeReview = (raw) => {
     const d = unwrap(raw);
 
-    // direct match
+    // already ok
     if (d?.items && Array.isArray(d.items)) return d;
 
-    // common wrappers
+    // wrapped forms
     const candidate = d?.review ?? d?.result ?? d?.data ?? d;
     if (candidate?.items && Array.isArray(candidate.items)) return candidate;
 
-    // fallback: ensure structure at least
+    // fallback mapping
+    const items =
+        (Array.isArray(candidate?.items) && candidate.items) ||
+        (Array.isArray(candidate?.questions) && candidate.questions) ||
+        [];
+
     return {
         score: candidate?.score ?? candidate?.scorePct ?? 0,
         correctCount: candidate?.correctCount ?? candidate?.correct ?? 0,
@@ -91,16 +95,28 @@ const normalizeReview = (raw) => {
             candidate?.totalQuestions ??
             candidate?.total ??
             candidate?.questionCount ??
+            items.length ??
             0,
-        items: Array.isArray(candidate?.questions) ? candidate.questions : [],
+        items,
     };
+};
+
+/**
+ * ✅ Study guide normalize:
+ * BE returns: { studyGuide: "..." }
+ */
+const normalizeStudyGuide = (raw) => {
+    const d = unwrap(raw);
+    const guide =
+        d?.studyGuide ??
+        d?.data?.studyGuide ??
+        (typeof d === "string" ? d : "");
+    return { studyGuide: guide || "" };
 };
 
 const API = {
     admin: "/admin/assigned-exams",
     student: "/student/assigned-exams",
-    // optional: attempt review endpoint (nếu BE dùng exam-attempts)
-    attempts: "/exam-attempts",
 };
 
 export const assignedExamApi = {
@@ -172,10 +188,8 @@ export const assignedExamApi = {
     },
 
     /**
-     * ✅ REVIEW (by assignment)
-     * FE AssignedExamsPage dùng để mở PracticeReviewDialog sau khi làm xong.
-     * Endpoint đề xuất: GET /api/student/assigned-exams/{assignmentId}/review
-     * Nếu BE khác path, chỉ cần sửa string ở đây.
+     * ✅ REVIEW (BY ASSIGNMENT) — matches your BE
+     * GET /api/student/assigned-exams/{assignmentId}/review
      */
     studentGetReview: async (assignmentId) => {
         const res = await axiosPrivate.get(`${API.student}/${assignmentId}/review`);
@@ -183,22 +197,19 @@ export const assignedExamApi = {
     },
 
     /**
-     * ✅ REVIEW (by attempt) - optional
-     * Endpoint đề xuất: GET /api/exam-attempts/{attemptId}/review
-     * Nếu list trả attemptId thì dùng cái này sẽ chuẩn nhất.
+     * ✅ STUDY GUIDE (BY ASSIGNMENT) — matches your BE
+     * GET /api/student/assigned-exams/{assignmentId}/study-guide
      */
-    studentGetReviewByAttempt: async (attemptId) => {
-        const res = await axiosPrivate.get(`${API.attempts}/${attemptId}/review`);
-        return normalizeReview(res);
+    studentGetStudyGuide: async (assignmentId) => {
+        const res = await axiosPrivate.get(`${API.student}/${assignmentId}/study-guide`);
+        return unwrap(res);
     },
 
     /**
-     * ✅ Utility: allow override base paths in rare cases (multi-deploy / gateway)
-     * Not required, but safe to keep.
+     * ✅ Utility: allow override base paths if needed
      */
     _setBasePaths: (paths = {}) => {
         if (paths?.admin) API.admin = ensureLeadingSlash(paths.admin);
         if (paths?.student) API.student = ensureLeadingSlash(paths.student);
-        if (paths?.attempts) API.attempts = ensureLeadingSlash(paths.attempts);
     },
 };

@@ -213,9 +213,7 @@ export default function AssignedExamsPage() {
                 setReviewLoading(true);
 
                 // ưu tiên attemptId nếu có, không thì dùng assignmentId
-                const reviewRaw = row.attemptId
-                    ? await assignedExamApi.studentGetReviewByAttempt(row.attemptId)
-                    : await assignedExamApi.studentGetReview(row.assignmentId);
+                const reviewRaw = await assignedExamApi.studentGetReview(row.assignmentId);
 
                 const normalized = normalizeReviewPayload(reviewRaw);
                 setReviewData(normalized);

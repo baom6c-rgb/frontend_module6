@@ -9,7 +9,6 @@ import {
     Box,
     Paper,
     Typography,
-    Grid,
     IconButton,
     Dialog,
     DialogTitle,
@@ -26,17 +25,12 @@ import {
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import { DataGrid } from "@mui/x-data-grid";
-import {
-    Timer,
-    Visibility,
-    CheckCircle,
-    Assignment as AssignmentIcon,
-    TrendingUpRounded,
-} from "@mui/icons-material";
+import { Visibility, TrendingUpRounded } from "@mui/icons-material";
 
 import { getMyExamAttemptsApi } from "../../api/examApi";
 import { getDashboardStatsApi } from "../../api/dashboardApi";
 import { practiceApi } from "../../api/practiceApi";
+import { assignedExamApi } from "../../api/assignedExamApi";
 
 import FilterPanel from "../../components/common/FilterPanel.jsx";
 import AppPagination from "../../components/common/AppPagination.jsx";
@@ -68,15 +62,75 @@ const formatDateTime = (d) => (d ? new Date(d).toLocaleString("vi-VN") : "—");
 const formatDateTimeSplit = (dateStr) => {
     if (!dateStr) return { date: "—", time: "—" };
     const d = new Date(dateStr);
-    const date = d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
-    const time = d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const date = d.toLocaleDateString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+    });
+    const time = d.toLocaleTimeString("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+    });
     return { date, time };
 };
+
+// ✅ Resolve assignmentId by calling assigned-exams list and matching attemptId/title
+async function resolveAssignmentIdFromAssignedList(selectedTest) {
+    const attemptId = selectedTest?.id ?? null;
+
+    const data = await assignedExamApi.studentList();
+    const list = Array.isArray(data) ? data : data?.items || data?.content || [];
+
+    const mapped = list.map((a) => {
+        const assignmentId = a.assignmentId ?? a.id ?? null;
+        const rowAttemptId =
+            a.attemptId ?? a.examAttemptId ?? a.latestAttemptId ?? a.attempt?.id ?? null;
+        const title = a.examTitle ?? a.title ?? a.exam?.title ?? "";
+        return { assignmentId, attemptId: rowAttemptId, title };
+    });
+
+    // ✅ 1) match attemptId
+    if (attemptId) {
+        const hit = mapped.find(
+            (x) =>
+                x.assignmentId &&
+                x.attemptId &&
+                String(x.attemptId) === String(attemptId)
+        );
+        if (hit?.assignmentId) return hit.assignmentId;
+    }
+
+    // ✅ 2) fallback match title (soft match)
+    const name = String(selectedTest?.name || "").trim().toLowerCase();
+    if (name) {
+        const hit2 = mapped.find((x) => {
+            const t = String(x.title || "").trim().toLowerCase();
+            return x.assignmentId && t && (t === name || t.includes(name) || name.includes(t));
+        });
+        if (hit2?.assignmentId) return hit2.assignmentId;
+    }
+
+    return null;
+}
 
 function normalizeAttempt(raw) {
     const id = raw?.id ?? raw?.attemptId ?? raw?.examAttemptId ?? null;
 
-    const submitTime = raw?.submitTime ?? raw?.date ?? raw?.submittedAt ?? raw?.endTime ?? null;
+    // ✅ assignmentId for admin-assigned review (if BE ever returns it)
+    const assignmentId =
+        raw?.assignmentId ??
+        raw?.assignedExamAssignmentId ??
+        raw?.assignedExamId ??
+        raw?.examAssignmentId ??
+        raw?.assignment?.id ??
+        raw?.assignedExam?.assignmentId ??
+        raw?.assignedExam?.id ??
+        raw?.examAssignment?.id ??
+        null;
+
+    const submitTime =
+        raw?.submitTime ?? raw?.date ?? raw?.submittedAt ?? raw?.endTime ?? null;
     const startTime = raw?.startTime ?? raw?.startedAt ?? null;
 
     const type = String(raw?.type || raw?.examType || "").toUpperCase();
@@ -107,7 +161,11 @@ function normalizeAttempt(raw) {
         null;
 
     const totalQuestions = safeNum(
-        raw?.totalQuestions ?? raw?.questions ?? raw?.questionCount ?? raw?.totalQuestion ?? raw?.numQuestions,
+        raw?.totalQuestions ??
+        raw?.questions ??
+        raw?.questionCount ??
+        raw?.totalQuestion ??
+        raw?.numQuestions,
         0
     );
 
@@ -126,7 +184,8 @@ function normalizeAttempt(raw) {
         }
     }
 
-    let durationMinutes = raw?.durationMinutes ?? raw?.duration ?? raw?.timeMinutes ?? raw?.minutes ?? null;
+    let durationMinutes =
+        raw?.durationMinutes ?? raw?.duration ?? raw?.timeMinutes ?? raw?.minutes ?? null;
 
     if (durationMinutes == null && startTime && submitTime) {
         const diffMs = new Date(submitTime).getTime() - new Date(startTime).getTime();
@@ -134,11 +193,15 @@ function normalizeAttempt(raw) {
     }
     durationMinutes = safeNum(durationMinutes, 0);
 
-    const accuracy = totalQuestions > 0 ? Number(((correctAnswers / totalQuestions) * 100).toFixed(1)) : 0;
+    const accuracy =
+        totalQuestions > 0
+            ? Number(((correctAnswers / totalQuestions) * 100).toFixed(1))
+            : 0;
 
     return {
         _raw: raw,
-        id,
+        id, // attemptId (practice review)
+        assignmentId, // assignmentId (assigned review)
         type,
         name,
         module: module || "Chưa gắn module",
@@ -154,56 +217,11 @@ function normalizeAttempt(raw) {
     };
 }
 
-const StatCard = ({ icon, title, value, subtitle, color }) => (
-    <Paper
-        elevation={0}
-        sx={{
-            p: { xs: 2, sm: 2.5, md: 3 },
-            borderRadius: "16px",
-            border: `1px solid ${COLORS.borderLight}`,
-            height: "100%",
-            background: COLORS.bgWhite,
-            transition: "all 0.25s ease",
-            "&:hover": {
-                transform: "translateY(-4px)",
-                boxShadow: "0px 18px 40px rgba(0,0,0,0.06)",
-                borderColor: color,
-            },
-        }}
-    >
-        <Stack direction="row" alignItems="center" spacing={2}>
-            <Box
-                sx={{
-                    width: { xs: 48, sm: 52, md: 56 },
-                    height: { xs: 48, sm: 52, md: 56 },
-                    borderRadius: "12px",
-                    bgcolor: color + "20",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                }}
-            >
-                {React.cloneElement(icon, { sx: { color, fontSize: { xs: 24, sm: 26, md: 28 } } })}
-            </Box>
-
-            <Box>
-                <Typography sx={{ fontSize: { xs: 12, sm: 13, md: 14 }, color: COLORS.textSecondary, fontWeight: 800 }}>
-                    {title}
-                </Typography>
-                <Typography sx={{ fontSize: { xs: 22, sm: 25, md: 28 }, fontWeight: 900, color: COLORS.textPrimary, lineHeight: 1.1 }}>
-                    {value}
-                </Typography>
-                <Typography sx={{ fontSize: { xs: 11, sm: 11.5, md: 12 }, color: "#8A94A6", fontWeight: 700 }}>
-                    {subtitle}
-                </Typography>
-            </Box>
-        </Stack>
-    </Paper>
-);
-
-// review API -> PracticeReviewDialog shape
+// review payload -> PracticeReviewDialog shape
 const adaptToPracticeReview = (rawReview, selectedTest) => {
-    const arr = Array.isArray(rawReview) ? rawReview : rawReview?.items || [];
+    const arr = Array.isArray(rawReview)
+        ? rawReview
+        : rawReview?.items || rawReview?.data?.items || [];
     const items = (arr || []).map((it) => {
         const qType = String(it?.questionType || "MCQ").toUpperCase();
         const isMcq = qType === "MCQ";
@@ -233,7 +251,11 @@ const adaptToPracticeReview = (rawReview, selectedTest) => {
         return {
             questionId: it?.questionId ?? it?.id ?? null,
             questionType: qType,
-            content: it?.content ?? it?.questionContent ?? it?.questionText ?? "(Không có nội dung câu hỏi)",
+            content:
+                it?.content ??
+                it?.questionContent ??
+                it?.questionText ??
+                "(Không có nội dung câu hỏi)",
             options: options || {},
             selectedAnswer,
             correctAnswer,
@@ -246,19 +268,28 @@ const adaptToPracticeReview = (rawReview, selectedTest) => {
         };
     });
 
-    const totalQuestions = safeNum(rawReview?.totalQuestions, items.length);
+    const totalQuestions = safeNum(
+        rawReview?.totalQuestions ?? rawReview?.data?.totalQuestions,
+        items.length
+    );
+
     const correctCount = Number.isFinite(rawReview?.correctCount)
         ? rawReview.correctCount
-        : items.filter((x) => x.isCorrect).length;
+        : Number.isFinite(rawReview?.data?.correctCount)
+            ? rawReview.data.correctCount
+            : items.filter((x) => x.isCorrect).length;
 
-    const score = safeNum(rawReview?.score, safeNum(selectedTest?.scorePct, 0));
+    const score = safeNum(
+        rawReview?.score ?? rawReview?.data?.score,
+        safeNum(selectedTest?.scorePct, 0)
+    );
 
     return {
         score,
         correctCount,
         totalQuestions,
         items,
-        aiFeedback: String(rawReview?.aiFeedback ?? "").trim(),
+        aiFeedback: String(rawReview?.aiFeedback ?? rawReview?.data?.aiFeedback ?? "").trim(),
     };
 };
 
@@ -278,15 +309,7 @@ export default function UserReview() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const [stats, setStats] = useState({
-        completedLessons: 0,
-        onlineTime: 0,
-        averageScore: 0,
-        rank: 0,
-        totalStudents: 0,
-    });
-
-    // ✅ Review state (chỉ mở khi bấm nút)
+    // ✅ Review state
     const [openReview, setOpenReview] = useState(false);
     const [reviewData, setReviewData] = useState(null);
     const [reviewLoading, setReviewLoading] = useState(false);
@@ -304,7 +327,7 @@ export default function UserReview() {
     const [modules, setModules] = useState([ALL]);
     const [classes, setClasses] = useState([ALL]);
 
-    // ✅ Tự động set filter "Trượt" khi navigate từ Dashboard (nút Cải thiện điểm số)
+    // ✅ Auto set filter from Dashboard
     useEffect(() => {
         if (location.state?.filterResult) {
             setSelectedResult(location.state.filterResult);
@@ -323,7 +346,7 @@ export default function UserReview() {
                 const token = localStorage.getItem("accessToken");
                 if (!token || token === "null") throw new Error("No valid token. Please login.");
 
-                const [attemptsRes, dashStatsRes] = await Promise.allSettled([
+                const [attemptsRes] = await Promise.allSettled([
                     getMyExamAttemptsApi(),
                     getDashboardStatsApi(),
                 ]);
@@ -342,19 +365,6 @@ export default function UserReview() {
                 } else {
                     console.error("UserReview attempts error:", attemptsRes.reason);
                     throw attemptsRes.reason;
-                }
-
-                if (dashStatsRes.status === "fulfilled") {
-                    const s = dashStatsRes.value?.data || {};
-                    setStats({
-                        completedLessons: safeNum(s.completedLessons, 0),
-                        onlineTime: safeNum(s.onlineTime, 0),
-                        averageScore: safeNum(s.averageScore, 0),
-                        rank: safeNum(s.rank, 0),
-                        totalStudents: safeNum(s.totalStudents, 0),
-                    });
-                } else {
-                    console.warn("UserReview dashboard stats error:", dashStatsRes.reason);
                 }
             } catch (err) {
                 if (!alive) return;
@@ -437,26 +447,61 @@ export default function UserReview() {
         setReviewLoading(false);
     };
 
+    // ✅ PRACTICE-first, fallback to ASSIGNED by assignmentId (direct or resolved from assigned list)
     const handleOpenReview = async () => {
-        const attemptId = selectedTest?.id;
-        if (!attemptId) {
-            setReviewError("Không tìm thấy attemptId để tải chi tiết bài làm.");
-            return;
-        }
+        if (!selectedTest) return;
 
         if (reviewData && (reviewData?.items?.length ?? 0) > 0) {
             setOpenReview(true);
             return;
         }
 
+        const attemptId = selectedTest?.id ?? null;
+
         try {
             setReviewLoading(true);
             setReviewError(null);
 
-            const raw = await practiceApi.review(attemptId);
-            const adapted = adaptToPracticeReview(raw, selectedTest);
-            setReviewData(adapted);
+            // 1) TRY PRACTICE
+            if (attemptId) {
+                try {
+                    const raw = await practiceApi.review(attemptId);
+                    const adapted = adaptToPracticeReview(raw, selectedTest);
+                    setReviewData(adapted);
+                    setOpenReview(true);
+                    return;
+                } catch (e1) {
+                    const status = e1?.response?.status;
+                    const shouldFallback = status === 400 || status === 404;
+                    if (!shouldFallback) throw e1;
+                }
+            }
 
+            // 2) TRY ASSIGNED
+            let assignmentId =
+                selectedTest?.assignmentId ??
+                selectedTest?._raw?.assignmentId ??
+                selectedTest?._raw?.assignedExamAssignmentId ??
+                selectedTest?._raw?.assignedExamId ??
+                selectedTest?._raw?.examAssignmentId ??
+                selectedTest?._raw?.assignment?.id ??
+                selectedTest?._raw?.assignedExam?.assignmentId ??
+                selectedTest?._raw?.assignedExam?.id ??
+                selectedTest?._raw?.examAssignment?.id ??
+                null;
+
+            if (!assignmentId) {
+                assignmentId = await resolveAssignmentIdFromAssignedList(selectedTest);
+            }
+
+            if (!assignmentId) {
+                setReviewError("Không tìm thấy assignmentId của bài admin gán để tải review.");
+                return;
+            }
+
+            const raw2 = await assignedExamApi.studentGetReview(assignmentId);
+            const adapted2 = adaptToPracticeReview(raw2, selectedTest);
+            setReviewData(adapted2);
             setOpenReview(true);
         } catch (e) {
             console.error("Load review error:", e);
@@ -583,7 +628,15 @@ export default function UserReview() {
 
     if (loading) {
         return (
-            <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", bgcolor: COLORS.bgLight }}>
+            <Box
+                sx={{
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    minHeight: "100vh",
+                    bgcolor: COLORS.bgLight,
+                }}
+            >
                 <Stack spacing={2} alignItems="center">
                     <CircularProgress size={60} />
                     <Typography sx={{ fontWeight: 700 }}>Đang tải dữ liệu...</Typography>
@@ -594,16 +647,37 @@ export default function UserReview() {
 
     if (error) {
         return (
-            <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", bgcolor: COLORS.bgLight, p: 3 }}>
+            <Box
+                sx={{
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    minHeight: "100vh",
+                    bgcolor: COLORS.bgLight,
+                    p: 3,
+                }}
+            >
                 <Paper sx={{ p: 4, maxWidth: 600, textAlign: "center", borderRadius: "16px" }}>
                     <Typography sx={{ fontSize: 48, mb: 2 }}>⚠️</Typography>
-                    <Typography sx={{ fontSize: 24, fontWeight: 900, mb: 2, color: COLORS.danger }}>Đã xảy ra lỗi</Typography>
-                    <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>
+                    <Typography sx={{ fontSize: 24, fontWeight: 900, mb: 2, color: COLORS.danger }}>
+                        Đã xảy ra lỗi
+                    </Typography>
+                    <Alert severity="error" sx={{ mb: 3 }}>
+                        {error}
+                    </Alert>
                     <Stack direction="row" spacing={2} justifyContent="center">
-                        <Button variant="contained" onClick={() => window.location.reload()} sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700 }}>
+                        <Button
+                            variant="contained"
+                            onClick={() => window.location.reload()}
+                            sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700 }}
+                        >
                             Tải lại trang
                         </Button>
-                        <Button variant="outlined" onClick={() => (window.location.href = "/login")} sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700 }}>
+                        <Button
+                            variant="outlined"
+                            onClick={() => (window.location.href = "/login")}
+                            sx={{ borderRadius: "12px", textTransform: "none", fontWeight: 700 }}
+                        >
                             Đăng nhập lại
                         </Button>
                     </Stack>
@@ -615,7 +689,6 @@ export default function UserReview() {
     return (
         <Box sx={{ bgcolor: COLORS.bgLight, minHeight: "100vh", py: { xs: 2, sm: 3, md: 4 } }}>
             <Container maxWidth="xl">
-                {/* ✅ Header đồng bộ: title left + chip right */}
                 <Stack
                     direction={{ xs: "column", sm: "row" }}
                     justifyContent="space-between"
@@ -640,23 +713,63 @@ export default function UserReview() {
                 </Stack>
 
                 <FilterPanel
-                    search={{ placeholder: "Tìm kiếm theo tên bài thi, module, lớp...", value: searchText, onChange: setSearchText }}
+                    search={{
+                        placeholder: "Tìm kiếm theo tên bài thi, module, lớp...",
+                        value: searchText,
+                        onChange: setSearchText,
+                    }}
                     showFilters={showFilters}
                     onToggleFilters={() => setShowFilters(!showFilters)}
                     onReset={handleResetFilters}
                     resetTooltip="Xóa bộ lọc"
                     fields={{
-                        module: { enabled: true, label: "Module", value: selectedModule, options: modules.map((m) => ({ value: m, label: m })), onChange: setSelectedModule, loading: false },
-                        class: { enabled: true, label: "Lớp học", value: selectedClass, options: classes.map((c) => ({ value: c, label: c })), onChange: setSelectedClass, loading: false },
+                        module: {
+                            enabled: true,
+                            label: "Module",
+                            value: selectedModule,
+                            options: modules.map((m) => ({ value: m, label: m })),
+                            onChange: setSelectedModule,
+                            loading: false,
+                        },
+                        class: {
+                            enabled: true,
+                            label: "Lớp học",
+                            value: selectedClass,
+                            options: classes.map((c) => ({ value: c, label: c })),
+                            onChange: setSelectedClass,
+                            loading: false,
+                        },
                         startDate: { enabled: true, label: "Từ ngày", value: startDate, onChange: setStartDate },
                         endDate: { enabled: true, label: "Đến ngày", value: endDate, onChange: setEndDate },
-                        result: { enabled: true, label: "Kết quả", value: selectedResult, options: [{ value: ALL, label: "Tất cả" }, { value: "Đạt", label: "Đạt" }, { value: "Trượt", label: "Trượt" }], onChange: setSelectedResult, loading: false },
+                        result: {
+                            enabled: true,
+                            label: "Kết quả",
+                            value: selectedResult,
+                            options: [
+                                { value: ALL, label: "Tất cả" },
+                                { value: "Đạt", label: "Đạt" },
+                                { value: "Trượt", label: "Trượt" },
+                            ],
+                            onChange: setSelectedResult,
+                            loading: false,
+                        },
                     }}
                 />
 
                 <Box sx={{ my: { xs: 2, sm: 2.5, md: 3 } }} />
 
-                <Paper elevation={0} sx={{ borderRadius: 2, overflow: "hidden", border: "1px solid", borderColor: "divider", display: "flex", flexDirection: "column", minHeight: { xs: 400, sm: 420 } }}>
+                <Paper
+                    elevation={0}
+                    sx={{
+                        borderRadius: 2,
+                        overflow: "hidden",
+                        border: "1px solid",
+                        borderColor: "divider",
+                        display: "flex",
+                        flexDirection: "column",
+                        minHeight: { xs: 400, sm: 420 },
+                    }}
+                >
                     <Box sx={{ flex: 1, minHeight: 0 }}>
                         <DataGrid
                             rows={filteredTests}
@@ -671,19 +784,37 @@ export default function UserReview() {
                             sx={{
                                 border: 0,
                                 height: "100%",
-                                "& .MuiDataGrid-columnHeaders": { bgcolor: "background.paper", borderBottom: "1px solid", borderColor: "divider" },
+                                "& .MuiDataGrid-columnHeaders": {
+                                    bgcolor: "background.paper",
+                                    borderBottom: "1px solid",
+                                    borderColor: "divider",
+                                },
                                 "& .MuiDataGrid-row:nth-of-type(odd)": { bgcolor: "action.hover" },
                                 "& .MuiDataGrid-cell:focus, & .MuiDataGrid-columnHeader:focus": { outline: "none" },
                             }}
                         />
                     </Box>
 
-                    <Box sx={{ px: { xs: 1, sm: 1.5 }, py: 1, borderTop: "1px solid", borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 1, flexWrap: "wrap" }}>
+                    <Box
+                        sx={{
+                            px: { xs: 1, sm: 1.5 },
+                            py: 1,
+                            borderTop: "1px solid",
+                            borderColor: "divider",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "flex-end",
+                            gap: 1,
+                            flexWrap: "wrap",
+                        }}
+                    >
                         <AppPagination
                             page={paginationModel.page + 1}
                             pageSize={paginationModel.pageSize}
                             total={filteredTests.length}
-                            onPageChange={(nextPage) => setPaginationModel((p) => ({ ...p, page: nextPage - 1 }))}
+                            onPageChange={(nextPage) =>
+                                setPaginationModel((p) => ({ ...p, page: nextPage - 1 }))
+                            }
                             onPageSizeChange={(nextSize) => setPaginationModel({ page: 0, pageSize: nextSize })}
                             pageSizeOptions={[10, 25, 50]}
                             loading={loading}
@@ -700,13 +831,22 @@ export default function UserReview() {
                     PaperProps={{ sx: { borderRadius: isMobile ? 0 : "16px" } }}
                 >
                     <DialogTitle>
-                        <Typography sx={{ fontWeight: 900, fontSize: { xs: 18, sm: 20 } }}>Chi tiết bài thi</Typography>
+                        <Typography sx={{ fontWeight: 900, fontSize: { xs: 18, sm: 20 } }}>
+                            Chi tiết bài thi
+                        </Typography>
                     </DialogTitle>
 
                     <DialogContent>
                         {selectedTest && (
                             <Box>
-                                <Typography sx={{ fontWeight: 700, fontSize: { xs: 16, sm: 18, md: 20 }, mb: 2, textAlign: "center" }}>
+                                <Typography
+                                    sx={{
+                                        fontWeight: 700,
+                                        fontSize: { xs: 16, sm: 18, md: 20 },
+                                        mb: 2,
+                                        textAlign: "center",
+                                    }}
+                                >
                                     {selectedTest.name}
                                 </Typography>
 
@@ -734,8 +874,12 @@ export default function UserReview() {
                                         </TableHead>
                                         <TableBody>
                                             <TableRow>
-                                                <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none", fontSize: { xs: 12, sm: 14 } }}>{selectedTest.module}</TableCell>
-                                                <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none", fontSize: { xs: 12, sm: 14 } }}>{selectedTest.className}</TableCell>
+                                                <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none", fontSize: { xs: 12, sm: 14 } }}>
+                                                    {selectedTest.module}
+                                                </TableCell>
+                                                <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none", fontSize: { xs: 12, sm: 14 } }}>
+                                                    {selectedTest.className}
+                                                </TableCell>
                                                 <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none", whiteSpace: "nowrap" }}>
                                                     <Typography sx={{ fontSize: { xs: 12, sm: 13, md: 14 } }}>
                                                         {formatDateTime(selectedTest.submitTime || selectedTest.startTime).split(" ")[1]}
@@ -744,9 +888,17 @@ export default function UserReview() {
                                                         {formatDateTime(selectedTest.submitTime || selectedTest.startTime).split(" ")[0]}
                                                     </Typography>
                                                 </TableCell>
-                                                <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none", fontSize: { xs: 12, sm: 14 } }}>{selectedTest.durationMinutes} phút</TableCell>
+                                                <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none", fontSize: { xs: 12, sm: 14 } }}>
+                                                    {selectedTest.durationMinutes} phút
+                                                </TableCell>
                                                 <TableCell sx={{ textAlign: "center", py: 1.5, borderBottom: "none" }}>
-                                                    <Typography sx={{ fontWeight: 900, color: getScoreColor(selectedTest.scorePct), fontSize: { xs: 13, sm: 14, md: 15 } }}>
+                                                    <Typography
+                                                        sx={{
+                                                            fontWeight: 900,
+                                                            color: getScoreColor(selectedTest.scorePct),
+                                                            fontSize: { xs: 13, sm: 14, md: 15 },
+                                                        }}
+                                                    >
                                                         {selectedTest.scorePct}/{selectedTest.totalScore}
                                                     </Typography>
                                                 </TableCell>
@@ -790,7 +942,7 @@ export default function UserReview() {
                                 </Button>
 
                                 {reviewError && (
-                                    <Alert severity="error" sx={{ mb: 2 }}>
+                                    <Alert severity="error" sx={{ mt: 2 }}>
                                         {reviewError}
                                     </Alert>
                                 )}
@@ -837,7 +989,11 @@ export default function UserReview() {
                     </DialogActions>
                 </Dialog>
 
-                <PracticeReviewDialog open={openReview} onClose={() => setOpenReview(false)} review={reviewData} />
+                <PracticeReviewDialog
+                    open={openReview}
+                    onClose={() => setOpenReview(false)}
+                    review={reviewData}
+                />
             </Container>
         </Box>
     );
