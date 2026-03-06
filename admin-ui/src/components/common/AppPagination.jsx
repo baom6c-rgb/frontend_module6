@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Box, IconButton, MenuItem, Select, Stack, Button } from "@mui/material";
+import { Box, IconButton, MenuItem, Select, Stack, Button, useMediaQuery, useTheme } from "@mui/material";
 import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 
@@ -39,10 +39,15 @@ export default function AppPagination({
                                           showPageSize = true, // ✅ mặc định có, muốn ẩn thì truyền false
                                           loading = false,
                                       }) {
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
     const totalPages = Math.max(1, Math.ceil((total || 0) / (pageSize || 10)));
     const safePage = Math.min(Math.max(1, page || 1), totalPages);
 
-    const pageItems = useMemo(() => buildPageItems(safePage, totalPages, 1), [safePage, totalPages]);
+    // Trên mobile chỉ hiện 1 trang lân cận, desktop hiện 2
+    const siblingCount = isMobile ? 0 : 1;
+    const pageItems = useMemo(() => buildPageItems(safePage, totalPages, siblingCount), [safePage, totalPages, siblingCount]);
 
     const canPrev = safePage > 1;
     const canNext = safePage < totalPages;
@@ -58,11 +63,18 @@ export default function AppPagination({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "flex-end",
-                gap: 1,
+                gap: 0.75,
                 px: 1,
                 py: 0.75,
                 borderRadius: 3,
                 bgcolor: "transparent",
+                flexWrap: "nowrap",
+                overflowX: "auto",
+                maxWidth: "100%",
+                // Ẩn scrollbar nhưng vẫn scroll được
+                "&::-webkit-scrollbar": { display: "none" },
+                msOverflowStyle: "none",
+                scrollbarWidth: "none",
             }}
         >
             {/* Optional minimal pageSize select */}
@@ -74,7 +86,8 @@ export default function AppPagination({
                     disabled={loading}
                     sx={{
                         height: 34,
-                        minWidth: 76,
+                        minWidth: isMobile ? 64 : 76,
+                        flexShrink: 0,
                         borderRadius: 999,
                         bgcolor: "#fff",
                         "& .MuiSelect-select": {
@@ -99,6 +112,7 @@ export default function AppPagination({
                 sx={{
                     width: 34,
                     height: 34,
+                    flexShrink: 0,
                     borderRadius: 999,
                     bgcolor: "#fff",
                     border: "1px solid rgba(15, 23, 42, 0.10)",
@@ -110,7 +124,7 @@ export default function AppPagination({
             </IconButton>
 
             {/* Page numbers */}
-            <Stack direction="row" spacing={0.6} alignItems="center">
+            <Stack direction="row" spacing={isMobile ? 0.4 : 0.6} alignItems="center" sx={{ flexShrink: 0 }}>
                 {pageItems.map((it, idx) => {
                     const isEllipsis = it === "…";
                     const isActive = it === safePage;
@@ -138,12 +152,13 @@ export default function AppPagination({
                             disabled={loading}
                             variant={isActive ? "contained" : "outlined"}
                             sx={{
-                                minWidth: 34,
-                                height: 34,
+                                minWidth: isMobile ? 30 : 34,
+                                height: isMobile ? 30 : 34,
                                 borderRadius: 999,
                                 px: 1,
                                 py: 0,
                                 fontWeight: 900,
+                                fontSize: isMobile ? "0.75rem" : "0.875rem",
                                 textTransform: "none",
                                 borderColor: isActive ? "transparent" : "rgba(15, 23, 42, 0.10)",
                                 color: isActive ? "#fff" : "#1B2559",
@@ -169,6 +184,7 @@ export default function AppPagination({
                 sx={{
                     width: 34,
                     height: 34,
+                    flexShrink: 0,
                     borderRadius: 999,
                     bgcolor: "#fff",
                     border: "1px solid rgba(15, 23, 42, 0.10)",

@@ -10,6 +10,8 @@ import {
     Tooltip,
     Chip,
     TextField,
+    useMediaQuery,
+    useTheme,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import { useNavigate } from "react-router-dom";
@@ -79,6 +81,8 @@ function formatServerDateTime(input) {
 export default function AdminExamListPage() {
     const navigate = useNavigate();
     const { showToast } = useToast();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down("xs"));
 
     const [loading, setLoading] = useState(false);
     const [rows, setRows] = useState([]);
@@ -420,10 +424,11 @@ export default function AdminExamListPage() {
                         borderTop: "1px solid",
                         borderColor: "divider",
                         display: "flex",
-                        flexDirection: { xs: "column", md: "row" },
-                        alignItems: { xs: "flex-end", md: "center" },
+                        flexDirection: "row",
+                        alignItems: "center",
                         justifyContent: "space-between",
                         gap: 1,
+                        flexWrap: "wrap",
                     }}
                 >
                     {/* Stats */}
@@ -436,7 +441,7 @@ export default function AdminExamListPage() {
                     </Stack>
 
                     {/* Pagination */}
-                    <Box sx={{ alignSelf: "flex-end" }}>
+                    <Box sx={{ flexShrink: 0 }}>
                         <AppPagination
                             page={paginationModel.page + 1}
                             pageSize={paginationModel.pageSize}
@@ -447,6 +452,7 @@ export default function AdminExamListPage() {
                             onPageSizeChange={(nextSize) =>
                                 setPaginationModel({ page: 0, pageSize: nextSize })
                             }
+                            showPageSize={!isMobile}
                         />
                     </Box>
                 </Box>
