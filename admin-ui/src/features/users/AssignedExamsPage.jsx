@@ -1,6 +1,6 @@
 // src/features/users/AssignedExamsPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Box, Button, Chip, Paper, Stack, Tooltip, Typography } from "@mui/material";
+import { Box, Button, Chip, Paper, Stack, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import { useNavigate } from "react-router-dom";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
@@ -144,6 +144,8 @@ function statusChip(status) {
 export default function AssignedExamsPage() {
     const navigate = useNavigate();
     const { showToast } = useToast();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down("xs"));
 
     const [loading, setLoading] = useState(false);
     const [rows, setRows] = useState([]);
@@ -600,18 +602,21 @@ export default function AssignedExamsPage() {
                         flexWrap: "wrap",
                     }}
                 >
-                    <Chip label={`Tổng: ${filteredRows.length}`} size="small" sx={{ fontWeight: 600 }} />
-                    <AppPagination
-                        page={paginationModel.page + 1}
-                        pageSize={paginationModel.pageSize}
-                        total={filteredRows.length}
-                        onPageChange={(nextPage) =>
-                            setPaginationModel((p) => ({ ...p, page: nextPage - 1 }))
-                        }
-                        onPageSizeChange={(nextSize) => setPaginationModel({ page: 0, pageSize: nextSize })}
-                        pageSizeOptions={[10, 25, 50]}
-                        loading={loading}
-                    />
+                    <Chip label={`Tổng: ${filteredRows.length}`} size="small" sx={{ fontWeight: 600, flexShrink: 0 }} />
+                    <Box sx={{ flexShrink: 0 }}>
+                        <AppPagination
+                            page={paginationModel.page + 1}
+                            pageSize={paginationModel.pageSize}
+                            total={filteredRows.length}
+                            onPageChange={(nextPage) =>
+                                setPaginationModel((p) => ({ ...p, page: nextPage - 1 }))
+                            }
+                            onPageSizeChange={(nextSize) => setPaginationModel({ page: 0, pageSize: nextSize })}
+                            pageSizeOptions={[10, 25, 50]}
+                            loading={loading}
+                            showPageSize={!isMobile}
+                        />
+                    </Box>
                 </Box>
             </Paper>
 
