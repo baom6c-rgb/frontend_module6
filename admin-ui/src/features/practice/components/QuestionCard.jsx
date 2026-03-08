@@ -12,10 +12,7 @@ function looksLikeCode(text) {
     const t = String(text).trim();
     if (!t) return false;
 
-    // ✅ Có code fence -> chắc chắn là code
     if (t.includes("```")) return true;
-
-    // ✅ Inline code bọc bằng backtick đơn -> coi như code
     if (t.startsWith("`") && t.endsWith("`") && t.length >= 3) return true;
 
     const hasNewline = t.includes("\n");
@@ -47,18 +44,69 @@ function looksLikeCode(text) {
         "for (",
         "if (",
         "while (",
+        "console.log",
+        "return ",
     ];
 
     const hintHit = codeHints.some((h) => t.includes(h));
 
-    // ✅ Nếu nhiều dòng: chỉ cần có hint
     if (hasNewline) return hintHit;
 
-    // ✅ Nếu 1 dòng: cần "strong hint"
-    const singleLineStrongHints = ["for (", "if (", "while (", "System.out", ";", "{", "}", "=>"];
+    const singleLineStrongHints = [
+        "for (",
+        "if (",
+        "while (",
+        "System.out",
+        "console.log",
+        ";",
+        "{",
+        "}",
+        "=>",
+    ];
     const strongHit = singleLineStrongHints.some((h) => t.includes(h));
 
     return strongHit && hintHit;
+}
+
+function detectCodeLanguage(code) {
+    const t = String(code || "").trim();
+    if (!t) return "text";
+
+    if (
+        t.includes("System.out") ||
+        t.includes("public class") ||
+        t.includes("private ") ||
+        t.includes("public ") ||
+        t.includes("class ") ||
+        t.includes("new ")
+    ) {
+        return "java";
+    }
+
+    if (
+        t.includes("console.log") ||
+        t.includes("const ") ||
+        t.includes("let ") ||
+        t.includes("var ") ||
+        t.includes("function ") ||
+        t.includes("=>")
+    ) {
+        return "javascript";
+    }
+
+    if (
+        t.toUpperCase().includes("SELECT ") ||
+        t.toUpperCase().includes("FROM ") ||
+        t.toUpperCase().includes("WHERE ")
+    ) {
+        return "sql";
+    }
+
+    if (t.includes("<div") || t.includes("</") || t.includes("<html")) {
+        return "markup";
+    }
+
+    return "text";
 }
 
 /**
@@ -71,12 +119,9 @@ function splitTitleAndBody(raw) {
     if (!raw) return { title: "Câu hỏi", body: "" };
 
     const DEFAULT_CODE_TITLE = "Đọc đoạn code sau và chọn đáp án đúng";
-
-    // ✅ normalize newline
     const text = String(raw).replace(/\r\n/g, "\n");
     const trimmedStart = text.trimStart();
 
-    // ✅ Case 1: bắt đầu bằng code fence => chỉ có code
     if (trimmedStart.startsWith("```")) {
         return {
             title: DEFAULT_CODE_TITLE,
@@ -84,7 +129,6 @@ function splitTitleAndBody(raw) {
         };
     }
 
-    // ✅ Case 2: có text rồi mới tới code fence
     const fenceIdx = text.indexOf("```");
     if (fenceIdx > 0) {
         const before = text.slice(0, fenceIdx).trim();
@@ -95,7 +139,6 @@ function splitTitleAndBody(raw) {
         };
     }
 
-    // ✅ Case 3: không có code fence => split dòng 1 như cũ
     const lines = text.split("\n");
 
     if (lines.length >= 2) {
@@ -149,18 +192,56 @@ function parseInlineBacktick(text) {
         const code = t.slice(1, -1).trim();
         if (!code) return null;
 
-        const language =
-            code.includes("System.out") ||
-            code.includes("public ") ||
-            code.includes("private ") ||
-            code.includes("class ") ||
-            code.includes("for (") ||
-            code.includes("if (") ||
-            code.includes("while (")
-                ? "java"
-                : "text";
+        return { language: detectCodeLanguage(code), code };
+    }
 
-        return { language, code };
+    return null;
+}
+
+/**
+ * ✅ FE-only fallback cho output kiểu DeepSeek:
+ * "Cho đoạn code sau: for (...) { ... } Kết quả là gì?"
+ *
+ * Tách thành:
+ * - title
+ * - code
+ * - suffix
+ */
+function extractInlineCodeQuestion(raw) {
+    if (!raw) return null;
+    const text = String(raw).replace(/\r\n/g, "\n").trim();
+    if (!text) return null;
+
+    const patterns = [
+        /(.*?)(for\s*\([\s\S]*?\)\s*\{[\s\S]*?\})(.*)/i,
+        /(.*?)(if\s*\([\s\S]*?\)\s*\{[\s\S]*?\})(.*)/i,
+        /(.*?)(while\s*\([\s\S]*?\)\s*\{[\s\S]*?\})(.*)/i,
+        /(.*?)(do\s*\{[\s\S]*?\}\s*while\s*\([\s\S]*?\)\s*;?)(.*)/i,
+        /(.*?)(function\s+[a-zA-Z_$][\w$]*\s*\([\s\S]*?\)\s*\{[\s\S]*?\})(.*)/i,
+        /(.*?)(const\s+[a-zA-Z_$][\w$]*\s*=\s*[\s\S]*?;)(.*)/i,
+        /(.*?)(let\s+[a-zA-Z_$][\w$]*\s*=\s*[\s\S]*?;)(.*)/i,
+        /(.*?)(var\s+[a-zA-Z_$][\w$]*\s*=\s*[\s\S]*?;)(.*)/i,
+        /(.*?)(System\.out\.println\s*\([\s\S]*?\)\s*;)(.*)/i,
+        /(.*?)(public\s+class\s+[A-Za-z_$][\w$]*\s*\{[\s\S]*?\})(.*)/i,
+        /(.*?)(SELECT[\s\S]+?FROM[\s\S]+?(?:WHERE[\s\S]+?)?;?)(.*)/i,
+    ];
+
+    for (const regex of patterns) {
+        const match = text.match(regex);
+        if (!match) continue;
+
+        const before = (match[1] || "").trim();
+        const code = (match[2] || "").trim();
+        const after = (match[3] || "").trim();
+
+        if (!code || !looksLikeCode(code)) continue;
+
+        return {
+            title: before || "Đọc đoạn code sau và chọn đáp án đúng",
+            code,
+            suffix: after,
+            language: detectCodeLanguage(code),
+        };
     }
 
     return null;
@@ -179,7 +260,6 @@ function CodeBlock({ language, code }) {
                 bgcolor: "#0f172a",
             }}
         >
-            {/* Header giống IDE (không có nút copy) */}
             <Box
                 sx={{
                     px: 1.25,
@@ -192,7 +272,6 @@ function CodeBlock({ language, code }) {
                 </Typography>
             </Box>
 
-            {/* Code */}
             <Box sx={{ px: 1, pb: 1 }}>
                 <SyntaxHighlighter
                     language={language}
@@ -226,7 +305,6 @@ export default function QuestionCard({ question, index, value, onChange }) {
     const isMcq = qType === "MCQ";
     const isEssay = qType === "ESSAY" || qType === "SHORT_ANSWER";
 
-    // ✅ fallback rộng hơn để tránh “mất câu hỏi” nếu BE trả field khác
     const rawContent =
         question?.content ??
         question?.question ??
@@ -235,20 +313,53 @@ export default function QuestionCard({ question, index, value, onChange }) {
         question?.stem ??
         "Câu hỏi";
 
+    const explicitCode = useMemo(() => {
+        const code =
+            question?.codeBlock ??
+            question?.code ??
+            question?.snippet ??
+            question?.sourceCode ??
+            null;
+
+        if (!code || !String(code).trim()) return null;
+
+        const language = String(
+            question?.codeLanguage ?? question?.language ?? detectCodeLanguage(code)
+        )
+            .trim()
+            .toLowerCase();
+
+        return {
+            language: language || "text",
+            code: String(code),
+        };
+    }, [question]);
+
     const { title, body } = useMemo(() => splitTitleAndBody(rawContent), [rawContent]);
 
-    // ✅ ưu tiên: code fence -> inline backtick -> fallback heuristic
+    const inlineExtracted = useMemo(() => {
+        if (explicitCode) return null;
+        if (body) return null;
+        return extractInlineCodeQuestion(rawContent);
+    }, [explicitCode, body, rawContent]);
+
     const fenced = useMemo(
         () =>
+            explicitCode ||
             parseCodeFence(body) ||
             parseCodeFence(rawContent) ||
             parseInlineBacktick(body) ||
-            parseInlineBacktick(rawContent),
-        [body, rawContent]
+            parseInlineBacktick(rawContent) ||
+            (inlineExtracted
+                ? { language: inlineExtracted.language, code: inlineExtracted.code }
+                : null),
+        [explicitCode, body, rawContent, inlineExtracted]
     );
 
-    // ✅ fallback heuristic code (không có fence/backtick nhưng vẫn là snippet)
-    const showBodyAsCode = useMemo(() => !fenced && looksLikeCode(body), [body, fenced]);
+    const showBodyAsCode = useMemo(() => {
+        if (fenced) return false;
+        return looksLikeCode(body);
+    }, [body, fenced]);
 
     const options = useMemo(() => {
         if (!isMcq) return null;
@@ -267,6 +378,9 @@ export default function QuestionCard({ question, index, value, onChange }) {
     const selectedAnswer = value?.selectedAnswer || null;
     const textAnswer = value?.textAnswer || "";
 
+    const displayTitle = inlineExtracted?.title || title;
+    const displaySuffix = inlineExtracted?.suffix || "";
+
     return (
         <Paper
             elevation={0}
@@ -277,7 +391,6 @@ export default function QuestionCard({ question, index, value, onChange }) {
                 bgcolor: "#fff",
             }}
         >
-            {/* Header */}
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
                 <Typography sx={{ fontWeight: 900, color: "#1B2559", fontSize: 18 }}>
                     Câu {index + 1}:
@@ -294,9 +407,7 @@ export default function QuestionCard({ question, index, value, onChange }) {
                 />
             </Box>
 
-            {/* Question content */}
             <Box sx={{ mt: 1.25 }}>
-                {/* Title line */}
                 <Typography
                     sx={{
                         fontWeight: 900,
@@ -307,14 +418,39 @@ export default function QuestionCard({ question, index, value, onChange }) {
                         wordBreak: "break-word",
                     }}
                 >
-                    {title}
+                    {displayTitle}
                 </Typography>
 
-                {/* Body */}
-                {Boolean(body) && (
+                {(Boolean(body) || Boolean(fenced) || Boolean(displaySuffix)) && (
                     <>
                         {fenced ? (
-                            <CodeBlock language={fenced.language} code={fenced.code} />
+                            <>
+                                <CodeBlock language={fenced.language} code={fenced.code} />
+
+                                {displaySuffix ? (
+                                    <Box
+                                        sx={{
+                                            mt: 1.25,
+                                            border: "1px solid #E3E8EF",
+                                            borderRadius: 2,
+                                            bgcolor: "#FFFFFF",
+                                            p: 1.25,
+                                        }}
+                                    >
+                                        <Typography
+                                            sx={{
+                                                whiteSpace: "pre-wrap",
+                                                wordBreak: "break-word",
+                                                fontSize: 14,
+                                                lineHeight: 1.55,
+                                                color: "#1B2559",
+                                            }}
+                                        >
+                                            {displaySuffix}
+                                        </Typography>
+                                    </Box>
+                                ) : null}
+                            </>
                         ) : showBodyAsCode ? (
                             <Box
                                 sx={{
@@ -339,7 +475,7 @@ export default function QuestionCard({ question, index, value, onChange }) {
                                     {body}
                                 </Typography>
                             </Box>
-                        ) : (
+                        ) : Boolean(body) ? (
                             <Box
                                 sx={{
                                     mt: 1.25,
@@ -361,12 +497,11 @@ export default function QuestionCard({ question, index, value, onChange }) {
                                     {body}
                                 </Typography>
                             </Box>
-                        )}
+                        ) : null}
                     </>
                 )}
             </Box>
 
-            {/* Answers */}
             {isMcq ? (
                 <Box sx={{ mt: 2, display: "grid", gap: 1.25 }}>
                     {["A", "B", "C", "D"].map((k) => {
