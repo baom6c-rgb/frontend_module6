@@ -46,6 +46,12 @@ const clampInt = (v, min, max) => {
     return Math.max(min, Math.min(max, Math.trunc(n)));
 };
 
+const clampFloat = (v, min, max, fallback = min) => {
+    const n = Number(v);
+    if (Number.isNaN(n)) return fallback;
+    return Math.max(min, Math.min(max, n));
+};
+
 const isValidTimeHHmm = (s) => {
     if (!s || typeof s !== "string") return false;
     return /^([01]\d|2[0-3]):[0-5]\d$/.test(s.trim());
@@ -100,13 +106,36 @@ const TASKS = {
     MODEL_AI: 3,
 };
 
-// 🔒 UI policy: Model + Temperature locked (read-only)
-const LOCK_AI_MODEL = true;
-const LOCK_AI_TEMPERATURE = true;
-const LOCK_AI_PROVIDER = true;
+const AI_PROVIDER_OPTIONS = [
+    { value: "GEMINI", label: "Gemini" },
+    { value: "OPENROUTER", label: "OpenRouter" },
+];
 
-// Temperature bắt buộc 0.0 cho stability
-const FORCED_AI_TEMPERATURE = 0.0;
+const AI_MODELS = {
+    GEMINI: [
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.0-flash",
+    ],
+    OPENROUTER: [
+        "deepseek/deepseek-chat",
+        "deepseek/deepseek-r1",
+        "deepseek/deepseek-r1:free",
+    ],
+};
+
+const DEFAULT_MODEL_BY_PROVIDER = {
+    GEMINI: "gemini-2.5-flash",
+    OPENROUTER: "deepseek/deepseek-chat",
+};
+
+const normalizeProvider = (provider) => {
+    const p = String(provider || "").trim().toUpperCase();
+    return p === "OPENROUTER" ? "OPENROUTER" : "GEMINI";
+};
+
+const getDefaultModelByProvider = (provider) =>
+    DEFAULT_MODEL_BY_PROVIDER[normalizeProvider(provider)] || "gemini-2.5-flash";
 
 export default function AdminSettings() {
     const { showToast } = useToast();
@@ -119,7 +148,6 @@ export default function AdminSettings() {
 
     const [activeTask, setActiveTask] = useState(TASKS.PRACTICE);
 
-    // ===== Base settings form =====
     const [form, setForm] = useState({
         passScore: "",
         minutesPerQuestion: "",
@@ -128,7 +156,6 @@ export default function AdminSettings() {
         emailNotificationsEnabled: false,
         adminEmails: "",
 
-        // ✅ NEW: distribution counts (Admin config)
         mcqQuestionCount: 10,
         essayQuestionCount: 0,
 
@@ -138,7 +165,6 @@ export default function AdminSettings() {
         monthlyReportTimeZone: DEFAULT_TIMEZONE,
     });
 
-    // ===== Admin email chips =====
     const [emailInput, setEmailInput] = useState("");
     const [adminEmailList, setAdminEmailList] = useState([]);
 
@@ -148,7 +174,6 @@ export default function AdminSettings() {
     const [updatedAt, setUpdatedAt] = useState(null);
     const [lastSentYearMonth, setLastSentYearMonth] = useState(null);
 
-    // ===== AI settings =====
     const [aiLoading, setAiLoading] = useState(false);
     const [aiUpdatedAt, setAiUpdatedAt] = useState(null);
     const [aiKeyMasked, setAiKeyMasked] = useState(null);
@@ -156,7 +181,7 @@ export default function AdminSettings() {
     const [aiForm, setAiForm] = useState({
         aiProvider: "GEMINI",
         aiModel: "gemini-2.5-flash",
-        aiTemperature: FORCED_AI_TEMPERATURE,
+        aiTemperature: 0.0,
         aiEnabled: true,
         aiApiKey: "",
     });
@@ -166,7 +191,6 @@ export default function AdminSettings() {
     const [removeKeyOpen, setRemoveKeyOpen] = useState(false);
     const [deletingAiKey, setDeletingAiKey] = useState(false);
 
-    // ===== Load base settings =====
     useEffect(() => {
         let mounted = true;
         setLoading(true);
@@ -212,7 +236,6 @@ export default function AdminSettings() {
         };
     }, [showToast]);
 
-    // ===== Load AI settings on demand (tab open) =====
     useEffect(() => {
         let mounted = true;
         if (activeTask !== TASKS.MODEL_AI) return;
@@ -223,14 +246,16 @@ export default function AdminSettings() {
             .then((data) => {
                 if (!mounted) return;
 
-                setAiForm((prev) => ({
-                    ...prev,
-                    aiProvider: data.aiProvider ?? "GEMINI",
-                    aiModel: data.aiModel ?? prev.aiModel ?? "gemini-2.5-flash",
-                    aiTemperature: FORCED_AI_TEMPERATURE,
+                const provider = normalizeProvider(data.aiProvider);
+                const model = String(data.aiModel || "").trim() || getDefaultModelByProvider(provider);
+
+                setAiForm({
+                    aiProvider: provider,
+                    aiModel: model,
+                    aiTemperature: clampFloat(data.aiTemperature, 0, 1, 0),
                     aiEnabled: data.aiEnabled !== false,
                     aiApiKey: "",
-                }));
+                });
 
                 setAiKeyMasked(data.aiApiKeyMasked ?? null);
                 setAiUpdatedAt(data.updatedAt ?? null);
@@ -255,14 +280,35 @@ export default function AdminSettings() {
     const handleAiChange = (field) => (e) => {
         const value = field === "aiEnabled" ? e.target.checked : e.target.value;
 
-        if (LOCK_AI_PROVIDER && field === "aiProvider") return;
-        if (LOCK_AI_MODEL && field === "aiModel") return;
-        if (LOCK_AI_TEMPERATURE && field === "aiTemperature") return;
+        if (field === "aiProvider") {
+            const nextProvider = normalizeProvider(value);
+            setAiForm((prev) => {
+                const currentModel = String(prev.aiModel || "").trim();
+                const availableModels = AI_MODELS[nextProvider] || [];
+                const nextModel = availableModels.includes(currentModel)
+                    ? currentModel
+                    : getDefaultModelByProvider(nextProvider);
+
+                return {
+                    ...prev,
+                    aiProvider: nextProvider,
+                    aiModel: nextModel,
+                };
+            });
+            return;
+        }
+
+        if (field === "aiTemperature") {
+            setAiForm((prev) => ({
+                ...prev,
+                aiTemperature: value,
+            }));
+            return;
+        }
 
         setAiForm((prev) => ({ ...prev, [field]: value }));
     };
 
-    // minutesPerQuestion (minutes) ↔ UI (seconds)
     const displaySecondsPerQuestion = useMemo(() => {
         const m = Number(form.minutesPerQuestion);
         if (Number.isNaN(m) || !Number.isFinite(m)) return "";
@@ -282,7 +328,6 @@ export default function AdminSettings() {
         setForm((prev) => ({ ...prev, minutesPerQuestion: seconds / 60 }));
     };
 
-    // Email chips
     const addAdminEmail = () => {
         const email = String(emailInput || "").trim().toLowerCase();
         if (!email) return;
@@ -303,7 +348,6 @@ export default function AdminSettings() {
         setForm((prev) => ({ ...prev, adminEmails: toEmailCsv(next) }));
     };
 
-    // Monthly report time preset/custom
     const handleTimePresetChange = (e) => {
         const v = e.target.value;
 
@@ -335,6 +379,16 @@ export default function AdminSettings() {
         return { mcq, essay, total, estMinutes };
     }, [form.essayQuestionCount, form.mcqQuestionCount, form.minutesPerQuestion]);
 
+    const currentAiModelOptions = useMemo(() => {
+        return AI_MODELS[normalizeProvider(aiForm.aiProvider)] || [];
+    }, [aiForm.aiProvider]);
+
+    const providerDescription = useMemo(() => {
+        return normalizeProvider(aiForm.aiProvider) === "OPENROUTER"
+            ? "Dùng OpenRouter để gọi model như DeepSeek."
+            : "Dùng Gemini trực tiếp từ Google AI.";
+    }, [aiForm.aiProvider]);
+
     const saveDisabledReason = useMemo(() => {
         const passScore = Number(form.passScore);
         const minutesPerQuestion = Number(form.minutesPerQuestion);
@@ -365,13 +419,18 @@ export default function AdminSettings() {
         }
 
         if (activeTask === TASKS.MODEL_AI) {
-            const provider = String(aiForm.aiProvider || "").trim().toUpperCase();
+            const provider = normalizeProvider(aiForm.aiProvider);
             const model = String(aiForm.aiModel || "").trim();
+            const temp = Number(aiForm.aiTemperature);
 
             if (!provider) return "Provider không được rỗng";
-            if (provider !== "GEMINI") return "Hiện chỉ hỗ trợ provider: GEMINI";
+            if (!["GEMINI", "OPENROUTER"].includes(provider)) {
+                return "Provider chỉ hỗ trợ GEMINI hoặc OPENROUTER";
+            }
             if (!model) return "Model không được rỗng";
-
+            if (Number.isNaN(temp) || temp < 0 || temp > 1) {
+                return "Temperature phải trong khoảng 0.0 - 1.0";
+            }
             return null;
         }
 
@@ -387,7 +446,6 @@ export default function AdminSettings() {
 
         setSaving(true);
         try {
-            // ===== SAVE BASE SETTINGS =====
             if (activeTask !== TASKS.MODEL_AI) {
                 const payload = {
                     passScore: clampInt(form.passScore, 0, 100),
@@ -434,32 +492,33 @@ export default function AdminSettings() {
                     monthlyReportTimeZone: updated.monthlyReportTimeZone ?? prev.monthlyReportTimeZone,
                 }));
 
-                // keep chips in sync if backend normalized emails
                 setAdminEmailList(parseEmails(updated.adminEmails ?? toEmailCsv(adminEmailList)));
 
                 showToast("Lưu cấu hình thành công!", "success");
                 return;
             }
 
-            // ===== SAVE AI SETTINGS =====
+            const provider = normalizeProvider(aiForm.aiProvider);
+
             const aiPayload = {
-                aiProvider: "GEMINI",
+                aiProvider: provider,
                 aiModel: String(aiForm.aiModel || "").trim(),
-                aiTemperature: FORCED_AI_TEMPERATURE,
+                aiTemperature: clampFloat(aiForm.aiTemperature, 0, 1, 0),
                 aiEnabled: !!aiForm.aiEnabled,
                 aiApiKey: String(aiForm.aiApiKey || "").trim(),
             };
 
             const updatedAi = await adminSettingsApi.updateAi(aiPayload);
+            const nextProvider = normalizeProvider(updatedAi.aiProvider ?? provider);
 
             setAiUpdatedAt(updatedAi.updatedAt ?? null);
             setAiKeyMasked(updatedAi.aiApiKeyMasked ?? aiKeyMasked);
 
             setAiForm((prev) => ({
                 ...prev,
-                aiProvider: updatedAi.aiProvider ?? prev.aiProvider,
-                aiModel: updatedAi.aiModel ?? prev.aiModel,
-                aiTemperature: FORCED_AI_TEMPERATURE,
+                aiProvider: nextProvider,
+                aiModel: String(updatedAi.aiModel || "").trim() || getDefaultModelByProvider(nextProvider),
+                aiTemperature: clampFloat(updatedAi.aiTemperature, 0, 1, prev.aiTemperature),
                 aiEnabled: updatedAi.aiEnabled !== false,
                 aiApiKey: "",
             }));
@@ -480,7 +539,6 @@ export default function AdminSettings() {
         try {
             const updated = await adminSettingsApi.deleteAiKey();
 
-            // backend có thể trả updated settings; nếu không thì vẫn set local
             setAiUpdatedAt(updated?.updatedAt ?? new Date().toISOString());
             setAiKeyMasked(updated?.aiApiKeyMasked ?? null);
 
@@ -501,7 +559,6 @@ export default function AdminSettings() {
         }
     };
 
-    // ===== RENDER SECTIONS =====
     const sectionPaperSx = {
         p: { xs: 1.5, sm: 2 },
         borderRadius: 2.5,
@@ -586,7 +643,6 @@ export default function AdminSettings() {
                     sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
                 />
 
-                {/* ✅ NEW: question distribution */}
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
                     <TextField
                         label="Số câu trắc nghiệm (MCQ)"
@@ -834,7 +890,6 @@ export default function AdminSettings() {
     const renderReportTask = () => (
         <Paper sx={sectionPaperSx}>
             <Stack spacing={{ xs: 1.5, sm: 2 }}>
-                {/* Header */}
                 <Box sx={{ minWidth: 0 }}>
                     <Stack direction="row" alignItems="center" spacing={1.5} mb={0.5} sx={{ minWidth: 0 }}>
                         <Box
@@ -882,7 +937,6 @@ export default function AdminSettings() {
 
                 <Divider />
 
-                {/* Summary cards */}
                 <Box
                     sx={{
                         display: "grid",
@@ -890,7 +944,6 @@ export default function AdminSettings() {
                         gap: { xs: 1, sm: 1.25 },
                     }}
                 >
-                    {/* Enable */}
                     <Box
                         sx={{
                             p: { xs: 1.5, sm: 2 },
@@ -927,7 +980,6 @@ export default function AdminSettings() {
                         </Stack>
                     </Box>
 
-                    {/* System info */}
                     <Box
                         sx={{
                             p: { xs: 1.5, sm: 2 },
@@ -964,7 +1016,6 @@ export default function AdminSettings() {
                     </Box>
                 </Box>
 
-                {/* Schedule config */}
                 <Box
                     sx={{
                         p: { xs: 1.5, sm: 2 },
@@ -1125,7 +1176,6 @@ export default function AdminSettings() {
     const renderModelAiTask = () => (
         <Paper sx={sectionPaperSx}>
             <Stack spacing={{ xs: 1.5, sm: 2 }}>
-                {/* Header */}
                 <Box sx={{ minWidth: 0 }}>
                     <Stack direction="row" alignItems="center" spacing={1.5} mb={0.5} sx={{ minWidth: 0 }}>
                         <Box
@@ -1156,7 +1206,7 @@ export default function AdminSettings() {
                                         Model AI
                                     </Typography>
                                     <Typography variant="body2" color="text.secondary">
-                                        Quản lý trạng thái AI và thay API Key.
+                                        Quản lý provider, model, temperature và API Key.
                                     </Typography>
                                 </Box>
 
@@ -1181,7 +1231,6 @@ export default function AdminSettings() {
                     </Box>
                 ) : (
                     <>
-                        {/* Summary cards */}
                         <Box
                             sx={{
                                 display: "grid",
@@ -1189,7 +1238,6 @@ export default function AdminSettings() {
                                 gap: { xs: 1, sm: 1.25 },
                             }}
                         >
-                            {/* AI Enabled */}
                             <Box
                                 sx={{
                                     p: { xs: 1.5, sm: 2 },
@@ -1226,7 +1274,6 @@ export default function AdminSettings() {
                                 </Stack>
                             </Box>
 
-                            {/* Provider */}
                             <Box
                                 sx={{
                                     p: { xs: 1.5, sm: 2 },
@@ -1239,18 +1286,17 @@ export default function AdminSettings() {
                                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
                                     <MemoryRoundedIcon fontSize="small" color="info" />
                                     <Typography variant="subtitle2" color="text.secondary">
-                                        Provider
+                                        Provider hiện tại
                                     </Typography>
                                 </Stack>
                                 <Typography variant="h6" fontWeight={900}>
-                                    {String(aiForm.aiProvider || "GEMINI").toUpperCase()}
+                                    {normalizeProvider(aiForm.aiProvider)}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                                    Hiện tại hệ thống chỉ hỗ trợ GEMINI.
+                                    {providerDescription}
                                 </Typography>
                             </Box>
 
-                            {/* Model */}
                             <Box
                                 sx={{
                                     p: { xs: 1.5, sm: 2 },
@@ -1267,14 +1313,13 @@ export default function AdminSettings() {
                                     </Typography>
                                 </Stack>
                                 <Typography variant="h6" fontWeight={900}>
-                                    {aiForm.aiModel}
+                                    {aiForm.aiModel || "-"}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                                     Mô hình AI đang được sử dụng để tạo nội dung.
                                 </Typography>
                             </Box>
 
-                            {/* Temperature */}
                             <Box
                                 sx={{
                                     p: { xs: 1.5, sm: 2 },
@@ -1291,15 +1336,95 @@ export default function AdminSettings() {
                                     </Typography>
                                 </Stack>
                                 <Typography variant="h6" fontWeight={900}>
-                                    {String(FORCED_AI_TEMPERATURE)}
+                                    {String(aiForm.aiTemperature)}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                                    Đang cố định ở 0.0 để đảm bảo output ổn định.
+                                    Dùng giá trị thấp để output ổn định hơn, giá trị cao để đa dạng hơn.
                                 </Typography>
                             </Box>
                         </Box>
 
-                        {/* API Key */}
+                        <Box
+                            sx={{
+                                p: { xs: 1.5, sm: 2 },
+                                borderRadius: 2,
+                                border: "1px solid",
+                                borderColor: "divider",
+                                bgcolor: (theme) =>
+                                    theme.palette.mode === "dark"
+                                        ? alpha(theme.palette.background.paper, 0.55)
+                                        : alpha(theme.palette.background.paper, 0.85),
+                            }}
+                        >
+                            <Stack spacing={2}>
+                                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                                    <TextField
+                                        select
+                                        label="AI Provider"
+                                        value={aiForm.aiProvider}
+                                        onChange={handleAiChange("aiProvider")}
+                                        fullWidth
+                                        helperText="Chọn provider AI"
+                                        InputProps={{
+                                            startAdornment: (
+                                                <InputAdornment position="start">
+                                                    <MemoryRoundedIcon fontSize="small" />
+                                                </InputAdornment>
+                                            ),
+                                        }}
+                                        sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                                    >
+                                        {AI_PROVIDER_OPTIONS.map((item) => (
+                                            <MenuItem key={item.value} value={item.value}>
+                                                {item.label}
+                                            </MenuItem>
+                                        ))}
+                                    </TextField>
+
+                                    <TextField
+                                        select
+                                        label="Model"
+                                        value={aiForm.aiModel}
+                                        onChange={handleAiChange("aiModel")}
+                                        fullWidth
+                                        helperText="Chọn model mặc định cho provider hiện tại"
+                                        InputProps={{
+                                            startAdornment: (
+                                                <InputAdornment position="start">
+                                                    <SmartToyRoundedIcon fontSize="small" />
+                                                </InputAdornment>
+                                            ),
+                                        }}
+                                        sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                                    >
+                                        {currentAiModelOptions.map((model) => (
+                                            <MenuItem key={model} value={model}>
+                                                {model}
+                                            </MenuItem>
+                                        ))}
+                                    </TextField>
+                                </Stack>
+
+                                <TextField
+                                    label="Temperature"
+                                    type="number"
+                                    value={aiForm.aiTemperature}
+                                    onChange={handleAiChange("aiTemperature")}
+                                    fullWidth
+                                    inputProps={{ min: 0, max: 1, step: 0.1 }}
+                                    helperText="Giá trị từ 0.0 đến 1.0"
+                                    InputProps={{
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <ThermostatRoundedIcon fontSize="small" />
+                                            </InputAdornment>
+                                        ),
+                                    }}
+                                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                                />
+                            </Stack>
+                        </Box>
+
                         <Box
                             sx={{
                                 p: { xs: 1.5, sm: 2 },
@@ -1350,7 +1475,6 @@ export default function AdminSettings() {
                                             />
                                         )}
 
-                                        {/* ✅ NEW: remove key button */}
                                         {aiKeyMasked && (
                                             <Button
                                                 variant="outlined"
@@ -1372,11 +1496,11 @@ export default function AdminSettings() {
                                 </Stack>
 
                                 <Typography variant="body2" color="text.secondary">
-                                    Nhập key mới rồi bấm <b>Lưu cấu hình</b>. Nếu để trống thì hệ thống giữ key cũ.
+                                    Key được lưu theo provider hiện tại. Nếu để trống rồi bấm lưu thì hệ thống giữ key cũ.
                                 </Typography>
 
                                 <TextField
-                                    label="Nhập API Key mới"
+                                    label={`Nhập API Key mới cho ${normalizeProvider(aiForm.aiProvider)}`}
                                     value={aiForm.aiApiKey}
                                     onChange={handleAiChange("aiApiKey")}
                                     fullWidth
@@ -1421,11 +1545,10 @@ export default function AdminSettings() {
                             </Stack>
                         </Box>
 
-                        {/* ✅ NEW: Confirm dialog */}
                         <AppConfirm
                             open={removeKeyOpen}
                             title="Xoá AI API Key?"
-                            message="Thao tác này sẽ xoá key hiện tại. AI sẽ không hoạt động cho đến khi bạn nhập key mới."
+                            message="Thao tác này sẽ xoá key hiện tại của provider đang chọn. AI sẽ không hoạt động cho đến khi bạn nhập key mới."
                             onClose={() => setRemoveKeyOpen(false)}
                             onConfirm={handleRemoveAiKey}
                             loading={deletingAiKey}
@@ -1460,7 +1583,6 @@ export default function AdminSettings() {
                     py: { xs: 1.5, sm: 2 },
                 }}
             >
-                {/* Header */}
                 <Box mb={{ xs: 1.5, sm: 2 }}>
                     <Stack
                         direction={{ xs: "column", sm: "row" }}
@@ -1483,7 +1605,6 @@ export default function AdminSettings() {
                     </Stack>
                 </Box>
 
-                {/* Tabs */}
                 <Paper
                     sx={{
                         borderRadius: 2.5,
@@ -1525,7 +1646,6 @@ export default function AdminSettings() {
                     </Tabs>
                 </Paper>
 
-                {/* Content */}
                 <Box mb={2}>
                     {activeTask === TASKS.PRACTICE && renderPracticeTask()}
                     {activeTask === TASKS.EMAIL && renderEmailTask()}
@@ -1533,7 +1653,6 @@ export default function AdminSettings() {
                     {activeTask === TASKS.MODEL_AI && renderModelAiTask()}
                 </Box>
 
-                {/* Footer */}
                 <Paper
                     sx={{
                         p: { xs: 1.5, sm: 2 },

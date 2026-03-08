@@ -1,4 +1,3 @@
-// src/features/practice/PracticePage.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, BottomNavigation, BottomNavigationAction, IconButton, Paper, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
 
@@ -46,18 +45,31 @@ const toPositiveIntOrNull = (v) => {
     return n;
 };
 
+const extractApiMessage = (e, fallback = "Đã xảy ra lỗi.") => {
+    const data = e?.response?.data;
+
+    if (typeof data === "string" && data.trim()) return data.trim();
+    if (typeof data?.message === "string" && data.message.trim()) return data.message.trim();
+    if (typeof data?.error === "string" && data.error.trim()) return data.error.trim();
+    if (typeof e?.message === "string" && e.message.trim()) return e.message.trim();
+
+    return fallback;
+};
+
+const buildAssistantErrorText = (prefix, e, fallback) => {
+    const msg = extractApiMessage(e, fallback);
+    return prefix ? `${prefix} ${msg}` : msg;
+};
+
 export default function PracticePage() {
     const { showToast } = useToast();
 
-    // ===== Responsive breakpoints =====
     const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down("md"));      // < 900px
-    const isTablet = useMediaQuery(theme.breakpoints.between("md", "lg")); // 900–1200px
+    const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+    const isTablet = useMediaQuery(theme.breakpoints.between("md", "lg"));
 
-    // Mobile: tab index 0=Chat, 1=Canvas
     const [mobileTab, setMobileTab] = useState(0);
 
-    // ===== Focus mode / auto hide sidebar =====
     useEffect(() => {
         document.body.classList.add("practice-focus-mode");
 
@@ -84,25 +96,20 @@ export default function PracticePage() {
         };
     }, []);
 
-    // ===== Loading =====
     const [loading, setLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState("Vui lòng chờ...");
 
-    // ===== Topic selection (multi-part material) =====
     const [topicDialogOpen, setTopicDialogOpen] = useState(false);
     const [topicOptions, setTopicOptions] = useState([]);
     const [selectionToken, setSelectionToken] = useState("");
     const [topicLoading, setTopicLoading] = useState(false);
 
-    // ===== Config =====
-    const [questionCount, setQuestionCount] = useState(null); // number|null
+    const [questionCount, setQuestionCount] = useState(null);
     const [durationMinutes, setDurationMinutes] = useState(0);
 
-    // from BE SystemSettings (fallback default)
     const [minutesPerQuestion, setMinutesPerQuestion] = useState(DEFAULT_MINUTES_PER_QUESTION);
     const minutesPerQuestionRef = useRef(DEFAULT_MINUTES_PER_QUESTION);
 
-    // ===== Material / session =====
     const [materialId, setMaterialId] = useState(null);
     const materialIdRef = useRef(null);
 
@@ -117,24 +124,16 @@ export default function PracticePage() {
     const [attemptDetail, setAttemptDetail] = useState(null);
     const [attemptQuestionCount, setAttemptQuestionCount] = useState(null);
 
-    // ===== UI =====
-    // READY/RESULT: toggle canvas -> chat 100% if closed
     const [isCanvasOpen, setIsCanvasOpen] = useState(true);
-    // DOING: toggle chat -> canvas 100% if closed
     const [isChatOpen, setIsChatOpen] = useState(true);
 
-    // ===== Result / review =====
     const [result, setResult] = useState(null);
     const [reviewOpen, setReviewOpen] = useState(false);
     const [reviewData, setReviewData] = useState(null);
 
-    // ===== Player ref =====
     const playerRef = useRef(null);
-
-    // ===== Confirm manager =====
     const confirmRef = useRef(null);
 
-    // ===== Assistant tab =====
     const [assistantMode, setAssistantMode] = useState(ASSISTANT_MODE.GENERATE);
 
     const lockGenerate = mode === MODE.DOING;
@@ -148,7 +147,6 @@ export default function PracticePage() {
         [lockGenerate]
     );
 
-    // ===== Chat state =====
     const [messages, setMessages] = useState([
         {
             id: uid("a"),
@@ -161,7 +159,6 @@ export default function PracticePage() {
         setMessages((prev) => [...prev, { id: uid(msg.role?.[0] || "m"), ...msg }]);
     }, []);
 
-    // ===== Study chat (keyword-only) =====
     const [studySessionId, setStudySessionId] = useState(null);
     const [studyMessages, setStudyMessages] = useState([
         { id: "intro", role: "assistant", text: "Nhập từ khóa liên quan bài học. Mình chỉ gợi ý khái niệm tổng quát, không đưa đáp án." },
@@ -182,7 +179,6 @@ export default function PracticePage() {
         return assistantMode === ASSISTANT_MODE.GENERATE ? messages : studyMessages;
     }, [assistantMode, messages, studyMessages]);
 
-    // ===== Storage helpers =====
     const saveActiveSession = useCallback((next) => {
         try {
             localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(next));
@@ -207,7 +203,6 @@ export default function PracticePage() {
         } catch {}
     }, []);
 
-    // ===== Fetch settings for minutesPerQuestion =====
     useEffect(() => {
         let mounted = true;
 
@@ -247,7 +242,6 @@ export default function PracticePage() {
         };
     }, []);
 
-    // ===== Auto-fill duration in READY-TO-GENERATE state =====
     useEffect(() => {
         const mat = materialIdRef.current ?? materialId;
         const safeCount = toPositiveIntOrNull(questionCount);
@@ -267,7 +261,6 @@ export default function PracticePage() {
         if (est > 0 && est !== Number(durationMinutes)) setDurationMinutes(est);
     }, [attemptDetail, durationMinutes, materialId, mode, questionCount, result, sessionToken]);
 
-    // ===== Reset practice state =====
     const resetPracticeState = useCallback(
         (opts = { keepMessages: true }) => {
             clearActiveSession();
@@ -293,7 +286,6 @@ export default function PracticePage() {
             setDurationMinutes(0);
             setQuestionCount(null);
 
-            // UI reset
             setIsCanvasOpen(true);
             setIsChatOpen(true);
 
@@ -309,7 +301,6 @@ export default function PracticePage() {
         [appendMessage, clearActiveSession, clearPersistedResult, resetStudyChat]
     );
 
-    // ===== Extracted text polling =====
     async function waitForExtractedTextOrReady(id) {
         const MAX_TRIES = 25;
         const SLEEP_MS = 700;
@@ -321,13 +312,11 @@ export default function PracticePage() {
                 const t = typeof data === "string" ? data : data?.text ?? data?.extractedText ?? "";
                 if (t && t.trim().length > 0) return t.trim();
             } catch {}
-            // eslint-disable-next-line no-await-in-loop
             await new Promise((r) => setTimeout(r, SLEEP_MS));
         }
         return "";
     }
 
-    // ===== Upload file =====
     const handleUploadFile = useCallback(
         async (file) => {
             if (!file) return;
@@ -378,7 +367,6 @@ export default function PracticePage() {
                 clearActiveSession();
                 resetStudyChat();
 
-                // Upload/Paste: để user thao tác tạo đề => chat/canvas mở
                 setIsChatOpen(true);
                 setIsCanvasOpen(true);
 
@@ -394,10 +382,14 @@ export default function PracticePage() {
                 showToast("Đã nhận học liệu. Bấm Gửi để tạo đề.", "success");
             } catch (e) {
                 console.error(e);
-                const status = e?.response?.status;
-                const serverMsg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Upload failed";
-                showToast(`Upload học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
-                appendMessage({ role: "assistant", text: "Không upload/đọc được file. Kiểm tra định dạng/size nhé." });
+                appendMessage({
+                    role: "assistant",
+                    text: buildAssistantErrorText(
+                        "Mình chưa upload/đọc được file này.",
+                        e,
+                        "Kiểm tra lại định dạng hoặc dung lượng file nhé."
+                    ),
+                });
             } finally {
                 setLoading(false);
             }
@@ -405,7 +397,6 @@ export default function PracticePage() {
         [appendMessage, clearActiveSession, clearPersistedResult, resetStudyChat, showToast]
     );
 
-    // ===== Paste text => create material =====
     const handleSendText = useCallback(
         async (rawText) => {
             const t = String(rawText || "").trim();
@@ -447,7 +438,6 @@ export default function PracticePage() {
                 clearActiveSession();
                 resetStudyChat();
 
-                // Paste: chat/canvas mở
                 setIsChatOpen(true);
                 setIsCanvasOpen(true);
 
@@ -463,10 +453,14 @@ export default function PracticePage() {
                 showToast("Đã nhận học liệu. Bấm Gửi để tạo đề.", "success");
             } catch (e) {
                 console.error(e);
-                const status = e?.response?.status;
-                const serverMsg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Create material failed";
-                showToast(`Gửi học liệu thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
-                appendMessage({ role: "assistant", text: "Không tạo được học liệu từ text này. Thử lại nhé." });
+                appendMessage({
+                    role: "assistant",
+                    text: buildAssistantErrorText(
+                        "Mình chưa tạo được học liệu từ nội dung này.",
+                        e,
+                        "Bạn thử chỉnh lại nội dung rồi gửi lại nhé."
+                    ),
+                });
             } finally {
                 setLoading(false);
             }
@@ -474,7 +468,6 @@ export default function PracticePage() {
         [appendMessage, clearActiveSession, clearPersistedResult, resetStudyChat, showToast]
     );
 
-    // ===== Boot study chat when switching to STUDY =====
     useEffect(() => {
         const boot = async () => {
             if (assistantMode !== ASSISTANT_MODE.STUDY) return;
@@ -504,18 +497,15 @@ export default function PracticePage() {
                 }
             } catch (e) {
                 console.error(e);
-                const msg = e?.response?.data?.message || e?.message || "Start chat failed";
-                showToast(`Không mở được chat: ${String(msg)}`, "error");
+                showToast(`Không mở được chat: ${extractApiMessage(e, "Start chat failed")}`, "error");
             } finally {
                 setStudyBooting(false);
             }
         };
 
         boot();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [assistantMode, materialId, studySessionId]);
+    }, [assistantMode, materialId, studySessionId, showToast]);
 
-    // ===== Ask study =====
     const handleAskStudy = useCallback(
         async (rawKeywords) => {
             if (loading) return;
@@ -550,11 +540,13 @@ export default function PracticePage() {
                 appendStudyMessage({ role: "assistant", text: ans });
             } catch (e) {
                 console.error(e);
-                const msg = e?.response?.data?.message || e?.message || "Ask failed";
-                showToast(`Không gửi được: ${String(msg)}`, "error");
                 appendStudyMessage({
                     role: "assistant",
-                    text: "Mình không trả lời được. Hãy thử từ khóa khác xuất hiện trong bài học.",
+                    text: buildAssistantErrorText(
+                        "Mình chưa trả lời được cho từ khóa này.",
+                        e,
+                        "Hãy thử từ khóa khác xuất hiện trong bài học."
+                    ),
                 });
             } finally {
                 setStudyBooting(false);
@@ -563,7 +555,6 @@ export default function PracticePage() {
         [appendStudyMessage, loading, materialId, showToast, studySessionId]
     );
 
-    // ===== Generate session =====
     const generateSessionV2 = useCallback(async () => {
         const matId = materialIdRef.current ?? materialId;
 
@@ -592,8 +583,6 @@ export default function PracticePage() {
                 setTopicDialogOpen(true);
 
                 setMode(MODE.IDLE);
-
-                // canvas/chat mở để thao tác
                 setIsCanvasOpen(true);
                 setIsChatOpen(true);
 
@@ -623,8 +612,6 @@ export default function PracticePage() {
             setDeadlineIso(null);
 
             setMode(MODE.READY);
-
-            // READY: canvas open, chat open
             setIsCanvasOpen(true);
             setIsChatOpen(true);
 
@@ -647,10 +634,14 @@ export default function PracticePage() {
             return { ok: true, token, durationMinutes: dur };
         } catch (e) {
             console.error(e);
-            const status = e?.response?.status;
-            const serverMsg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Generate failed";
-            showToast(`Không tạo được đề${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
-            appendMessage({ role: "assistant", text: "Lỗi tạo đề (AI/Server). Thử gửi lại hoặc đổi học liệu." });
+            appendMessage({
+                role: "assistant",
+                text: buildAssistantErrorText(
+                    "Mình chưa tạo được đề.",
+                    e,
+                    "Bạn thử gửi lại hoặc đổi học liệu nhé."
+                ),
+            });
             return { ok: false };
         } finally {
             setLoading(false);
@@ -704,8 +695,6 @@ export default function PracticePage() {
                 setDeadlineIso(null);
 
                 setMode(MODE.READY);
-
-                // READY: canvas open, chat open
                 setIsCanvasOpen(true);
                 setIsChatOpen(true);
 
@@ -726,10 +715,14 @@ export default function PracticePage() {
                 });
             } catch (e) {
                 console.error(e);
-                const status = e?.response?.status;
-                const serverMsg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Select topic failed";
-                showToast(`Không tạo được đề theo phần đã chọn${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
-                appendMessage({ role: "assistant", text: "Lỗi tạo đề theo phần đã chọn. Bạn thử chọn lại hoặc bấm tạo đề lại nhé." });
+                appendMessage({
+                    role: "assistant",
+                    text: buildAssistantErrorText(
+                        "Mình chưa tạo được đề theo phần bạn chọn.",
+                        e,
+                        "Bạn thử chọn lại hoặc bấm tạo đề lại nhé."
+                    ),
+                });
             } finally {
                 setTopicLoading(false);
                 setLoading(false);
@@ -738,7 +731,6 @@ export default function PracticePage() {
         [appendMessage, materialId, saveActiveSession, selectionToken, showToast]
     );
 
-    // ===== Start session =====
     const startSessionV2 = useCallback(async () => {
         const token = sessionTokenRef.current || sessionToken;
 
@@ -773,8 +765,6 @@ export default function PracticePage() {
             setDeadlineIso(deadline);
 
             setMode(MODE.DOING);
-
-            // DOING: auto hide chat => canvas 100% (but still mounted for animation)
             setIsChatOpen(false);
             setIsCanvasOpen(true);
 
@@ -799,19 +789,20 @@ export default function PracticePage() {
             });
         } catch (e) {
             console.error(e);
-            const status = e?.response?.status;
-            const msg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Start failed";
-            showToast(`Không bắt đầu được${status ? ` (${status})` : ""}: ${String(msg)}`, "error");
-            appendMessage({ role: "assistant", text: "Không start được. Session có thể đã hết hạn, hãy bấm Gửi để tạo lại đề." });
-
-            // start fail => chat mở lại
+            appendMessage({
+                role: "assistant",
+                text: buildAssistantErrorText(
+                    "Mình chưa bắt đầu được bài làm này.",
+                    e,
+                    "Session có thể đã hết hạn, bạn hãy bấm Gửi để tạo lại đề nhé."
+                ),
+            });
             setIsChatOpen(true);
         } finally {
             setLoading(false);
         }
     }, [appendMessage, durationMinutes, materialId, questionCount, saveActiveSession, sessionToken, showToast, setAssistantModeSafe]);
 
-    // ===== Submit session =====
     const submitSessionV2 = useCallback(
         async (answersArray, meta = {}) => {
             const token = sessionTokenRef.current || sessionToken;
@@ -838,7 +829,6 @@ export default function PracticePage() {
                 setResult(data);
                 setMode(MODE.RESULT);
 
-                // RESULT: mở chat + canvas open default
                 setIsChatOpen(true);
                 setIsCanvasOpen(true);
 
@@ -866,18 +856,21 @@ export default function PracticePage() {
                 appendMessage({ role: "assistant", text: `Đã nộp bài. Kết quả: ${data?.status || "—"} (${data?.score ?? "?"}%).` });
             } catch (e) {
                 console.error(e);
-                const status = e?.response?.status;
-                const serverMsg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Submit failed";
-                showToast(`Nộp bài thất bại${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
-                appendMessage({ role: "assistant", text: "Không nộp bài được. Thử lại nhé." });
+                appendMessage({
+                    role: "assistant",
+                    text: buildAssistantErrorText(
+                        "Mình chưa nộp bài được.",
+                        e,
+                        "Bạn thử lại nhé."
+                    ),
+                });
             } finally {
                 setLoading(false);
             }
         },
-        [appendMessage, attemptDetail, attemptQuestionCount, durationMinutes, materialId, questionCount, saveActiveSession, savePersistedResult, sessionToken, showToast]
+        [appendMessage, attemptDetail, attemptQuestionCount, durationMinutes, materialId, questionCount, saveActiveSession, savePersistedResult, sessionToken]
     );
 
-    // ===== Review =====
     const openReview = useCallback(async () => {
         const attemptId = result?.attemptId;
         if (!attemptId) {
@@ -890,13 +883,17 @@ export default function PracticePage() {
             setReviewOpen(true);
         } catch (e) {
             console.error(e);
-            const status = e?.response?.status;
-            const serverMsg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Review failed";
-            showToast(`Không tải được review${status ? ` (${status})` : ""}: ${String(serverMsg)}`, "error");
+            appendMessage({
+                role: "assistant",
+                text: buildAssistantErrorText(
+                    "Mình chưa tải được phần review.",
+                    e,
+                    "Bạn thử mở lại nhé."
+                ),
+            });
         }
-    }, [result?.attemptId, showToast]);
+    }, [result?.attemptId, showToast, appendMessage]);
 
-    // ===== Retest =====
     const startRetestV2 = useCallback(
         async (attemptId) => {
             if (!attemptId) return;
@@ -933,8 +930,6 @@ export default function PracticePage() {
                 setDeadlineIso(deadline);
 
                 setMode(MODE.DOING);
-
-                // DOING: hide chat => canvas 100% (animated)
                 setIsChatOpen(false);
                 setIsCanvasOpen(true);
 
@@ -954,18 +949,22 @@ export default function PracticePage() {
                 appendMessage({ role: "assistant", text: "Ok! Mình đã tạo bài thi lại tập trung phần sai. Bắt đầu làm nhé." });
             } catch (e) {
                 console.error(e);
-                const status = e?.response?.status;
-                const msg = e?.response?.data?.message || e?.response?.data?.error || e?.response?.data || e?.message || "Retest failed";
-                showToast(`Không tạo được bài thi lại${status ? ` (${status})` : ""}: ${String(msg)}`, "error");
+                appendMessage({
+                    role: "assistant",
+                    text: buildAssistantErrorText(
+                        "Mình chưa tạo được bài thi lại.",
+                        e,
+                        "Bạn thử lại sau nhé."
+                    ),
+                });
                 setIsChatOpen(true);
             } finally {
                 setLoading(false);
             }
         },
-        [appendMessage, clearPersistedResult, durationMinutes, materialId, questionCount, saveActiveSession, showToast, setAssistantModeSafe]
+        [appendMessage, clearPersistedResult, durationMinutes, materialId, questionCount, saveActiveSession, setAssistantModeSafe]
     );
 
-    // ===== Resume session / result from storage =====
     useEffect(() => {
         let cancelled = false;
 
@@ -987,8 +986,6 @@ export default function PracticePage() {
 
                         setResult(r);
                         setMode(MODE.RESULT);
-
-                        // RESULT: chat open + canvas open
                         setIsChatOpen(true);
                         setIsCanvasOpen(true);
                         return;
@@ -1039,11 +1036,8 @@ export default function PracticePage() {
                         }
 
                         setMode(MODE.DOING);
-
-                        // DOING resume: hide chat
                         setIsChatOpen(false);
                         setIsCanvasOpen(true);
-
                         setAssistantModeSafe(ASSISTANT_MODE.STUDY);
 
                         appendMessage({
@@ -1065,8 +1059,6 @@ export default function PracticePage() {
                 } else {
                     if (!cancelled) {
                         setMode(MODE.READY);
-
-                        // READY resume: canvas open + chat open
                         setIsCanvasOpen(true);
                         setIsChatOpen(true);
                     }
@@ -1097,10 +1089,8 @@ export default function PracticePage() {
         return () => {
             cancelled = true;
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [appendMessage, saveActiveSession, setAssistantModeSafe]);
 
-    // ===== Timer start ts =====
     const attemptStartTs = useMemo(() => {
         if (startedAtIso) {
             const ts = Date.parse(startedAtIso);
@@ -1130,23 +1120,20 @@ export default function PracticePage() {
     const isSplit = Boolean(materialId || sessionToken || attemptDetail || result);
     const isDoing = mode === MODE.DOING;
 
-    // DOING: canvas luôn open (không cho đóng để tránh mất UX làm bài)
     const effectiveCanvasOpen = useMemo(() => {
         if (!isSplit) return false;
         if (isDoing) return true;
         return isCanvasOpen;
     }, [isCanvasOpen, isDoing, isSplit]);
 
-    // ===== Chat visibility for animation (keep mounted) =====
     const isChatVisible = useMemo(() => {
-        if (!isSplit) return true; // IDLE: chat full
-        if (!effectiveCanvasOpen) return true; // canvas closed => chat full
-        if (isDoing) return isChatOpen; // DOING: toggle
-        return true; // READY/RESULT: show when canvas open
+        if (!isSplit) return true;
+        if (!effectiveCanvasOpen) return true;
+        if (isDoing) return isChatOpen;
+        return true;
     }, [effectiveCanvasOpen, isChatOpen, isDoing, isSplit]);
 
     const allowUpload = assistantMode === ASSISTANT_MODE.GENERATE && mode !== MODE.DOING;
-
     const showFloatingTimer = mode === MODE.DOING && Boolean(attemptStartTs) && Number(durationMinutes) > 0;
 
     const resultQuestionCount = useMemo(() => {
@@ -1155,7 +1142,6 @@ export default function PracticePage() {
         return toPositiveIntOrNull(questionCount) ?? 0;
     }, [attemptDetail?.questions, attemptQuestionCount, questionCount]);
 
-    // ===== Canvas actions (with confirm rules) =====
     const handleRequestReset = useCallback(() => {
         if (mode !== MODE.IDLE) {
             confirmRef.current?.requestReset?.();
@@ -1172,7 +1158,6 @@ export default function PracticePage() {
         return confirmRef.current?.requestSubmit?.(answersArray, meta) ?? false;
     }, []);
 
-    // ===== Layout widths =====
     const leftWidth = useMemo(() => {
         if (isMobile) return "100%";
         if (!isSplit) return "100%";
@@ -1189,7 +1174,6 @@ export default function PracticePage() {
         return isTablet ? "60%" : "70%";
     }, [effectiveCanvasOpen, isChatOpen, isDoing, isMobile, isSplit, isTablet]);
 
-    // ===== Arrow button behavior =====
     const handleRightArrowClick = useCallback(() => {
         if (!isSplit) return;
         if (isDoing) {
@@ -1211,9 +1195,6 @@ export default function PracticePage() {
         return isCanvasOpen ? ChevronRightRoundedIcon : ChevronLeftRoundedIcon;
     }, [isCanvasOpen, isChatOpen, isDoing, isSplit]);
 
-    // ===========================
-    // Auto-switch mobile tab
-    // ===========================
     useEffect(() => {
         if (isMobile && isSplit) setMobileTab(1);
     }, [isMobile, isSplit]);
@@ -1222,9 +1203,6 @@ export default function PracticePage() {
         if (isMobile && (mode === MODE.DOING || mode === MODE.RESULT)) setMobileTab(1);
     }, [isMobile, mode]);
 
-    // ===========================
-    // Shared props objects
-    // ===========================
     const sharedCanvasProps = {
         mode,
         loading,
@@ -1315,9 +1293,6 @@ export default function PracticePage() {
         </>
     );
 
-    // ===========================
-    // MOBILE LAYOUT (< 900px)
-    // ===========================
     if (isMobile) {
         return (
             <Box sx={{ height: "calc(100vh - var(--app-header-height, 72px))", width: "100%", bgcolor: COLORS.bg, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
@@ -1376,9 +1351,6 @@ export default function PracticePage() {
         );
     }
 
-    // ===========================
-    // TABLET + DESKTOP (>= 900px)
-    // ===========================
     return (
         <Box
             sx={{
@@ -1410,7 +1382,6 @@ export default function PracticePage() {
                     overflow: "hidden",
                 }}
             >
-                {/* LEFT: Chat (keep mounted for smooth animation) */}
                 <Box
                     sx={{
                         width: leftWidth,
@@ -1437,7 +1408,6 @@ export default function PracticePage() {
                     </Box>
                 </Box>
 
-                {/* RIGHT: Canvas */}
                 {isSplit && effectiveCanvasOpen && (
                     <Box
                         sx={{
@@ -1457,7 +1427,6 @@ export default function PracticePage() {
                 )}
             </Box>
 
-            {/* Arrow toggle button */}
             {isSplit && (
                 <Box
                     sx={{
