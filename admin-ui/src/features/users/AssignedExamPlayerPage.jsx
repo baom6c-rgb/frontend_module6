@@ -1,7 +1,7 @@
 // src/features/users/AssignedExamPlayerPage.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Paper, Stack, Typography } from "@mui/material";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
 import { assignedExamApi } from "../../api/assignedExamApi";
 import GlobalLoading from "../../components/common/GlobalLoading";
@@ -18,6 +18,17 @@ import { parseServerDateTime } from "../../utils/datetime";
 const MODE = {
     DOING: "DOING",
     RESULT: "RESULT",
+};
+
+// backend enum compatible
+const CHEAT_TYPE = {
+    TAB_SWITCH: "TAB_SWITCH",
+    VISIBILITY_HIDDEN: "VISIBILITY_HIDDEN",
+    DEVTOOLS: "DEVTOOLS",
+    COPY: "COPY",
+    PASTE: "PASTE",
+    FULLSCREEN_EXIT: "FULLSCREEN_EXIT",
+    BLUR: "BLUR",
 };
 
 // ✅ robust error extractor
@@ -51,16 +62,23 @@ const useCheatReporter = (assignmentId) => {
 
     return useCallback(
         async (type, meta = {}) => {
-            const key = String(type || "UNKNOWN");
+            if (!assignmentId || !type) return;
+
+            const key = String(type);
             const now = Date.now();
             const last = lastRef.current[key] || 0;
-            if (now - last < 2000) return; // throttle 2s/type
+
+            // throttle 2s / same type
+            if (now - last < 2000) return;
             lastRef.current[key] = now;
 
             try {
-                await assignedExamApi.studentReportCheating(assignmentId, { type: key, ...meta });
-            } catch {
-                // ignore
+                await assignedExamApi.studentReportCheating(assignmentId, {
+                    type: key,
+                    meta,
+                });
+            } catch (e) {
+                console.error("studentReportCheating failed:", e?.response?.data || e?.message);
             }
         },
         [assignmentId]
@@ -74,6 +92,7 @@ function normalizeAssignedStartResponse(raw) {
     const normalizedQuestions = qArr
         .map((q, idx) => {
             if (!q) return null;
+
             return {
                 questionId: q.questionId ?? q.id ?? idx,
                 id: q.questionId ?? q.id ?? idx,
@@ -109,22 +128,24 @@ function safeParseJson(text) {
     }
 }
 
-// Normalize any answers array into a safe shape for local draft/ref.
 // Accepts:
-// - practice style: {questionId, selectedAnswer, textAnswer}
-// - assigned style: {questionId, selectedAnswer, yourAnswer}
-// Output keeps BOTH text fields for compatibility.
+// - { questionId, selectedAnswer, textAnswer }
+// - { questionId, selectedAnswer, yourAnswer }
 function normalizeDraftArray(draft) {
     if (!Array.isArray(draft)) return [];
+
     return draft
         .map((x) => {
             if (!x) return null;
+
             const qid = x.questionId ?? x.id;
             if (qid == null) return null;
 
             const out = { questionId: String(qid) };
 
-            if (x.selectedAnswer != null) out.selectedAnswer = String(x.selectedAnswer);
+            if (x.selectedAnswer != null) {
+                out.selectedAnswer = String(x.selectedAnswer);
+            }
 
             const text =
                 x.yourAnswer != null && String(x.yourAnswer).trim() !== ""
@@ -143,7 +164,6 @@ function normalizeDraftArray(draft) {
         .filter(Boolean);
 }
 
-// ✅ Normalize submit payload (send BOTH fields to be safe)
 function normalizeSubmitAnswers(arr) {
     const normalized = normalizeDraftArray(arr);
 
@@ -157,10 +177,11 @@ function normalizeSubmitAnswers(arr) {
 
 export default function AssignedExamPlayerPage() {
     const { assignmentId } = useParams();
-    const navigate = useNavigate();
     const { showToast } = useToast();
 
     const playerRef = useRef(null);
+    const latestDraftRef = useRef([]);
+    const pendingSubmitRef = useRef(null);
 
     const [loading, setLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState("Vui lòng chờ...");
@@ -177,20 +198,13 @@ export default function AssignedExamPlayerPage() {
     const [reviewOpen, setReviewOpen] = useState(false);
     const [reviewData, setReviewData] = useState(null);
 
-    // ✅ draft answers (persist on reload)
     const [draftAnswers, setDraftAnswers] = useState([]);
 
-    // ✅ IMPORTANT: keep latest draft answers in ref to avoid stale state on timer expire
-    const latestDraftRef = useRef([]);
-
-    // ✅ confirm submit bridge
     const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
     const [submitLoading, setSubmitLoading] = useState(false);
-    const pendingSubmitRef = useRef(null); // { answersArray, resolve(boolean) }
 
     const reportCheat = useCheatReporter(assignmentId);
 
-    // derived
     const durationSeconds = useMemo(() => {
         const m = Number(attemptDetail?.durationMinutes);
         if (!Number.isFinite(m) || m <= 0) return 0;
@@ -199,47 +213,9 @@ export default function AssignedExamPlayerPage() {
 
     const draftKey = useMemo(() => buildDraftKey(assignmentId, attemptId), [assignmentId, attemptId]);
 
-    // ====== load draft from localStorage when attemptId ready
-    useEffect(() => {
-        if (!attemptId) return;
-        const raw = localStorage.getItem(draftKey);
-        if (!raw) return;
-
-        const parsed = safeParseJson(raw);
-        const restored = normalizeDraftArray(parsed?.answers ?? parsed);
-        if (restored.length) {
-            setDraftAnswers(restored);
-            latestDraftRef.current = restored;
-        }
-    }, [attemptId, draftKey]);
-
-    // ====== persist draft to localStorage
-    useEffect(() => {
-        if (!attemptId) return;
-        try {
-            localStorage.setItem(
-                draftKey,
-                JSON.stringify({
-                    updatedAt: Date.now(),
-                    answers: draftAnswers,
-                })
-            );
-        } catch {
-            // ignore
-        }
-    }, [draftAnswers, attemptId, draftKey]);
-
-    const clearDraft = useCallback(() => {
-        if (!attemptId) return;
-        try {
-            localStorage.removeItem(draftKey);
-        } catch {
-            // ignore
-        } finally {
-            latestDraftRef.current = [];
-        }
-    }, [attemptId, draftKey]);
-
+    // =====================
+    // boot
+    // =====================
     const boot = useCallback(async () => {
         if (!assignmentId) return;
 
@@ -259,14 +235,18 @@ export default function AssignedExamPlayerPage() {
             const normalized = normalizeAssignedStartResponse(res);
 
             setAttemptDetail(normalized);
+
             const newAttemptId = normalized?.attemptId ?? normalized?.id ?? assignmentId;
             setAttemptId(newAttemptId);
 
-            // ✅ parse LocalDateTime as LOCAL (VN)
             const startedAtRaw = normalized?.startTime ?? normalized?.startedAt ?? null;
             const startedAtDate = parseServerDateTime(startedAtRaw);
-            if (startedAtDate) setAttemptStartTs(startedAtDate.getTime());
-            else setAttemptStartTs(Date.now());
+
+            if (startedAtDate) {
+                setAttemptStartTs(startedAtDate.getTime());
+            } else {
+                setAttemptStartTs(Date.now());
+            }
 
             if (!Array.isArray(normalized?.questions) || normalized.questions.length === 0) {
                 setStartError("Bài kiểm tra chưa có câu hỏi. Vui lòng báo admin kiểm tra đề.");
@@ -285,64 +265,122 @@ export default function AssignedExamPlayerPage() {
     }, [boot]);
 
     // =====================
-    // ✅ Anti-cheat: chặn F12/devtools hotkeys + copy/paste + contextmenu
+    // load draft
+    // =====================
+    useEffect(() => {
+        if (!attemptId) return;
+
+        const raw = localStorage.getItem(draftKey);
+        if (!raw) return;
+
+        const parsed = safeParseJson(raw);
+        const restored = normalizeDraftArray(parsed?.answers ?? parsed);
+
+        if (restored.length) {
+            setDraftAnswers(restored);
+            latestDraftRef.current = restored;
+        }
+    }, [attemptId, draftKey]);
+
+    // =====================
+    // persist draft
+    // =====================
+    useEffect(() => {
+        if (!attemptId) return;
+
+        try {
+            localStorage.setItem(
+                draftKey,
+                JSON.stringify({
+                    updatedAt: Date.now(),
+                    answers: draftAnswers,
+                })
+            );
+        } catch {
+            // ignore
+        }
+    }, [draftAnswers, attemptId, draftKey]);
+
+    const clearDraft = useCallback(() => {
+        if (!attemptId) return;
+
+        try {
+            localStorage.removeItem(draftKey);
+        } catch {
+            // ignore
+        } finally {
+            latestDraftRef.current = [];
+        }
+    }, [attemptId, draftKey]);
+
+    // =====================
+    // anti-cheat: keyboard / clipboard / contextmenu
     // =====================
     useEffect(() => {
         if (mode !== MODE.DOING) return;
 
         const onKeyDown = (e) => {
             const key = String(e.key || "").toLowerCase();
-
             const ctrl = e.ctrlKey || e.metaKey;
             const shift = e.shiftKey;
 
+            // DevTools / Source / Save page -> map all to DEVTOOLS
             if (e.key === "F12") {
                 e.preventDefault();
-                reportCheat("DEVTOOLS_KEY", { key: "F12" });
+                reportCheat(CHEAT_TYPE.DEVTOOLS, { key: "F12" });
                 return;
             }
 
             if (ctrl && shift && ["i", "j", "c"].includes(key)) {
                 e.preventDefault();
-                reportCheat("DEVTOOLS_KEY", { key: `Ctrl+Shift+${key.toUpperCase()}` });
+                reportCheat(CHEAT_TYPE.DEVTOOLS, {
+                    key: `Ctrl+Shift+${key.toUpperCase()}`,
+                });
                 return;
             }
 
             if (ctrl && key === "u") {
                 e.preventDefault();
-                reportCheat("VIEW_SOURCE", { key: "Ctrl+U" });
+                reportCheat(CHEAT_TYPE.DEVTOOLS, { key: "Ctrl+U" });
                 return;
             }
 
             if (ctrl && key === "s") {
                 e.preventDefault();
-                reportCheat("SAVE_PAGE", { key: "Ctrl+S" });
+                reportCheat(CHEAT_TYPE.DEVTOOLS, { key: "Ctrl+S" });
                 return;
             }
 
-            if (ctrl && ["c", "x", "v"].includes(key)) {
+            if (ctrl && ["c", "x"].includes(key)) {
                 e.preventDefault();
-                reportCheat("CLIPBOARD_KEY", { key: `Ctrl+${key.toUpperCase()}` });
+                reportCheat(CHEAT_TYPE.COPY, { key: `Ctrl+${key.toUpperCase()}` });
                 return;
+            }
+
+            if (ctrl && key === "v") {
+                e.preventDefault();
+                reportCheat(CHEAT_TYPE.PASTE, { key: "Ctrl+V" });
             }
         };
 
         const onContextMenu = (e) => {
             e.preventDefault();
-            reportCheat("CONTEXT_MENU");
+            reportCheat(CHEAT_TYPE.COPY, { action: "contextmenu" });
         };
 
         const onCopy = (e) => {
             e.preventDefault();
-            reportCheat("COPY");
+            reportCheat(CHEAT_TYPE.COPY, { action: "copy" });
         };
+
         const onCut = (e) => {
             e.preventDefault();
-            reportCheat("CUT");
+            reportCheat(CHEAT_TYPE.COPY, { action: "cut" });
         };
+
         const onPaste = (e) => {
             e.preventDefault();
-            reportCheat("PASTE");
+            reportCheat(CHEAT_TYPE.PASTE, { action: "paste" });
         };
 
         window.addEventListener("keydown", onKeyDown, true);
@@ -360,35 +398,88 @@ export default function AssignedExamPlayerPage() {
         };
     }, [mode, reportCheat]);
 
-    // ✅ tab visibility (switch tab)
+    // =====================
+    // anti-cheat: tab hidden / visibility hidden
+    // =====================
     useEffect(() => {
         if (mode !== MODE.DOING) return;
 
         const onVisibility = () => {
-            if (document.hidden) reportCheat("TAB_HIDDEN");
+            if (document.hidden) {
+                reportCheat(CHEAT_TYPE.TAB_SWITCH, {
+                    visibilityState: document.visibilityState,
+                    hidden: document.hidden,
+                });
+
+                reportCheat(CHEAT_TYPE.VISIBILITY_HIDDEN, {
+                    visibilityState: document.visibilityState,
+                    hidden: document.hidden,
+                });
+            }
         };
 
         document.addEventListener("visibilitychange", onVisibility, true);
-        return () => document.removeEventListener("visibilitychange", onVisibility, true);
+        return () => {
+            document.removeEventListener("visibilitychange", onVisibility, true);
+        };
     }, [mode, reportCheat]);
 
-    // ✅ beforeunload: cảnh báo rời trang (và vẫn giữ draft vì đã lưu localStorage)
+    // =====================
+    // anti-cheat: blur
+    // =====================
+    useEffect(() => {
+        if (mode !== MODE.DOING) return;
+
+        const onBlur = () => {
+            reportCheat(CHEAT_TYPE.BLUR, {
+                reason: "window_blur",
+            });
+        };
+
+        window.addEventListener("blur", onBlur, true);
+        return () => {
+            window.removeEventListener("blur", onBlur, true);
+        };
+    }, [mode, reportCheat]);
+
+    // =====================
+    // anti-cheat: fullscreen exit
+    // =====================
+    useEffect(() => {
+        if (mode !== MODE.DOING) return;
+
+        const onFullscreenChange = () => {
+            if (!document.fullscreenElement) {
+                reportCheat(CHEAT_TYPE.FULLSCREEN_EXIT, {
+                    reason: "fullscreen_exited",
+                });
+            }
+        };
+
+        document.addEventListener("fullscreenchange", onFullscreenChange, true);
+        return () => {
+            document.removeEventListener("fullscreenchange", onFullscreenChange, true);
+        };
+    }, [mode, reportCheat]);
+
+    // =====================
+    // beforeunload: only warn, no cheating report
+    // =====================
     useEffect(() => {
         if (mode !== MODE.DOING) return;
 
         const onBeforeUnload = (e) => {
             e.preventDefault();
             e.returnValue = "";
-            reportCheat("BEFORE_UNLOAD");
             return "";
         };
 
         window.addEventListener("beforeunload", onBeforeUnload);
         return () => window.removeEventListener("beforeunload", onBeforeUnload);
-    }, [mode, reportCheat]);
+    }, [mode]);
 
     // =====================
-    // ✅ Draft answers update helper (called by PracticePlayer)
+    // draft answers update helper
     // =====================
     const handleDraftChange = useCallback((nextDraftArray) => {
         const normalized = normalizeDraftArray(nextDraftArray);
@@ -397,7 +488,7 @@ export default function AssignedExamPlayerPage() {
     }, []);
 
     // =====================
-    // ✅ Submit confirm bridge
+    // submit confirm bridge
     // =====================
     const openSubmitConfirm = useCallback((answersArray) => {
         return new Promise((resolve) => {
@@ -408,32 +499,44 @@ export default function AssignedExamPlayerPage() {
 
     const closeSubmitConfirm = useCallback(() => {
         setSubmitConfirmOpen(false);
+
         if (pendingSubmitRef.current?.resolve) {
             pendingSubmitRef.current.resolve(false);
         }
+
         pendingSubmitRef.current = null;
     }, []);
 
-    // ✅ submit thật sự (gọi API)
+    // =====================
+    // submit now
+    // =====================
     const submitNow = useCallback(
         async (answersArray) => {
             setLoading(true);
             setLoadingMessage("Đang nộp bài...");
+
             try {
-                const payload = { answers: normalizeSubmitAnswers(answersArray) };
+                const payload = {
+                    answers: normalizeSubmitAnswers(answersArray),
+                };
 
                 const res = await assignedExamApi.studentSubmit(assignmentId, payload);
+
                 setResult(res);
                 setMode(MODE.RESULT);
-
                 clearDraft();
+
                 return true;
             } catch (e) {
                 const msg = extractApiError(e);
                 showToast(msg, "error");
+
                 try {
                     playerRef.current?.unlock?.();
-                } catch {}
+                } catch {
+                    // ignore
+                }
+
                 return false;
             } finally {
                 setLoading(false);
@@ -442,26 +545,26 @@ export default function AssignedExamPlayerPage() {
         [assignmentId, clearDraft, showToast]
     );
 
-    // ✅ onSubmit mà PracticePlayer gọi -> mở confirm trước
+    // =====================
+    // onSubmit called by PracticePlayer
+    // =====================
     const handleSubmit = useCallback(
         async (answersArray) => {
             if (loading || submitLoading) return false;
-            const ok = await openSubmitConfirm(answersArray);
-            return ok;
+            return await openSubmitConfirm(answersArray);
         },
         [loading, submitLoading, openSubmitConfirm]
     );
 
-    // ✅ auto-submit when timer expires (KHÔNG confirm)
-    // IMPORTANT: lấy trực tiếp từ PracticePlayer ref để chắc chắn lấy được textAnswer đang gõ
+    // =====================
+    // auto submit when timer expires
+    // =====================
     const handleExpire = useCallback(async () => {
         if (mode !== MODE.DOING) return;
 
-        reportCheat("TIME_EXPIRED");
-
         let fromPlayer = null;
+
         try {
-            // ✅ PracticePlayer exposes getAnswersArray (the source of truth)
             fromPlayer = playerRef.current?.getAnswersArray?.() || null;
         } catch {
             fromPlayer = null;
@@ -474,15 +577,18 @@ export default function AssignedExamPlayerPage() {
                 : [];
 
         await submitNow(payloadAnswers);
-    }, [mode, reportCheat, submitNow]);
+    }, [mode, submitNow]);
 
-    // ✅ xem lại đáp án: gọi endpoint review của assigned-exams
+    // =====================
+    // review
+    // =====================
     const handleViewReview = useCallback(async () => {
         if (!assignmentId) return;
 
         try {
             setLoading(true);
             setLoadingMessage("Đang tải đáp án...");
+
             const review = await assignedExamApi.studentGetReview(assignmentId);
             setReviewData(review);
             setReviewOpen(true);
@@ -528,7 +634,12 @@ export default function AssignedExamPlayerPage() {
 
             <Paper
                 variant="outlined"
-                sx={{ mt: 2, borderRadius: 3, borderColor: "#E3E8EF", overflow: "hidden" }}
+                sx={{
+                    mt: 2,
+                    borderRadius: 3,
+                    borderColor: "#E3E8EF",
+                    overflow: "hidden",
+                }}
             >
                 <Box sx={{ p: 2.5 }}>
                     {mode === MODE.DOING && (
@@ -550,7 +661,6 @@ export default function AssignedExamPlayerPage() {
                                     attemptId={attemptId}
                                     attemptStartTs={attemptStartTs}
                                     onSubmit={handleSubmit}
-                                    // ✅ persist answers (reload)
                                     initialAnswers={draftAnswers}
                                     onAnswersChange={handleDraftChange}
                                 />
@@ -575,7 +685,6 @@ export default function AssignedExamPlayerPage() {
                 review={reviewData}
             />
 
-            {/* ✅ Confirm submit */}
             <AppConfirm
                 open={submitConfirmOpen}
                 onClose={closeSubmitConfirm}
@@ -585,8 +694,16 @@ export default function AssignedExamPlayerPage() {
                         <Typography sx={{ color: "#2B3674", fontWeight: 900 }}>
                             Bạn chắc chắn muốn nộp bài ngay bây giờ?
                         </Typography>
-                        <Typography sx={{ mt: 0.75, color: "#6C757D", fontWeight: 700, lineHeight: 1.6 }}>
-                            Sau khi nộp, bạn không thể quay lại sửa đáp án. Hệ thống sẽ chấm điểm và lưu kết quả.
+                        <Typography
+                            sx={{
+                                mt: 0.75,
+                                color: "#6C757D",
+                                fontWeight: 700,
+                                lineHeight: 1.6,
+                            }}
+                        >
+                            Sau khi nộp, bạn không thể quay lại sửa đáp án. Hệ thống sẽ chấm điểm
+                            và lưu kết quả.
                         </Typography>
                     </Box>
                 }
@@ -602,12 +719,15 @@ export default function AssignedExamPlayerPage() {
 
                     try {
                         setSubmitLoading(true);
+
                         const ok = await submitNow(pending.answersArray);
 
                         pending.resolve(ok);
                         pendingSubmitRef.current = null;
 
-                        if (ok) setSubmitConfirmOpen(false);
+                        if (ok) {
+                            setSubmitConfirmOpen(false);
+                        }
                     } finally {
                         setSubmitLoading(false);
                     }
