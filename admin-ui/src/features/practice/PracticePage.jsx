@@ -48,10 +48,18 @@ const toPositiveIntOrNull = (v) => {
 const extractApiMessage = (e, fallback = "Đã xảy ra lỗi.") => {
     const data = e?.response?.data;
 
-    if (typeof data === "string" && data.trim()) return data.trim();
-    if (typeof data?.message === "string" && data.message.trim()) return data.message.trim();
-    if (typeof data?.error === "string" && data.error.trim()) return data.error.trim();
-    if (typeof e?.message === "string" && e.message.trim()) return e.message.trim();
+    const clean = (str) => {
+        if (typeof str !== "string") return str;
+        // Bỏ prefix kiểu "503 SERVICE_UNAVAILABLE "..." hoặc "400 BAD_REQUEST "..."
+        const match = str.match(/^\d{3}\s+[A-Z_]+\s+"(.+)"$/s);
+        if (match) return match[1].trim();
+        return str.trim();
+    };
+
+    if (typeof data === "string" && data.trim()) return clean(data);
+    if (typeof data?.message === "string" && data.message.trim()) return clean(data.message);
+    if (typeof data?.error === "string" && data.error.trim()) return clean(data.error);
+    if (typeof e?.message === "string" && e.message.trim()) return clean(e.message);
 
     return fallback;
 };

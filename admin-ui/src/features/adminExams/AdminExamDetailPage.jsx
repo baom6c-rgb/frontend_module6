@@ -834,7 +834,20 @@ export default function AdminExamDetailPage() {
         () => [
             { field: "fullName", headerName: "Họ tên", flex: 1, minWidth: 180 },
             { field: "email", headerName: "Email", flex: 1, minWidth: 220 },
-            { field: "status", headerName: "Trạng thái", width: 140 },
+            {
+                field: "status",
+                headerName: "Trạng thái",
+                width: 140,
+                renderCell: (params) => {
+                    const map = {
+                        ASSIGNED: "Đã giao",
+                        STARTED: "Đang làm",
+                        SUBMITTED: "Đã nộp",
+                        CANCELED: "Đã hủy",
+                    };
+                    return <span>{map[params.value] ?? params.value}</span>;
+                },
+            },
             { field: "startedAtText", headerName: "Bắt đầu", width: 200 },
             { field: "submittedAtText", headerName: "Nộp", width: 200 },
             {
@@ -883,7 +896,24 @@ export default function AdminExamDetailPage() {
         () => [
             { field: "fullName", headerName: "Học viên", flex: 1, minWidth: 180 },
             { field: "email", headerName: "Email", flex: 1, minWidth: 220 },
-            { field: "type", headerName: "Vi phạm", width: 160 },
+            {
+                field: "type",
+                headerName: "Vi phạm",
+                width: 200,
+                renderCell: (params) => {
+                    const map = {
+                        TAB_SWITCH: "Chuyển tab",
+                        VISIBILITY_HIDDEN: "Ẩn tab trình duyệt",
+                        DEVTOOLS: "Mở DevTools",
+                        COPY: "Sao chép nội dung",
+                        PASTE: "Dán nội dung",
+                        FULLSCREEN_EXIT: "Thoát toàn màn hình",
+                        BLUR: "Rời khỏi trang",
+                    };
+                    const label = map[params.value] ?? params.value;
+                    return <span>{label}</span>;
+                },
+            },
             { field: "detectedAtText", headerName: "Thời gian", width: 220 },
         ],
         []
