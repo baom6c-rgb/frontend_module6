@@ -15,6 +15,16 @@ const safeParse = (key, fallback = null) => {
     }
 };
 
+// ✅ đảm bảo UI "Đang kiểm tra..." hiển thị tối thiểu 1.2s
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const withMinDelay = async (promise, minMs = 1200) => {
+    const startedAt = Date.now();
+    const result = await promise;
+    const elapsed = Date.now() - startedAt;
+    if (elapsed < minMs) await sleep(minMs - elapsed);
+    return result;
+};
+
 export default function WaitingApproval() {
     const navigate = useNavigate();
     const { showToast } = useToast();
@@ -41,7 +51,6 @@ export default function WaitingApproval() {
 
     const approved = useMemo(() => status === "ACTIVE", [status]);
 
-    const handleGoHome = () => navigate("/users/dashboard");
     const handleStartLearning = () => navigate("/users/dashboard");
 
     const syncReduxAuthNow = (updatedUser) => {
@@ -57,6 +66,8 @@ export default function WaitingApproval() {
     };
 
     const handleRefresh = async () => {
+        if (loading) return; // ✅ tránh spam click
+
         const email = readEmail();
         if (!email) {
             showToast("Không tìm thấy email. Vui lòng đăng nhập lại.", "error");
@@ -64,10 +75,12 @@ export default function WaitingApproval() {
             return;
         }
 
-        try {
-            setLoading(true);
+        setLoading(true);
 
-            const res = await getUserStatusByEmailApi(email);
+        try {
+            // ✅ call API + đảm bảo UI loading tồn tại tối thiểu 1.2s
+            const res = await withMinDelay(getUserStatusByEmailApi(email), 1200);
+
             const newStatus = String(res?.data?.status || "").toUpperCase();
 
             const current = safeParse("userData", {});
@@ -80,16 +93,37 @@ export default function WaitingApproval() {
                 localStorage.removeItem("pendingApproval");
                 syncReduxAuthNow(updatedUser);
                 showToast("Phê duyệt thành công", "success");
+
+                // (Optional) Nếu mày muốn vừa duyệt là tự chuyển dashboard:
+                // navigate("/users/dashboard", { replace: true });
             } else {
                 showToast("Chưa được duyệt. Vui lòng thử lại sau.", "info");
             }
         } catch (e) {
-            const msg =
-                typeof e?.response?.data === "string"
-                    ? e.response.data
-                    : e?.response?.data?.message || e?.message || "Không kiểm tra được trạng thái";
-            showToast(msg, "error");
+            // ✅ vẫn đảm bảo loading tối thiểu 1.2s ngay cả khi error
+            await sleep(1200);
+
+            const statusCode = e?.response?.status;
+            const message =
+                e?.response?.data?.message ||
+                (typeof e?.response?.data === "string" ? e.response.data : "");
+
+            // ✅ CASE: user bị reject -> đã bị DELETE khỏi DB
+            if (statusCode === 404 || /not found/i.test(message)) {
+                localStorage.removeItem("accessToken");
+                localStorage.removeItem("userData");
+                localStorage.removeItem("userRoles");
+                localStorage.removeItem("pendingApproval");
+                localStorage.removeItem("register_email");
+
+                showToast("Tài khoản đã bị từ chối", "error");
+                navigate("/approval-result?status=rejected", { replace: true });
+                return;
+            }
+
+            showToast("Không kiểm tra được trạng thái. Vui lòng thử lại.", "error");
         } finally {
+            // ✅ không còn bị kẹt "Đang kiểm tra..."
             setLoading(false);
         }
     };
@@ -104,20 +138,14 @@ export default function WaitingApproval() {
 
                     <Typography sx={{ color: "#707EAE", fontWeight: 600, mb: 3, lineHeight: 1.6 }}>
                         {approved
-                            ? "Tài khoản của bạn đã được phê duyệt. Bạn có thể quay lại trang Home hoặc bắt đầu học tập ngay bây giờ."
+                            ? "Tài khoản của bạn đã được phê duyệt. Bạn có thể bắt đầu học tập ngay bây giờ."
                             : "Tài khoản của bạn đã gửi yêu cầu. Vui lòng chờ Admin phê duyệt hoặc liên hệ Admin nếu cần gấp."}
                     </Typography>
 
                     <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
                         {approved ? (
                             <>
-                                <Button
-                                    variant="outlined"
-                                    onClick={handleGoHome}
-                                    sx={{ textTransform: "none", fontWeight: 800 }}
-                                >
-                                    Quay lại Home
-                                </Button>
+                                {/* ✅ BỎ nút "Quay lại Home" */}
 
                                 <Button
                                     variant="contained"
@@ -127,13 +155,13 @@ export default function WaitingApproval() {
                                     Bắt đầu học tập ngay
                                 </Button>
 
-                                {/* ✅ CHỈ HIỆN KHI ĐÃ DUYỆT */}
+                                {/* ✅ "Xem hồ sơ" đổi sang outlined (có border) */}
                                 <Button
-                                    variant="text"
+                                    variant="outlined"
                                     onClick={() => navigate("/users/profile")}
                                     sx={{ textTransform: "none", fontWeight: 800 }}
                                 >
-                                    Xem hồ sơ
+                                    Xem hồ sơ cá nhân
                                 </Button>
                             </>
                         ) : (

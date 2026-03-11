@@ -108,10 +108,6 @@ export default function AvatarUploadDialog({
                         Chọn ảnh
                         <input hidden type="file" accept=".jpg,.jpeg,.png,.webp" onChange={handlePick} />
                     </Button>
-
-                    <Typography variant="caption" sx={{ color: "#A3AED0" }}>
-                        Chỉ chấp nhận jpg/png/webp, tối đa {MAX_MB}MB. (crop/zoom: TODO)
-                    </Typography>
                 </Stack>
             </DialogContent>
             <DialogActions sx={{ p: 2 }}>

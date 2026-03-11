@@ -1,368 +1,316 @@
-import React, { useEffect, useState } from "react";
-import { Box, Typography, Paper, Grid, Fade, CircularProgress } from "@mui/material";
-import { PeopleAlt, HowToReg, Block, CheckCircle, Schedule } from "@mui/icons-material";
+// src/features/admin/AdminDashboard.jsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Box, Fade, CircularProgress, Stack, Typography } from "@mui/material";
+
+import axiosPrivate from "../../api/axiosPrivate";
+import { adminAnalyticsApi } from "../../api/adminAnalyticsApi";
+
+import AdminDashboardFilterBar from "./components/dashboard/AdminDashboardFilterBar";
+
 import {
-    LineChart,
-    Line,
-    BarChart,
-    Bar,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
-} from "recharts";
-import { adminUserApi } from "../../api/adminUserApi";
+    AdminDashboardKpiCards,
+    AdminDashboardResultClassificationBox,
+    AdminDashboardTrends,
+    AdminDashboardAtRiskTable,
+    AdminDashboardAiInsightPanel,
+    StudentQuickDrawer,
+} from "./components/dashboard";
 
-// Statistics Card Component
-const StatCard = ({ title, value, icon, color, bgColor, trend }) => (
-    <Paper
+import {
+    DASHBOARD_COLORS as COLORS,
+    normalizeOption,
+    buildRequestBody,
+    getDefaultFilters7d,
+    safeNumber,
+} from "./components/dashboard/dashboard.helpers";
+
+const PageShell = ({ children }) => (
+    <Box
         sx={{
-            p: 3,
-            borderRadius: "16px",
-            boxShadow: "0px 10px 30px rgba(0,0,0,0.08)",
-            background: "#FFFFFF",
-            position: "relative",
-            overflow: "hidden",
-            border: "1px solid #F4F7FE",
+            width: "100%",
+            maxWidth: 1400,
+            mx: "auto",
+            px: { xs: 2, sm: 2.5, md: 4, lg: 6 },
+            pb: { xs: 3, sm: 3.5, md: 4 },
+            minWidth: 0,
+            overflowX: "hidden", // ✅ Prevent horizontal scroll
         }}
     >
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
-            <Box
-                sx={{
-                    bgcolor: bgColor,
-                    p: 1.5,
-                    borderRadius: "12px",
-                    display: "flex",
-                }}
-            >
-                {React.cloneElement(icon, { sx: { fontSize: 28, color: color } })}
-            </Box>
-        </Box>
-
-        <Typography sx={{ color: "#A3AED0", fontSize: "0.85rem", fontWeight: 600, mb: 0.5 }}>
-            {title}
-        </Typography>
-
-        <Typography sx={{ color: "#2B3674", fontSize: "2rem", fontWeight: 800, mb: 1 }}>
-            {(value ?? 0).toLocaleString()}
-        </Typography>
-
-        {trend && (
-            <Typography sx={{ color: "#05CD99", fontSize: "0.8rem", fontWeight: 700 }}>{trend}</Typography>
-        )}
-    </Paper>
+        {children}
+    </Box>
 );
 
-// Chart Card Component with Bar Chart
-const BarChartCard = ({ title, subtitle, data, color, timeInfo }) => (
-    <Paper
-        sx={{
-            p: 3,
-            borderRadius: "16px",
-            boxShadow: "0px 10px 30px rgba(0,0,0,0.08)",
-            height: "100%",
-            border: "1px solid #F4F7FE",
-        }}
-    >
-        <Typography variant="h6" sx={{ fontWeight: 800, color: "#2B3674", mb: 0.5 }}>
-            {title}
-        </Typography>
-        <Typography variant="body2" sx={{ color: "#A3AED0", mb: 3, fontWeight: 600 }}>
-            {subtitle}
-        </Typography>
+/** ✅ 1 nguồn metrics để đồng bộ KPI + Donut + Trends */
+const computeMetrics = (overview) => {
+    const totalAttempts = Math.max(0, safeNumber(overview?.totalAttempts, 0));
+    const totalStudents = Math.max(0, safeNumber(overview?.totalStudents, 0));
 
-        <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F4F7FE" vertical={false} />
-                <XAxis
-                    dataKey="name"
-                    stroke="#A3AED0"
-                    style={{ fontSize: "0.75rem", fontWeight: 600 }}
-                    axisLine={false}
-                    tickLine={false}
-                />
-                <YAxis
-                    stroke="#A3AED0"
-                    style={{ fontSize: "0.75rem", fontWeight: 600 }}
-                    axisLine={false}
-                    tickLine={false}
-                />
-                <Tooltip
-                    contentStyle={{
-                        backgroundColor: "#fff",
-                        border: "none",
-                        borderRadius: "12px",
-                        boxShadow: "0px 10px 30px rgba(0,0,0,0.1)",
-                        fontWeight: 700,
-                    }}
-                />
-                <Bar dataKey="value" fill={color} radius={[8, 8, 0, 0]} maxBarSize={50} />
-            </BarChart>
-        </ResponsiveContainer>
+    const passRate = Math.max(0, safeNumber(overview?.passRate, 0));
+    const failRate = Math.max(0, safeNumber(overview?.failRate, 0));
 
-        {timeInfo && (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 2 }}>
-                <Schedule sx={{ fontSize: 16, color: "#A3AED0" }} />
-                <Typography sx={{ color: "#A3AED0", fontSize: "0.75rem", fontWeight: 600 }}>
-                    {timeInfo}
-                </Typography>
-            </Box>
-        )}
-    </Paper>
-);
+    let passCount = Math.round(totalAttempts * passRate);
+    let failCount = Math.round(totalAttempts * failRate);
 
-// Line Chart Card Component
-const LineChartCard = ({ title, subtitle, data, color, timeInfo }) => (
-    <Paper
-        sx={{
-            p: 3,
-            borderRadius: "16px",
-            boxShadow: "0px 10px 30px rgba(0,0,0,0.08)",
-            height: "100%",
-            border: "1px solid #F4F7FE",
-        }}
-    >
-        <Typography variant="h6" sx={{ fontWeight: 800, color: "#2B3674", mb: 0.5 }}>
-            {title}
-        </Typography>
-        <Typography variant="body2" sx={{ color: "#A3AED0", mb: 3, fontWeight: 600 }}>
-            {subtitle}
-        </Typography>
+    // ✅ clamp để không âm / không vượt total
+    passCount = Math.max(0, Math.min(passCount, totalAttempts));
+    failCount = Math.max(0, Math.min(failCount, totalAttempts - passCount));
 
-        <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={data}>
-                <defs>
-                    <linearGradient id={`gradient-${color}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={color} stopOpacity={0.3} />
-                        <stop offset="95%" stopColor={color} stopOpacity={0} />
-                    </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F4F7FE" vertical={false} />
-                <XAxis
-                    dataKey="name"
-                    stroke="#A3AED0"
-                    style={{ fontSize: "0.75rem", fontWeight: 600 }}
-                    axisLine={false}
-                    tickLine={false}
-                />
-                <YAxis
-                    stroke="#A3AED0"
-                    style={{ fontSize: "0.75rem", fontWeight: 600 }}
-                    axisLine={false}
-                    tickLine={false}
-                />
-                <Tooltip
-                    contentStyle={{
-                        backgroundColor: "#fff",
-                        border: "none",
-                        borderRadius: "12px",
-                        boxShadow: "0px 10px 30px rgba(0,0,0,0.1)",
-                        fontWeight: 700,
-                    }}
-                />
-                <Line
-                    type="monotone"
-                    dataKey="value"
-                    stroke={color}
-                    strokeWidth={3}
-                    dot={{ fill: color, r: 6, strokeWidth: 2, stroke: "#fff" }}
-                    activeDot={{ r: 8 }}
-                    fill={`url(#gradient-${color})`}
-                />
-            </LineChart>
-        </ResponsiveContainer>
+    const otherCount = Math.max(0, totalAttempts - passCount - failCount);
 
-        {timeInfo && (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 2 }}>
-                <Schedule sx={{ fontSize: 16, color: "#A3AED0" }} />
-                <Typography sx={{ color: "#A3AED0", fontSize: "0.75rem", fontWeight: 600 }}>
-                    {timeInfo}
-                </Typography>
-            </Box>
-        )}
-    </Paper>
-);
+    const timeSeries = Array.isArray(overview?.timeSeries) ? overview.timeSeries : [];
 
-const AdminDashboard = () => {
-    const [stats, setStats] = useState({
-        total: 0,
-        active: 0,
-        pending: 0,
-        blocked: 0,
+    const attemptsByDay = timeSeries.map((x) => ({
+        name: x?.date || "",
+        attempts: Math.max(0, safeNumber(x?.attempts, 0)),
+    }));
+
+    const passRateByDay = timeSeries.map((x) => {
+        const fr = Math.max(0, safeNumber(x?.failRate, 0));
+        return {
+            name: x?.date || "",
+            passRate: Math.max(0, Math.min(1, 1 - fr)),
+        };
     });
-    const [loading, setLoading] = useState(true);
+
+    return {
+        totalAttempts,
+        totalStudents,
+        passRate,
+        failRate,
+        passCount,
+        failCount,
+        otherCount,
+        attemptsByDay,
+        passRateByDay,
+        timeSeries,
+    };
+};
+
+export default function AdminDashboard() {
+    const initFilters = () => {
+        const f = getDefaultFilters7d();
+        return {
+            preset: f.preset ?? "7d",
+            classId: "",
+            moduleId: "",
+            keyword: "",
+            fromDate: f.from?.slice(0, 10),
+            toDate: f.to?.slice(0, 10),
+        };
+    };
+
+    const [filters, setFilters] = useState(initFilters);
+
+    const [overview, setOverview] = useState(null);
+    const [dashLoading, setDashLoading] = useState(false);
+    const [dashError, setDashError] = useState("");
+
+    const [classes, setClasses] = useState([]);
+    const [modules, setModules] = useState([]);
+
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiError, setAiError] = useState("");
+    const [aiInsight, setAiInsight] = useState(null);
+
+    const [selectedStudent, setSelectedStudent] = useState(null);
+    const [drawerOpen, setDrawerOpen] = useState(false);
+
+    const studentsSectionRef = useRef(null);
 
     useEffect(() => {
-        fetchStatistics();
+        bootstrap();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const fetchStatistics = async () => {
-        setLoading(true);
+    const bootstrap = async () => {
         try {
-            const [pendingRes, activeRes, blockedRes] = await Promise.all([
-                adminUserApi.getPendingApprovals(),
-                adminUserApi.getActiveStudents(),
-                adminUserApi.getBlockedStudents(),
+            const [clsRes, modRes] = await Promise.all([
+                axiosPrivate.get("/classes"),
+                axiosPrivate.get("/modules"),
             ]);
 
-            const pending = pendingRes.data?.length ?? 0;
-            const active = activeRes.data?.length ?? 0;
-            const blocked = blockedRes.data?.length ?? 0;
+            const clsList = Array.isArray(clsRes.data) ? clsRes.data : clsRes.data?.data || [];
+            const modList = Array.isArray(modRes.data) ? modRes.data : modRes.data?.data || [];
 
-            setStats({
-                total: pending + active + blocked,
-                active,
-                pending,
-                blocked,
-            });
-        } catch (error) {
-            console.error("Error fetching statistics:", error);
+            setClasses(clsList.map(normalizeOption));
+            setModules(modList.map(normalizeOption));
+        } catch (e) {
+            console.warn("bootstrap classes/modules failed:", e);
         } finally {
-            setLoading(false);
+            fetchOverview(filters);
         }
     };
 
-    // Weekly activity data (Bar Chart)
-    const weeklyData = [
-        { name: "M", value: 45 },
-        { name: "T", value: 32 },
-        { name: "W", value: 38 },
-        { name: "T", value: 48 },
-        { name: "F", value: 55 },
-        { name: "S", value: 42 },
-        { name: "S", value: 50 },
-    ];
+    const toApiFilters = (f) => {
+        const from = f.fromDate ? `${f.fromDate}T00:00:00` : "";
+        const to = f.toDate ? `${f.toDate}T23:59:59` : "";
+        return {
+            classId: f.classId,
+            moduleId: f.moduleId,
+            keyword: f.keyword,
+            from,
+            to,
+        };
+    };
 
-    // Monthly sales data (Line Chart - Green)
-    const monthlySalesData = [
-        { name: "Apr", value: 100 },
-        { name: "May", value: 150 },
-        { name: "Jun", value: 280 },
-        { name: "Jul", value: 400 },
-        { name: "Aug", value: 520 },
-        { name: "Sep", value: 380 },
-        { name: "Oct", value: 450 },
-        { name: "Nov", value: 500 },
-        { name: "Dec", value: 600 },
-    ];
+    const fetchOverview = async (f) => {
+        setDashError("");
+        setDashLoading(true);
+        try {
+            const body = buildRequestBody(toApiFilters(f));
+            const data = await adminAnalyticsApi.overview(body);
+            setOverview(data);
 
-    // Completed tasks data (Line Chart - Dark)
-    const completedTasksData = [
-        { name: "Apr", value: 200 },
-        { name: "May", value: 230 },
-        { name: "Jun", value: 280 },
-        { name: "Jul", value: 350 },
-        { name: "Aug", value: 450 },
-        { name: "Sep", value: 380 },
-        { name: "Oct", value: 420 },
-        { name: "Nov", value: 480 },
-        { name: "Dec", value: 550 },
-    ];
+            // Đổi filter => reset AI insight để tránh "AI cũ dính filter mới"
+            setAiInsight(null);
+            setAiError("");
+        } catch (e) {
+            console.error("overview error:", e);
+            setDashError(
+                "Không tải được thống kê. Kiểm tra quyền ADMIN và endpoint /admin/analytics/overview."
+            );
+        } finally {
+            setDashLoading(false);
+        }
+    };
 
-    if (loading) {
-        return (
-            <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
-                <CircularProgress />
-            </Box>
-        );
-    }
+    const onResetAll = () => {
+        const next = initFilters();
+        setFilters(next);
+        fetchOverview(next);
+    };
+
+    const onAutoApply = (next) => {
+        setFilters(next);
+        fetchOverview(next);
+    };
+
+    const onJumpStudents = () => {
+        studentsSectionRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    };
+
+    const onSelectStudent = (student) => {
+        setSelectedStudent(student);
+        setDrawerOpen(true);
+    };
+
+    const runAiInsights = async () => {
+        setAiError("");
+        setAiLoading(true);
+        try {
+            const body = buildRequestBody(toApiFilters(filters));
+            const data = await adminAnalyticsApi.aiInsights(body);
+            setAiInsight(data);
+        } catch (e) {
+            console.error("ai-insights error:", e);
+            setAiError("Không thể phân tích AI lúc này. Thử lại sau.");
+        } finally {
+            setAiLoading(false);
+        }
+    };
+
+    const metrics = useMemo(() => computeMetrics(overview), [overview]);
 
     return (
-        <Fade in timeout={800}>
-            <Box>
-                {/* Page Header */}
-                <Box sx={{ mb: 4 }}>
-                    <Typography variant="h4" sx={{ fontWeight: 800, color: "#2B3674", mb: 0.5 }}>
-                        Dashboard
-                    </Typography>
-                </Box>
-
-                {/* Statistics Cards */}
-                <Grid container spacing={4} sx={{ mb: 6 }}>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <StatCard
-                            title="Tổng số học viên"
-                            value={stats.total}
-                            icon={<PeopleAlt />}
-                            color="#2B3674"
-                            bgColor="#F4F7FE"
-                            trend="ALL STUDENTS"
+        <Fade in timeout={350}>
+            <Box sx={{ background: COLORS.bg, minHeight: "calc(100vh - 120px)", width: "100%", overflowX: "hidden" }}>
+                <PageShell>
+                    {/* HEADER: Filter */}
+                    <Box sx={{ mt: { xs: 1.5, md: 2 }, mb: { xs: 1.5, md: 2 }, minWidth: 0 }}>
+                        <AdminDashboardFilterBar
+                            classes={classes}
+                            modules={modules}
+                            filters={filters}
+                            loading={dashLoading}
+                            onChange={(next) => setFilters(next)}
+                            onReset={onResetAll}
+                            onAutoApply={onAutoApply}
                         />
-                    </Grid>
 
-                    <Grid item xs={12} sm={6} md={3}>
-                        <StatCard
-                            title="Học viên đợi phê duyệt"
-                            value={stats.pending}
-                            icon={<CheckCircle />}
-                            color="#4318FF"
-                            bgColor="#F4F7FE"
-                            trend="WAITING_APPROVAL"
-                        />
-                    </Grid>
+                        {dashError ? (
+                            <Typography sx={{ mt: 1, color: "#dc2626", fontWeight: 900, fontSize: { xs: 13, sm: 14 } }}>
+                                {dashError}
+                            </Typography>
+                        ) : null}
+                    </Box>
 
-                    <Grid item xs={12} sm={6} md={3}>
-                        <StatCard
-                            title="Số học viên đang hoạt động"
-                            value={stats.active}
-                            icon={<HowToReg />}
-                            color="#05CD99"
-                            bgColor="#F4F7FE"
-                            trend="ACTIVE STUDENTS"
-                        />
-                    </Grid>
+                    {/* BODY: Loading (chỉ khi chưa có overview) */}
+                    {!overview && dashLoading ? (
+                        <Box
+                            sx={{
+                                p: { xs: 1.75, sm: 2.25 },
+                                borderRadius: "18px",
+                                border: `1px solid ${COLORS.border}`,
+                                bgcolor: "#fff",
+                                boxShadow: "0px 18px 45px rgba(15, 23, 42, 0.06)",
+                            }}
+                        >
+                            <Stack direction="row" spacing={1.25} alignItems="center">
+                                <CircularProgress size={18} sx={{ color: COLORS.primaryBlue }} />
+                                <Typography sx={{ color: COLORS.textSecondary, fontWeight: 800, fontSize: { xs: 13, sm: 14 } }}>
+                                    Đang tải thống kê...
+                                </Typography>
+                            </Stack>
+                        </Box>
+                    ) : null}
 
-                    <Grid item xs={12} sm={6} md={3}>
-                        <StatCard
-                            title="Số học viên đã khóa"
-                            value={stats.blocked}
-                            icon={<Block />}
-                            color="#EE5D50"
-                            bgColor="#F4F7FE"
-                            trend="STUDENT BLOCKED"
+                    {/* 1) AI phân tích theo bộ lọc */}
+                    <Box sx={{ mt: { xs: 1.5, md: 2 }, minWidth: 0 }}>
+                        <AdminDashboardAiInsightPanel
+                            overview={overview}
+                            insight={aiInsight}
+                            loading={aiLoading}
+                            error={aiError}
+                            onRun={runAiInsights}
                         />
-                    </Grid>
-                </Grid>
+                    </Box>
 
-                {/* Charts Section */}
-                <Grid container spacing={3}>
-                    {/* Bar Chart */}
-                    <Grid item xs={12} md={4}>
-                        <BarChartCard
-                            title="Website Views"
-                            subtitle="Last Campaign Performance"
-                            data={weeklyData}
-                            color="#4318FF"
-                            timeInfo="campaign sent 2 days ago"
-                        />
-                    </Grid>
+                    {/* 2) Danh sách học viên đã làm bài */}
+                    <Box sx={{ mt: { xs: 2, md: 3 }, minWidth: 0 }} ref={studentsSectionRef}>
+                        <Box sx={{ width: "100%", minWidth: 0, overflowX: "hidden" }}>
+                            <AdminDashboardAtRiskTable
+                                students={overview?.students || []}
+                                onSelect={onSelectStudent}
+                            />
+                        </Box>
+                    </Box>
 
-                    {/* Line Chart - Green */}
-                    <Grid item xs={12} md={4}>
-                        <LineChartCard
-                            title="Daily Sales"
-                            subtitle="(+15%) increase in today sales."
-                            data={monthlySalesData}
-                            color="#05CD99"
-                            timeInfo="updated 4 min ago"
-                        />
-                    </Grid>
+                    {/* 3) KPI + Phân loại */}
+                    <Box
+                        sx={{
+                            mt: { xs: 2, md: 3 },
+                            display: "grid",
+                            gridTemplateColumns: { xs: "1fr", lg: "1.12fr 0.88fr" },
+                            gap: { xs: 2, md: 3 },
+                            alignItems: "stretch",
+                            minWidth: 0,
+                        }}
+                    >
+                        <Box sx={{ minWidth: 0 }}>
+                            <AdminDashboardKpiCards
+                                overview={overview}
+                                metrics={metrics}
+                                onJumpAtRisk={onJumpStudents}
+                            />
+                        </Box>
 
-                    {/* Line Chart - Dark */}
-                    <Grid item xs={12} md={4}>
-                        <LineChartCard
-                            title="Completed Tasks"
-                            subtitle="Last Campaign Performance"
-                            data={completedTasksData}
-                            color="#2B3674"
-                            timeInfo="just updated"
-                        />
-                    </Grid>
-                </Grid>
+                        <Box sx={{ minWidth: 0 }}>
+                            <AdminDashboardResultClassificationBox overview={overview} metrics={metrics} />
+                        </Box>
+                    </Box>
+
+                    {/* 4) Trends */}
+                    <Box sx={{ mt: { xs: 2, md: 3 }, minWidth: 0 }}>
+                        <AdminDashboardTrends timeSeries={metrics.timeSeries} />
+                    </Box>
+
+                    <StudentQuickDrawer
+                        open={drawerOpen}
+                        onClose={() => setDrawerOpen(false)}
+                        student={selectedStudent}
+                    />
+                </PageShell>
             </Box>
         </Fade>
     );
-};
-
-export default AdminDashboard;
+}

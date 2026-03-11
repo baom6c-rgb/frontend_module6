@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { adminUserApi } from "../../../api/adminUserApi";
 
-export function usePendingApprovals({
-                                        enabled = true,
-                                        intervalMs = 5000, // 🔥 5s polling
-                                    } = {}) {
+export function usePendingApprovals({ enabled = true, intervalMs = 3000 } = {}) {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
 
@@ -26,13 +23,13 @@ export function usePendingApprovals({
     useEffect(() => {
         if (!enabled) return;
 
-        // 🔹 fetch ngay lần đầu
+        // fetch ngay lần đầu
         fetchPending();
 
-        // 🔹 polling 5s
+        // polling
         const intervalId = setInterval(fetchPending, intervalMs);
 
-        // 🔹 refresh khi quay lại tab
+        // refresh khi quay lại tab
         const onFocus = () => fetchPending();
         window.addEventListener("focus", onFocus);
 
