@@ -4,7 +4,7 @@ const BASE_URL = "http://localhost:8080/api";
 
 // Tạo axios instance cho dashboard
 const dashboardClient = axios.create({
-    baseURL: BASE_URL,
+    baseURL:import.meta.env.VITE_API_URL || BASE_URL,
     headers: {
         "Content-Type": "application/json",
     },
