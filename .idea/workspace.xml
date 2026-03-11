@@ -5,10 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="fc5d4544-f2c2-455b-ba5f-41d519bc4368" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/admin-ui/.env" beforeDir="false" afterPath="$PROJECT_DIR$/admin-ui/.env" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/admin-ui/src/api/axiosClient.js" beforeDir="false" afterPath="$PROJECT_DIR$/admin-ui/src/api/axiosClient.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/admin-ui/src/api/axiosConfig.js" beforeDir="false" afterPath="$PROJECT_DIR$/admin-ui/src/api/axiosConfig.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/admin-ui/src/api/axiosPrivate.js" beforeDir="false" afterPath="$PROJECT_DIR$/admin-ui/src/api/axiosPrivate.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/admin-ui/vercel.json" beforeDir="false" afterPath="$PROJECT_DIR$/admin-ui/vercel.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
