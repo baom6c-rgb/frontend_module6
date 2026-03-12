@@ -1100,21 +1100,12 @@ export default function PracticePage() {
     }, [appendMessage, saveActiveSession, setAssistantModeSafe]);
 
     const attemptStartTs = useMemo(() => {
-        const parseIso = (iso) => {
-            if (!iso) return NaN;
-            // Cắt nanoseconds → 3 chữ số ms, thêm Z nếu chưa có
-            const normalized = iso
-                .replace(/(\.\d{3})\d+/, "$1")  // cắt nanoseconds
-                .replace(/(?<!Z)$/, "Z");        // thêm Z nếu chưa có
-            return Date.parse(normalized);
-        };
-
         if (startedAtIso) {
-            const ts = parseIso(startedAtIso);
+            const ts = Date.parse(startedAtIso);
             return Number.isFinite(ts) ? ts : null;
         }
         if (deadlineIso && Number(durationMinutes) > 0) {
-            const dts = parseIso(deadlineIso);
+            const dts = Date.parse(deadlineIso);
             if (!Number.isFinite(dts)) return null;
             return dts - Number(durationMinutes) * 60 * 1000;
         }
