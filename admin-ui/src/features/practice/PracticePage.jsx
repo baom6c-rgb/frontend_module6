@@ -1120,6 +1120,11 @@ export default function PracticePage() {
         return null;
     }, [deadlineIso, durationMinutes, startedAtIso]);
 
+    const doingAttemptId = useMemo(() => {
+        const t = sessionTokenRef.current || sessionToken;
+        return t || null;
+    }, [sessionToken]);
+
     const durationLabel = useMemo(() => {
         if (Number(durationMinutes) > 0) return durationMinutes;
         if (mode === MODE.IDLE) return 0;
