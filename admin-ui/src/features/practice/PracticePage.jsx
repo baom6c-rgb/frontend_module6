@@ -1100,22 +1100,25 @@ export default function PracticePage() {
     }, [appendMessage, saveActiveSession, setAssistantModeSafe]);
 
     const attemptStartTs = useMemo(() => {
+        // Helper: truncate nanoseconds → milliseconds (ISO 8601 chuẩn)
+        const parseIso = (iso) => {
+            if (!iso) return NaN;
+            // "2026-03-12T06:42:50.061464768" → "2026-03-12T06:42:50.061Z"
+            const normalized = iso.replace(/(\.\d{3})\d+/, "$1").replace(/Z?$/, "Z");
+            return Date.parse(normalized);
+        };
+
         if (startedAtIso) {
-            const ts = Date.parse(startedAtIso);
+            const ts = parseIso(startedAtIso);
             return Number.isFinite(ts) ? ts : null;
         }
         if (deadlineIso && Number(durationMinutes) > 0) {
-            const dts = Date.parse(deadlineIso);
+            const dts = parseIso(deadlineIso);
             if (!Number.isFinite(dts)) return null;
             return dts - Number(durationMinutes) * 60 * 1000;
         }
         return null;
     }, [deadlineIso, durationMinutes, startedAtIso]);
-
-    const doingAttemptId = useMemo(() => {
-        const t = sessionTokenRef.current || sessionToken;
-        return t || null;
-    }, [sessionToken]);
 
     const durationLabel = useMemo(() => {
         if (Number(durationMinutes) > 0) return durationMinutes;
