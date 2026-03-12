@@ -6,7 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="fc5d4544-f2c2-455b-ba5f-41d519bc4368" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/admin-ui/src/features/practice/PracticePage.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/admin-ui/src/features/practice/PracticePage.jsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -58,7 +57,7 @@
       <updated>1773280927051</updated>
       <workItem from="1773280928511" duration="118000" />
       <workItem from="1773281699261" duration="1170000" />
-      <workItem from="1773298026809" duration="1347000" />
+      <workItem from="1773298026809" duration="2613000" />
     </task>
     <servers />
   </component>

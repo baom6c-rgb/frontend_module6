@@ -1100,11 +1100,12 @@ export default function PracticePage() {
     }, [appendMessage, saveActiveSession, setAssistantModeSafe]);
 
     const attemptStartTs = useMemo(() => {
-        // Helper: truncate nanoseconds → milliseconds (ISO 8601 chuẩn)
         const parseIso = (iso) => {
             if (!iso) return NaN;
-            // "2026-03-12T06:42:50.061464768" → "2026-03-12T06:42:50.061Z"
-            const normalized = iso.replace(/(\.\d{3})\d+/, "$1").replace(/Z?$/, "Z");
+            // Cắt nanoseconds → 3 chữ số ms, thêm Z nếu chưa có
+            const normalized = iso
+                .replace(/(\.\d{3})\d+/, "$1")  // cắt nanoseconds
+                .replace(/(?<!Z)$/, "Z");        // thêm Z nếu chưa có
             return Date.parse(normalized);
         };
 
