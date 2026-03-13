@@ -186,6 +186,13 @@ export default function Login() {
             const idToken = credentialResponse?.credential;
             if (!idToken) throw new Error("Google token not found");
 
+            const payload = JSON.parse(atob(idToken.split(".")[1]));
+            console.log("Google payload =", payload);
+            console.log("aud =", payload.aud);
+            console.log("iss =", payload.iss);
+            console.log("exp =", payload.exp);
+            console.log("now =", Math.floor(Date.now() / 1000));
+
             const raw = await dispatch(googleLoginThunk(idToken)).unwrap();
 
             // do NOT mutate raw
